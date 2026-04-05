@@ -267,7 +267,7 @@ export default function App() {
       <div className="max-w-3xl mx-auto">
         {/* APP TITLE */}
 
-        <h1 className="text-3xl font-semibold text-center mb-6">My Spendr</h1>
+        <h1 className="text-3xl font-semibold text-center mb-6">mySpendr</h1>
 
         {/* INSIGHTS */}
 
