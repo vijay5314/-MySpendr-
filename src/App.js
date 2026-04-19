@@ -67,39 +67,18 @@ function XIcon(){return<svg width="14"height="14"viewBox="0 0 24 24"fill="none"s
 function AlertIcon(){return<svg width="15"height="15"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><triangle points="10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12"y1="9"x2="12"y2="13"/><line x1="12"y1="17"x2="12.01"y2="17"/></svg>;}
 
 /* ════ GOLD POT SVG ════ */
-function GoldPotSVG({fillPercent,dark,size="md"}){
+/* ── Money Bag with animated fill bar ── */
+function MoneyBag({fillPercent,size="md"}){
   const clamp=Math.max(0,Math.min(100,fillPercent));
-  const[wave,setWave]=useState(0);
-  useEffect(()=>{let raf;let t=0;const tick=()=>{t+=0.025;setWave(Math.sin(t)*3);raf=requestAnimationFrame(tick);};raf=requestAnimationFrame(tick);return()=>cancelAnimationFrame(raf);},[]);
-  const lc=clamp<=0?{top:"#6b7280",mid:"#4b5563",shine:"#9ca3af"}:clamp<=20?{top:"#ef4444",mid:"#dc2626",shine:"#fca5a5"}:clamp<=40?{top:"#f97316",mid:"#ea580c",shine:"#fdba74"}:clamp<=60?{top:"#f59e0b",mid:"#d97706",shine:"#fcd34d"}:clamp<=80?{top:"#fbbf24",mid:"#f59e0b",shine:"#fde68a"}:{top:"#fcd34d",mid:"#fbbf24",shine:"#fef3c7"};
-  const liqH=(clamp/100)*68,liqY=108-liqH;
-  const showSparkles=clamp>75;
-  const dims=size==="sm"?{w:80,h:96}:size==="lg"?{w:140,h:160}:{w:110,h:130};
-  const potShine=dark?"#374151":"#ffffff";
+  const fontSize=size==="sm"?52:size==="lg"?96:72;
+  const barColor=clamp<=20?"#ef4444":clamp<=40?"#f97316":clamp<=60?"#f59e0b":"#fbbf24";
   return(
-    <div style={{position:"relative",width:dims.w,height:dims.h}}>
-      <style>{`@keyframes _bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}@keyframes _sp{0%{opacity:0;transform:scale(0) rotate(0deg)}50%{opacity:1;transform:scale(1) rotate(180deg)}100%{opacity:0;transform:scale(0) rotate(360deg)}}@keyframes _shim{0%,100%{opacity:0.2}50%{opacity:0.7}}@keyframes _pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}.gpbob{animation:_bob 2.2s ease-in-out infinite}.gpsp{animation:_sp 1.6s ease-in-out infinite}.gpshim{animation:_shim 2s ease-in-out infinite}.gppulse{animation:_pulse 2s ease-in-out infinite}`}</style>
-      <div className="gpbob" style={{width:"100%",height:"100%"}}>
-        {showSparkles&&[{x:4,y:4,d:"0s",s:8},{x:68,y:12,d:"0.5s",s:6},{x:38,y:0,d:"0.9s",s:7},{x:8,y:28,d:"1.2s",s:5},{x:66,y:34,d:"0.3s",s:6}].map((sp,i)=>(
-          <div key={i} className="gpsp" style={{position:"absolute",left:sp.x*(dims.w/80),top:sp.y*(dims.h/96),animationDelay:sp.d,fontSize:sp.s,color:"#fbbf24",zIndex:10,pointerEvents:"none"}}>✦</div>
-        ))}
-        <svg viewBox="0 0 120 140" width={dims.w} height={dims.h}>
-          <defs>
-            <clipPath id="gpclip"><path d="M28 52 Q24 55 22 65 L20 108 Q20 118 60 118 Q100 118 100 108 L98 65 Q96 55 92 52 Z"/></clipPath>
-            <linearGradient id="gpbd" x1="0"y1="0"x2="1"y2="0"><stop offset="0%"stopColor={dark?"#374151":"#e5e7eb"}/><stop offset="45%"stopColor={dark?"#4b5563":"#f9fafb"}/><stop offset="100%"stopColor={dark?"#1f2937":"#d1d5db"}/></linearGradient>
-            <linearGradient id="gplq" x1="0"y1="0"x2="0"y2="1"><stop offset="0%"stopColor={lc.top}/><stop offset="100%"stopColor={lc.mid}/></linearGradient>
-            <linearGradient id="gprm" x1="0"y1="0"x2="0"y2="1"><stop offset="0%"stopColor={dark?"#6b7280":"#ffffff"}/><stop offset="100%"stopColor={dark?"#374151":"#d1d5db"}/></linearGradient>
-          </defs>
-          <path d="M28 52 Q24 55 22 65 L20 108 Q20 118 60 118 Q100 118 100 108 L98 65 Q96 55 92 52 Z" fill="url(#gpbd)" stroke={dark?"#374151":"#d1d5db"} strokeWidth="1.5"/>
-          {clamp>0&&<g clipPath="url(#gpclip)"><rect x="20"y={liqY}width="80"height={liqH+10}fill="url(#gplq)"/><path d={`M20 ${liqY} Q${35+wave} ${liqY-5} 50 ${liqY} Q${65-wave} ${liqY+5} 80 ${liqY} Q${90+wave} ${liqY-4} 100 ${liqY} L100 ${liqY+10} L20 ${liqY+10} Z`}fill={lc.top}opacity="0.85"/><rect className="gpshim"x="30"y={liqY+5}width="7"height={Math.max(0,liqH-8)}rx="3.5"fill={lc.shine}opacity="0.5"/></g>}
-          <path d="M35 58 Q34 72 34 88" stroke={potShine} strokeWidth="4" strokeLinecap="round" opacity="0.2"/>
-          <ellipse cx="60"cy="52"rx="34"ry="10"fill="url(#gprm)"stroke={dark?"#4b5563":"#d1d5db"}strokeWidth="1.5"/>
-          <ellipse cx="60"cy="52"rx="27"ry="6.5"fill={dark?"#111827":"#f3f4f6"}stroke="none"opacity="0.55"/>
-          <path d="M22 70 Q9 70 9 81 Q9 92 22 92" fill="none" stroke={dark?"#4b5563":"#d1d5db"} strokeWidth="5.5" strokeLinecap="round"/>
-          <path d="M98 70 Q111 70 111 81 Q111 92 98 90" fill="none" stroke={dark?"#4b5563":"#d1d5db"} strokeWidth="5.5" strokeLinecap="round"/>
-          {clamp>10&&<g opacity={Math.min(1,clamp/35)}><ellipse cx="46"cy={liqY+2}rx="9"ry="3"fill="#fbbf24"stroke="#d97706"strokeWidth="0.5"/><ellipse cx="68"cy={liqY+0}rx="7.5"ry="2.5"fill="#fbbf24"stroke="#d97706"strokeWidth="0.5"/><ellipse cx="57"cy={liqY-2}rx="10"ry="3.2"fill="#fcd34d"stroke="#d97706"strokeWidth="0.5"/></g>}
-          <ellipse cx="60"cy="121"rx="40"ry="5"fill={dark?"#00000050":"#00000012"}/>
-        </svg>
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+      <style>{`@keyframes _bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}@keyframes _pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}.mbob{animation:_bob 2s ease-in-out infinite}.mpulse{animation:_pulse 2s ease-in-out infinite}`}</style>
+      <div className="mbob" style={{fontSize,lineHeight:1,userSelect:"none"}}>💰</div>
+      {/* fill indicator bar */}
+      <div style={{width:size==="sm"?60:size==="lg"?100:80,height:5,borderRadius:99,background:"rgba(0,0,0,0.08)",overflow:"hidden"}}>
+        <div style={{height:5,borderRadius:99,width:`${clamp}%`,background:barColor,transition:"width 0.6s ease"}}/>
       </div>
     </div>
   );
@@ -107,10 +86,24 @@ function GoldPotSVG({fillPercent,dark,size="md"}){
 function UsablePot({fillPercent,amount,dark,size="md"}){
   const c=Math.max(0,Math.min(100,fillPercent));
   const col=c<=20?"#ef4444":c<=40?"#f97316":"#f59e0b";
-  return<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><GoldPotSVG fillPercent={fillPercent}dark={dark}size={size}/><div className="gppulse"style={{fontSize:size==="sm"?22:28,fontWeight:800,fontFamily:"'DM Mono',monospace",color:col,letterSpacing:"-1px",lineHeight:1,textAlign:"center"}}>₹{amount<0?"-":""}{Math.abs(amount).toLocaleString()}</div></div>;
+  return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+      <MoneyBag fillPercent={fillPercent} size={size}/>
+      <div className="mpulse" style={{fontSize:size==="sm"?20:26,fontWeight:800,fontFamily:"'DM Mono',monospace",color:col,letterSpacing:"-1px",lineHeight:1,textAlign:"center"}}>
+        ₹{amount<0?"-":""}{Math.abs(amount).toLocaleString()}
+      </div>
+    </div>
+  );
 }
 function NetWorthPot({fillPercent,amount,dark}){
-  return<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><GoldPotSVG fillPercent={fillPercent}dark={dark}size="lg"/><div className="gppulse"style={{fontSize:32,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#7c3aed",letterSpacing:"-1.5px",lineHeight:1,textAlign:"center"}}>₹{Math.abs(amount).toLocaleString()}</div></div>;
+  return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+      <MoneyBag fillPercent={fillPercent} size="lg"/>
+      <div className="mpulse" style={{fontSize:30,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#7c3aed",letterSpacing:"-1.5px",lineHeight:1,textAlign:"center"}}>
+        ₹{Math.abs(amount).toLocaleString()}
+      </div>
+    </div>
+  );
 }
 
 /* ════ SOURCE PILL ════ */
@@ -207,6 +200,71 @@ function daysFromToday(dateStr){
 /* ════════════════════════════════════
    MAIN APP
 ════════════════════════════════════ */
+/* ════ CATEGORY BUBBLES ════ */
+function CategoryBubbles({categories,catTotals,getCatStyle,getCatAccent,onSelect,dark,cardBg,border,textMute,subbg}){
+  const[open,setOpen]=useState(false);
+  const totalSpent=Object.values(catTotals).reduce((s,v)=>s+v,0);
+  const sorted=[...categories].sort((a,b)=>(catTotals[b.name]||0)-(catTotals[a.name]||0));
+  return(
+    <div style={{marginBottom:12}}>
+      {/* Header toggle */}
+      <button
+        onClick={()=>setOpen(o=>!o)}
+        style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",background:cardBg,border:`1px solid ${border}`,borderRadius:open?"16px 16px 0 0":16,padding:"10px 14px",cursor:"pointer"}}
+      >
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:13,fontWeight:600,color:dark?"#f9fafb":"#111827"}}>Categories</span>
+          {totalSpent>0&&<span style={{fontSize:12,color:textMute}}>₹{totalSpent.toLocaleString()} total</span>}
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transform:open?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s"}}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {/* Expanded bubble grid */}
+      {open&&(
+        <div style={{background:cardBg,border:`1px solid ${border}`,borderTop:"none",borderRadius:"0 0 16px 16px",padding:"12px 14px 14px"}}>
+          {/* bar chart style rows */}
+          {sorted.map(cat=>{
+            const spent=catTotals[cat.name]||0;
+            const pct=totalSpent>0?Math.round((spent/totalSpent)*100):0;
+            const cs=getCatStyle(cat.name);
+            const accent=getCatAccent(cat.name);
+            return(
+              <button
+                key={cat.name}
+                onClick={()=>{onSelect(cat.name);setOpen(false);}}
+                style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"8px 0",background:"none",border:"none",cursor:"pointer",borderBottom:`1px solid ${dark?"#1f2937":"#f3f4f6"}`}}
+              >
+                {/* color dot + name */}
+                <span style={{...cs,width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>
+                  {cat.name[0]}
+                </span>
+                <div style={{flex:1,textAlign:"left"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <span style={{fontSize:13,fontWeight:600,color:dark?"#f9fafb":"#111827"}}>{cat.name}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:accent,fontFamily:"'DM Mono',monospace"}}>
+                      {spent>0?`₹${spent.toLocaleString()}`:"—"}
+                    </span>
+                  </div>
+                  {/* mini bar */}
+                  <div style={{width:"100%",height:5,borderRadius:99,background:dark?"#1f2937":"#f3f4f6",overflow:"hidden"}}>
+                    <div style={{height:5,borderRadius:99,width:`${pct}%`,background:accent,transition:"width 0.5s ease"}}/>
+                  </div>
+                </div>
+                <span style={{fontSize:11,color:textMute,minWidth:28,textAlign:"right"}}>{pct>0?`${pct}%`:""}</span>
+              </button>
+            );
+          })}
+          {sorted.every(c=>!(catTotals[c.name]))&&(
+            <p style={{margin:0,fontSize:13,color:textMute,textAlign:"center",padding:"8px 0"}}>No expenses yet across any category.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App(){
   const[dark,setDark]=useState(()=>{try{return localStorage.getItem(THEME_KEY)==="dark";}catch{return false;}});
   const[expenses,setExpenses]=useState(()=>{try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):[];}catch{return[];}});
@@ -238,6 +296,7 @@ export default function App(){
   const[addingCat,setAddingCat]=useState(false);
   const[toast,setToast]=useState(null);
   const[tab,setTab]=useState("expenses");
+  const tabRef=useRef(null);
   const[drillCat,setDrillCat]=useState(null);
 
   const[rName,setRName]=useState("");
@@ -324,6 +383,11 @@ export default function App(){
   function editExpense(item){setEditingId(item.id);setAmount(item.amount);setSelCat(item.category);setNote(item.note);setDate(item.date);setPaySource(item.paySource||"bank");}
   function deleteExpense(id){const exp=expenses.find(e=>e.id===id);if(exp)setPot(p=>refundPot(exp.paySource||"bank",exp.amount,p));setExpenses(p=>p.filter(e=>e.id!==id));showToast("Deleted & refunded.");}
   function logNoSpend(){if(todayLogged){showToast("Already logged!");return;}logDay(today);showToast("No-spend day logged!");}
+  function switchTab(t,section){
+    setTab(t);
+    if(section)setPotSection(section);
+    setTimeout(()=>{if(tabRef.current)tabRef.current.scrollIntoView({behavior:"smooth",block:"start"});},50);
+  }
   function saveBudget(){if(!budgetInput)return;setBudget(Number(budgetInput));setBudgetInput("");setEditingBudget(false);showToast("Budget updated!");}
   function addCategory(){if(!newCatName.trim()||categories.find(c=>c.name===newCatName.trim()))return;const colorIdx=categories.length%CAT_PALETTE.length;setCategories(p=>[...p,{name:newCatName.trim(),colorIdx}]);setNewCatName("");setAddingCat(false);showToast("Category added!");}
 
@@ -525,11 +589,7 @@ export default function App(){
                 </div>
                 <p style={{margin:"4px 0 6px",fontSize:11,color:textMute}}>Net worth ₹{netWorthTotal.toLocaleString()}</p>
                 <button
-                  onClick={()=>{
-                    setTab("pot");
-                    setPotSection("usable");
-                    window.scrollTo({top:0,behavior:"smooth"});
-                  }}
+                  onClick={()=>switchTab("pot","usable")}
                   style={{background:dark?"#422006":"#fef3c7",border:"none",borderRadius:10,cursor:"pointer",fontSize:12,fontWeight:700,color:dark?"#fbbf24":"#92400e",padding:"6px 14px",display:"inline-flex",alignItems:"center",gap:4}}
                 >
                   Manage ₹ →
@@ -539,20 +599,19 @@ export default function App(){
           )}
         </div>
 
-        {/* CATEGORY PILLS */}
-        <div style={{marginBottom:12}}>
-          <p style={{margin:"0 0 7px",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute}}>Tap a category to see expenses</p>
-          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-            {categories.map(cat=>{
-              const total=catTotals[cat.name]||0;
-              return(
-                <button key={cat.name} onClick={()=>setDrillCat(cat.name)} style={{...getCatStyle(cat.name),border:"none",borderRadius:99,padding:"5px 12px",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-                  {cat.name}{total>0&&<span style={{opacity:0.75,fontSize:11}}>₹{total.toLocaleString()}</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* CATEGORY BUBBLES — expandable */}
+        <CategoryBubbles
+          categories={categories}
+          catTotals={catTotals}
+          getCatStyle={getCatStyle}
+          getCatAccent={getCatAccent}
+          onSelect={(name)=>setDrillCat(name)}
+          dark={dark}
+          cardBg={cardBg}
+          border={border}
+          textMute={textMute}
+          subbg={subbg}
+        />
 
         {/* STREAK */}
         <div style={{...cardStyle,position:"relative",overflow:"hidden"}}>
@@ -607,9 +666,9 @@ export default function App(){
         </div>
 
         {/* TABS */}
-        <div style={{display:"flex",gap:4,marginBottom:12,background:subbg,borderRadius:14,padding:4,border:`1px solid ${border}`}}>
+        <div ref={tabRef} style={{display:"flex",gap:4,marginBottom:12,background:subbg,borderRadius:14,padding:4,border:`1px solid ${border}`}}>
           {["expenses","recurring","pot"].map(t=>(
-            <button key={t}onClick={()=>{setTab(t);window.scrollTo({top:0,behavior:"smooth"});}}style={{flex:1,padding:"8px 0",borderRadius:10,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:tab===t?cardBg:"transparent",color:tab===t?textMain:textMute,boxShadow:tab===t?"0 1px 4px rgba(0,0,0,0.08)":"none",transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
+            <button key={t} onClick={()=>switchTab(t)} style={{flex:1,padding:"8px 0",borderRadius:10,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:tab===t?cardBg:"transparent",color:tab===t?textMain:textMute,boxShadow:tab===t?"0 1px 4px rgba(0,0,0,0.08)":"none",transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
               {t==="recurring"?<><RepeatIcon/>Recurring</>:t==="pot"?<><PotTabIcon/>My Pot</>:"Expenses"}
             </button>
           ))}
