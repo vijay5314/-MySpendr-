@@ -38,6 +38,7 @@ const defaultCategories = [
 
 const defaultPot = {
   usableCash:0,usableBank:0,savings:0,investments:0,gold:0,
+  goldGrams:0,goldRate:0,goldRateUpdatedOn:null,
   incomes:[{id:1,label:"Salary",amount:0,frequency:"Monthly",active:true}],
   extras:[],
 };
@@ -313,6 +314,9 @@ export default function App(){
   const[cashMode,setCashMode]=useState(null);
   const[bankAdj,setBankAdj]=useState("");
   const[bankMode,setBankMode]=useState(null);
+  const[goldRateInput,setGoldRateInput]=useState("");
+  const[showGoldRateForm,setShowGoldRateForm]=useState(false);
+  const[goldBannerDismissed,setGoldBannerDismissed]=useState(false);
   const[showIncomeForm,setShowIncomeForm]=useState(false);
   const[incName,setIncName]=useState("");
   const[incAmt,setIncAmt]=useState("");
@@ -360,6 +364,13 @@ export default function App(){
   function quickAdjust(field,mode,val){const num=Number(val)||0;if(num<=0)return;setPot(p=>({...p,[field]:mode==="add"?(Number(p[field])||0)+num:Math.max(0,(Number(p[field])||0)-num)}));showToast(`${mode==="add"?"+":"-"}₹${num.toLocaleString()} ${field==="usableCash"?"cash":"bank"}`);}
   function updateNWField(field,val){const newVal=Number(val)||0;const oldVal=Number(pot[field])||0;const diff=newVal-oldVal;setPot(p=>{const nb=Math.max(0,(Number(p.usableBank)||0)-diff);return{...p,[field]:newVal,usableBank:nb};});}
   function setUsableField(field,val){setPot(p=>({...p,[field]:Number(val)||0}));}
+  function saveGoldRate(){
+    const rate=Number(goldRateInput)||0;
+    if(rate<=0)return;
+    setPot(p=>({...p,goldRate:rate,goldRateUpdatedOn:today}));
+    setGoldRateInput("");setShowGoldRateForm(false);setGoldBannerDismissed(true);
+    showToast("Gold rate updated!");
+  }
 
   /* ── Expense CRUD ── */
   function resetForm(){setAmount("");setNote("");setDate(today);setEditingId(null);setPaySource("bank");}
@@ -459,12 +470,34 @@ export default function App(){
   const topCategory=Object.keys(catTotals).sort((a,b)=>catTotals[b]-catTotals[a])[0];
   const grouped={};[...expenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(e=>{if(!grouped[e.date])grouped[e.date]=[];grouped[e.date].push(e);});
   const dailyTotal={};expenses.forEach(e=>{dailyTotal[e.date]=(dailyTotal[e.date]||0)+e.amount;});
+  const goldValue=(Number(pot.goldGrams)||0)*(Number(pot.goldRate)||0);
   const usableTotal=(Number(pot.usableCash)||0)+(Number(pot.usableBank)||0);
-  const netWorthTotal=usableTotal+(Number(pot.savings)||0)+(Number(pot.investments)||0)+(Number(pot.gold)||0);
+  const netWorthTotal=usableTotal+(Number(pot.savings)||0)+(Number(pot.investments)||0)+goldValue;
   const monthlyIncome=(pot.incomes||[]).reduce((s,i)=>{if(!i.active)return s;if(i.frequency==="Monthly")return s+i.amount;if(i.frequency==="Weekly")return s+i.amount*4;if(i.frequency==="Yearly")return s+Math.round(i.amount/12);return s;},0);
   const potBase=monthlyIncome>0?monthlyIncome:netWorthTotal>0?netWorthTotal:1;
   const usableFillPct=Math.min(100,(usableTotal/potBase)*100);
   const nwFillActual=netWorthTotal>0?Math.min(100,(usableTotal/netWorthTotal)*100+20):0;
+
+  /* gold rate reminder — show on 1st of month if not updated this month */
+  const showGoldRateBanner=(()=>{
+    if(goldBannerDismissed)return false;
+    if(!pot.goldGrams||pot.goldGrams<=0)return false; // no gold, no reminder
+    const istNow=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+    if(istNow.getDate()!==1)return false; // only on 1st
+    if(!pot.goldRateUpdatedOn)return true;
+    const updated=new Date(pot.goldRateUpdatedOn+"T00:00:00");
+    return!(updated.getMonth()===istNow.getMonth()&&updated.getFullYear()===istNow.getFullYear());
+  })();
+
+  /* total in / total out for current month */
+  const totalIn=(pot.incomes||[]).reduce((s,i)=>{
+    // sum all credited extras this month
+    return s;
+  },0) + (pot.extras||[]).filter(e=>{
+    const d=new Date(e.date+"T00:00:00");
+    return d.getMonth()===ist.getMonth()&&d.getFullYear()===ist.getFullYear();
+  }).reduce((s,e)=>s+e.amount,0) + monthlyIncome;
+  const totalOut=monthlyTotal; // all expenses this month
 
   /* ── Theme ── */
   const bg=dark?"#030712":"#f8fafc",cardBg=dark?"#111827":"#ffffff",border=dark?"#1f2937":"#f1f5f9";
@@ -540,6 +573,32 @@ export default function App(){
             {reminders.map(item=>(
               <ReminderBanner key={item.id} item={item} onDismiss={dismissReminder} onPay={payFromReminder} dark={dark}/>
             ))}
+          </div>
+        )}
+
+        {/* ══ GOLD RATE BANNER ══ */}
+        {showGoldRateBanner&&(
+          <div style={{background:dark?"#422006":"#fffbeb",border:dark?"1px solid #92400e":"1px solid #fde68a",borderRadius:14,padding:"12px 14px",marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <span style={{fontSize:20}}>🪙</span>
+              <div style={{flex:1}}>
+                <span style={{fontSize:13,fontWeight:700,color:dark?"#fbbf24":"#92400e"}}>Update Gold Rate</span>
+                <p style={{margin:0,fontSize:11,color:dark?"#d97706":"#a16207"}}>It's the 1st — time to update your gold rate for this month</p>
+              </div>
+              <button onClick={()=>setGoldBannerDismissed(true)} style={{background:"none",border:"none",cursor:"pointer",color:dark?"#6b7280":"#9ca3af",padding:4}}><XIcon/></button>
+            </div>
+            {showGoldRateForm?(
+              <div style={{display:"flex",gap:6}}>
+                <input type="number" value={goldRateInput} onChange={e=>setGoldRateInput(e.target.value)} placeholder="₹ per gram (24K)" style={{...inputStyle,flex:1}} autoFocus onKeyDown={e=>e.key==="Enter"&&saveGoldRate()}/>
+                <button onClick={saveGoldRate} style={{...btnPrimary,padding:"8px 14px",background:"#d97706"}}>Save</button>
+                <button onClick={()=>setShowGoldRateForm(false)} style={{...btnSecondary,padding:"8px 10px"}}>✕</button>
+              </div>
+            ):(
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setShowGoldRateForm(true)} style={{background:"#d97706",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Update Rate</button>
+                <button onClick={()=>setGoldBannerDismissed(true)} style={{...btnSecondary,fontSize:12,padding:"6px 12px"}}>Later</button>
+              </div>
+            )}
           </div>
         )}
 
@@ -868,25 +927,60 @@ export default function App(){
                 </div>
                 <div style={cardStyle}>
                   <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:14}}><TrendingUpIcon/><span style={{fontSize:14,fontWeight:700}}>Breakdown</span></div>
-                  {[["usableCash","Cash in Hand","#16a34a"],["usableBank","Bank Balance","#2563eb"],["savings","Savings / FD","#7c3aed"],["investments","Investments (MF/Stocks)","#db2777"],["gold","Gold / Assets","#d97706"]].map(([field,label,color])=>(
+                  {[["usableCash","Cash in Hand","#16a34a"],["usableBank","Bank Balance","#2563eb"],["savings","Savings / FD","#7c3aed"],["investments","Investments (MF/Stocks)","#db2777"]].map(([field,label,color])=>(
                     <div key={field}style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
                       <div style={{width:10,height:10,borderRadius:"50%",background:color,flexShrink:0}}/>
                       <span style={{flex:1,fontSize:13}}>{label}</span>
                       <span style={{fontSize:13,fontWeight:700,color,minWidth:90,textAlign:"right"}}>₹{(Number(pot[field])||0).toLocaleString()}</span>
                     </div>
                   ))}
+                  {/* Gold row */}
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                    <div style={{width:10,height:10,borderRadius:"50%",background:"#d97706",flexShrink:0}}/>
+                    <div style={{flex:1}}>
+                      <span style={{fontSize:13}}>Gold</span>
+                      {pot.goldGrams>0&&pot.goldRate>0&&(
+                        <span style={{fontSize:11,color:textMute,marginLeft:6}}>{pot.goldGrams}g × ₹{(Number(pot.goldRate)||0).toLocaleString()}/g</span>
+                      )}
+                    </div>
+                    <span style={{fontSize:13,fontWeight:700,color:"#d97706",minWidth:90,textAlign:"right"}}>₹{goldValue.toLocaleString()}</span>
+                  </div>
                   <div style={{display:"flex",justifyContent:"space-between",paddingTop:10,marginTop:4,borderTop:`1px solid ${border}`}}><span style={{fontSize:13,color:textMute,fontWeight:600}}>Total Net Worth</span><span style={{fontSize:20,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Mono',monospace"}}>₹{netWorthTotal.toLocaleString()}</span></div>
                 </div>
                 <div style={cardStyle}>
                   <p style={{margin:"0 0 4px",fontSize:13,fontWeight:700}}>Update Savings / Investments / Gold</p>
                   <p style={{margin:"0 0 12px",fontSize:11,color:textMute}}>Increasing these deducts from your bank balance</p>
-                  {[["savings","Savings / FD","#7c3aed"],["investments","Investments","#db2777"],["gold","Gold / Assets","#d97706"]].map(([field,label,color])=>(
+                  {[["savings","Savings / FD","#7c3aed"],["investments","Investments","#db2777"]].map(([field,label,color])=>(
                     <div key={field}style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
                       <div style={{width:8,height:8,borderRadius:"50%",background:color,flexShrink:0}}/>
                       <span style={{flex:1,fontSize:13}}>{label}</span>
                       <input type="number"value={pot[field]||""}onChange={e=>updateNWField(field,e.target.value)}placeholder="₹0"style={{...inputStyle,width:130,textAlign:"right",fontWeight:700,color}}/>
                     </div>
                   ))}
+                  {/* Gold — grams + rate */}
+                  <div style={{paddingTop:10,borderTop:`1px solid ${border}`}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                      <div style={{width:8,height:8,borderRadius:"50%",background:"#d97706"}}/>
+                      <span style={{fontSize:13,fontWeight:600}}>Gold</span>
+                      {pot.goldRateUpdatedOn&&<span style={{fontSize:11,color:textMute,marginLeft:"auto"}}>Rate updated: {formatDate(pot.goldRateUpdatedOn)}</span>}
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
+                      <div>
+                        <p style={{margin:"0 0 4px",fontSize:11,color:textMute}}>Weight (grams)</p>
+                        <input type="number" value={pot.goldGrams||""} onChange={e=>setPot(p=>({...p,goldGrams:Number(e.target.value)||0}))} placeholder="e.g. 24.5" style={{...inputStyle,textAlign:"right",fontWeight:700,color:"#d97706"}}/>
+                      </div>
+                      <div>
+                        <p style={{margin:"0 0 4px",fontSize:11,color:textMute}}>Rate (₹/gram 24K)</p>
+                        <input type="number" value={pot.goldRate||""} onChange={e=>setPot(p=>({...p,goldRate:Number(e.target.value)||0,goldRateUpdatedOn:today}))} placeholder="e.g. 9200" style={{...inputStyle,textAlign:"right",fontWeight:700,color:"#d97706"}}/>
+                      </div>
+                    </div>
+                    {pot.goldGrams>0&&pot.goldRate>0&&(
+                      <div style={{background:dark?"#422006":"#fffbeb",borderRadius:10,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span style={{fontSize:12,color:dark?"#d97706":"#92400e"}}>{pot.goldGrams}g × ₹{Number(pot.goldRate).toLocaleString()}</span>
+                        <span style={{fontSize:14,fontWeight:800,color:"#d97706",fontFamily:"'DM Mono',monospace"}}>= ₹{goldValue.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </>
             )}
@@ -943,7 +1037,31 @@ export default function App(){
           </>
         )}
 
-        <p style={{textAlign:"center",fontSize:12,color:textMute,marginTop:24}}>mySpendr · your money, your streak</p>
+        {/* ══ MONTHLY SUMMARY ══ */}
+        <div style={{...cardStyle,marginTop:8}}>
+          <p style={{margin:"0 0 12px",fontSize:13,fontWeight:700}}>This Month Summary</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{background:dark?"#052e16":"#f0fdf4",borderRadius:12,padding:"12px 14px",border:dark?"1px solid #065f46":"1px solid #bbf7d0"}}>
+              <p style={{margin:0,fontSize:11,color:dark?"#34d399":"#16a34a",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>Total In</p>
+              <p style={{margin:0,fontSize:20,fontWeight:800,fontFamily:"'DM Mono',monospace",color:dark?"#34d399":"#16a34a",letterSpacing:"-0.5px"}}>₹{totalIn.toLocaleString()}</p>
+              <p style={{margin:"3px 0 0",fontSize:11,color:textMute}}>Income + extras</p>
+            </div>
+            <div style={{background:dark?"#450a0a":"#fff1f2",borderRadius:12,padding:"12px 14px",border:dark?"1px solid #7f1d1d":"1px solid #fca5a5"}}>
+              <p style={{margin:0,fontSize:11,color:dark?"#f87171":"#dc2626",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>Total Out</p>
+              <p style={{margin:0,fontSize:20,fontWeight:800,fontFamily:"'DM Mono',monospace",color:dark?"#f87171":"#dc2626",letterSpacing:"-0.5px"}}>₹{totalOut.toLocaleString()}</p>
+              <p style={{margin:"3px 0 0",fontSize:11,color:textMute}}>All expenses</p>
+            </div>
+          </div>
+          {/* net */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:`1px solid ${border}`}}>
+            <span style={{fontSize:12,color:textMute,fontWeight:500}}>Net this month</span>
+            <span style={{fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:totalIn-totalOut>=0?(dark?"#34d399":"#16a34a"):"#ef4444"}}>
+              {totalIn-totalOut>=0?"+":""}{(totalIn-totalOut).toLocaleString()}
+            </span>
+          </div>
+        </div>
+
+        <p style={{textAlign:"center",fontSize:12,color:textMute,marginTop:8}}>mySpendr · your money, your streak</p>
       </div>
     </div>
   );
