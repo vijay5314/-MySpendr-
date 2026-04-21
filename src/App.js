@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 
 const STORAGE_KEY   = "myspendr_expenses_v3";
 const BUDGET_KEY    = "myspendr_budget_v3";
@@ -59,7 +59,6 @@ function RepeatIcon(){return<svg width="16"height="16"viewBox="0 0 24 24"fill="n
 function PlusIcon(){return<svg width="16"height="16"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2.5"strokeLinecap="round"strokeLinejoin="round"><line x1="12"y1="5"x2="12"y2="19"/><line x1="5"y1="12"x2="19"y2="12"/></svg>;}
 function CheckIcon(){return<svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2.5"strokeLinecap="round"strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;}
 function PotTabIcon(){return<svg width="16"height="16"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M4 10h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8z"/><path d="M2 10h20"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>;}
-function WalletIcon(){return<svg width="16"height="16"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><circle cx="18"cy="12"r="2"/></svg>;}
 function TrendingUpIcon(){return<svg width="16"height="16"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>;}
 function PiggyIcon(){return<svg width="18"height="18"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M19 8a7 7 0 0 0-14 0c0 2.5 1.3 4.7 3.3 6L8 20h8l-.3-6A7 7 0 0 0 19 8z"/><line x1="12"y1="2"x2="12"y2="4"/><line x1="8"y1="20"x2="16"y2="20"/></svg>;}
 function ZapIcon(){return<svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;}
@@ -233,7 +232,7 @@ function PinLock({onUnlock,dark}){
     setBioError("");
     try{
       // Use a simple get() with userVerification to trigger fingerprint/FaceID
-      const cred=await navigator.credentials.get({
+      await navigator.credentials.get({
         publicKey:{
           challenge:crypto.getRandomValues(new Uint8Array(32)),
           timeout:30000,
@@ -648,7 +647,6 @@ export default function App(){
   function refundPot(source,amount,p){const f=source==="cash"?"usableCash":"usableBank";return{...p,[f]:(Number(p[f])||0)+amount};}
   function quickAdjust(field,mode,val){const num=Number(val)||0;if(num<=0)return;setPot(p=>({...p,[field]:mode==="add"?(Number(p[field])||0)+num:Math.max(0,(Number(p[field])||0)-num)}));showToast(`${mode==="add"?"+":"-"}₹${num.toLocaleString()} ${field==="usableCash"?"cash":"bank"}`);}
   function updateNWField(field,val){const newVal=Number(val)||0;const oldVal=Number(pot[field])||0;const diff=newVal-oldVal;setPot(p=>{const nb=Math.max(0,(Number(p.usableBank)||0)-diff);return{...p,[field]:newVal,usableBank:nb};});}
-  function setUsableField(field,val){setPot(p=>({...p,[field]:Number(val)||0}));}
   function saveGoldRate(){
     const rate=Number(goldRateInput)||0;
     if(rate<=0)return;
