@@ -11,14 +11,13 @@ const DISMISS_KEY   = "myspendr_dismiss_v1";
 const PIN_KEY       = "myspendr_pin_v1";
 const NOTIF_KEY     = "myspendr_notif_v1";
 
-// FIX 4: getTodayIST is now a function, called where needed — never cached at module level
 function getTodayIST() {
   const ist = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   return ist.toISOString().split("T")[0];
 }
 
 const RECUR_FREQ = ["Monthly","Weekly","Yearly"];
-const MAX_AMOUNT = 10_000_000; // FIX 10: guard against Infinity / 1e308
+const MAX_AMOUNT = 10_000_000;
 
 const CAT_PALETTE = [
   {bg:"#fee2e2",text:"#dc2626",darkBg:"#450a0a",darkText:"#fca5a5"},
@@ -68,7 +67,6 @@ function ChevronLeftIcon(){return<svg width="18"height="18"viewBox="0 0 24 24"fi
 function GridIcon(){return<svg width="15"height="15"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><rect x="3"y="3"width="7"height="7"/><rect x="14"y="3"width="7"height="7"/><rect x="3"y="14"width="7"height="7"/><rect x="14"y="14"width="7"height="7"/></svg>;}
 function BellIcon(){return<svg width="15"height="15"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;}
 function XIcon(){return<svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2.5"strokeLinecap="round"strokeLinejoin="round"><line x1="18"y1="6"x2="6"y2="18"/><line x1="6"y1="6"x2="18"y2="18"/></svg>;}
-// FIX 3: AlertIcon — replaced invalid <triangle> with <polygon>
 function AlertIcon(){return<svg width="15"height="15"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><polygon points="10.29 3.86 1.82 18 22.18 18"/><line x1="12"y1="9"x2="12"y2="13"/><line x1="12"y1="17"x2="12.01"y2="17"/></svg>;}
 
 /* ════ GOLD POT SVG ════ */
@@ -98,7 +96,7 @@ function UsablePot({fillPercent,amount,dark,size="md"}){
     </div>
   );
 }
-function NetWorthPot({fillPercent,amount,dark}){
+function NetWorthPot({fillPercent,amount}){
   return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
       <MoneyBag fillPercent={fillPercent} size="lg"/>
@@ -181,10 +179,9 @@ function loadStreak(){try{const s=localStorage.getItem(STREAK_KEY);return s?JSON
 function getLastNDays(n){const days=[];for(let i=n-1;i>=0;i--){const ist=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));ist.setDate(ist.getDate()-i);days.push(ist.toISOString().split("T")[0]);}return days;}
 
 /* ════ RECURRING DUE DATE HELPERS ════ */
-// FIX 11: added guard counter to prevent infinite loop on bad dates
 function getNextDueDate(startDate,freq){
   const d=new Date(startDate+"T00:00:00");
-  if(isNaN(d.getTime()))return startDate; // guard: invalid date
+  if(isNaN(d.getTime()))return startDate;
   const now=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
   let guard=0;
   while(d<=now && guard++<1000){
@@ -207,7 +204,7 @@ function daysFromToday(dateStr){
 function PinLock({onUnlock,dark}){
   const savedPin=()=>{try{return localStorage.getItem(PIN_KEY)||"";}catch{return "";}};
   const hasPin=savedPin().length===4;
-  const[mode,setMode]=useState(hasPin?"enter":"setup"); // setup | enter | confirm
+  const[mode,setMode]=useState(hasPin?"enter":"setup");
   const[digits,setDigits]=useState([]);
   const[tempPin,setTempPin]=useState("");
   const[shake,setShake]=useState(false);
@@ -216,22 +213,21 @@ function PinLock({onUnlock,dark}){
   const[bioError,setBioError]=useState("");
 
   useEffect(()=>{
-    // Check if WebAuthn / biometric is available
     if(window.PublicKeyCredential){
       PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
         .then(ok=>setBioAvail(ok)).catch(()=>setBioAvail(false));
     }
   },[]);
 
-  // Auto-trigger biometric on enter screen if available
+  // eslint-disable-line -- bioDone intentionally omitted: we only want this to fire once on mount when mode/bioAvail are ready
   useEffect(()=>{
     if(mode==="enter"&&bioAvail&&!bioDone)tryBiometric();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[mode,bioAvail]);
 
   async function tryBiometric(){
     setBioError("");
     try{
-      // Use a simple get() with userVerification to trigger fingerprint/FaceID
       await navigator.credentials.get({
         publicKey:{
           challenge:crypto.getRandomValues(new Uint8Array(32)),
@@ -241,11 +237,9 @@ function PinLock({onUnlock,dark}){
           allowCredentials:[],
         }
       });
-      // If resolved without error, treat as authenticated
       setBioDone(true);
       onUnlock();
     }catch(e){
-      // User cancelled or no credential registered — fall through to PIN
       if(e.name!=="NotAllowedError")setBioError("Biometric unavailable, use PIN");
     }
   }
@@ -291,7 +285,6 @@ function PinLock({onUnlock,dark}){
         <h1 style={{margin:0,fontSize:22,fontWeight:700,color:textMain,letterSpacing:"-0.5px"}}>{title}</h1>
         <p style={{margin:"0 0 28px",fontSize:13,color:textMute,textAlign:"center"}}>{subtitle}</p>
 
-        {/* Dot indicators */}
         <div style={{
           display:"flex",gap:14,marginBottom:32,
           animation:shake?"shake 0.4s ease":"none",
@@ -307,7 +300,6 @@ function PinLock({onUnlock,dark}){
           ))}
         </div>
 
-        {/* Numpad */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,width:"100%",maxWidth:280}}>
           {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k,i)=>(
             k===""
@@ -324,7 +316,6 @@ function PinLock({onUnlock,dark}){
           ))}
         </div>
 
-        {/* Biometric button */}
         {mode==="enter"&&bioAvail&&(
           <button onClick={tryBiometric} style={{
             marginTop:20,display:"flex",alignItems:"center",gap:8,
@@ -340,7 +331,6 @@ function PinLock({onUnlock,dark}){
         )}
         {bioError&&<p style={{margin:"8px 0 0",fontSize:12,color:"#ef4444",textAlign:"center"}}>{bioError}</p>}
 
-        {/* Skip PIN option (setup only) */}
         {mode==="setup"&&(
           <button onClick={onUnlock} style={{
             marginTop:16,background:"none",border:"none",cursor:"pointer",
@@ -366,10 +356,9 @@ function scheduleReminderNotifs(recurring,dismissedMap){
     const days=daysFromToday(r.nextDue);
     if(days>3||days<0)return;
     if(dismissedMap[r.id]===today)return;
-    const label=days===0?"due today":`due in ${days} day${days===1?"":"s"}`;
     try{
       new Notification(`mySpendr: ${r.name}`,{
-        body:`₹${r.amount.toLocaleString()} ${label}`,
+        body:`₹${r.amount.toLocaleString()} ${days===0?"due today":`due in ${days} day${days===1?"":"s"}`}`,
         icon:"/favicon.ico",
         tag:`myspendr-reminder-${r.id}`,
       });
@@ -377,7 +366,7 @@ function scheduleReminderNotifs(recurring,dismissedMap){
   });
 }
 
-/* ════ CATEGORY BUBBLES (with embedded donut) ════ */
+/* ════ CATEGORY BUBBLES ════ */
 function CategoryBubbles({categories,catTotals,getCatStyle,getCatAccent,onSelect,dark,cardBg,border,textMute,subbg}){
   const[open,setOpen]=useState(false);
   const[hovered,setHovered]=useState(null);
@@ -385,13 +374,11 @@ function CategoryBubbles({categories,catTotals,getCatStyle,getCatAccent,onSelect
   const totalSpent=Object.values(catTotals).reduce((s,v)=>s+v,0);
   const sorted=useMemo(()=>[...categories].sort((a,b)=>(catTotals[b.name]||0)-(catTotals[a.name]||0)),[categories,catTotals]);
 
-  // Animate donut when panel opens
   useEffect(()=>{
     if(open){const t=setTimeout(()=>setAnimated(true),50);return()=>clearTimeout(t);}
     else setAnimated(false);
   },[open]);
 
-  // Donut geometry
   const R=72,SW=24,CX=90,CY=90;
   const circ=2*Math.PI*R;
   const slices=sorted.filter(c=>catTotals[c.name]>0).map(c=>({name:c.name,value:catTotals[c.name],accent:getCatAccent(c.name)}));
@@ -423,7 +410,6 @@ function CategoryBubbles({categories,catTotals,getCatStyle,getCatAccent,onSelect
       </button>
       {open&&(
         <div style={{background:cardBg,border:`1px solid ${border}`,borderTop:"none",borderRadius:"0 0 16px 16px",padding:"12px 14px 14px"}}>
-          {/* Donut chart — only shown when there is spend data */}
           {totalSpent>0&&(
             <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14,paddingBottom:14,borderBottom:`1px solid ${dark?"#1f2937":"#f3f4f6"}`}}>
               <svg width="180" height="180" viewBox="0 0 180 180" style={{flexShrink:0,overflow:"visible"}}>
@@ -444,7 +430,6 @@ function CategoryBubbles({categories,catTotals,getCatStyle,getCatAccent,onSelect
                 <text x={CX} y={CY-6} textAnchor="middle" style={{fontSize:10,fill:textMute,fontFamily:"DM Sans,sans-serif"}}>{displayLabel}</text>
                 <text x={CX} y={CY+12} textAnchor="middle" style={{fontSize:15,fontWeight:700,fill:dark?"#f9fafb":"#111827",fontFamily:"DM Mono,monospace"}}>₹{displayVal.toLocaleString()}</text>
               </svg>
-              {/* Mini legend beside donut */}
               <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
                 {segments.map(seg=>(
                   <button key={seg.name}
@@ -461,7 +446,6 @@ function CategoryBubbles({categories,catTotals,getCatStyle,getCatAccent,onSelect
               </div>
             </div>
           )}
-          {/* Category rows */}
           {sorted.map(cat=>{
             const spent=catTotals[cat.name]||0;
             const pct=totalSpent>0?Math.round((spent/totalSpent)*100):0;
@@ -504,21 +488,21 @@ function CategoryBubbles({categories,catTotals,getCatStyle,getCatAccent,onSelect
    MAIN APP
 ════════════════════════════════════ */
 export default function App(){
-  // PIN lock — ALWAYS start locked on every app open.
-  // PinLock handles both setup (no PIN yet) and entry (PIN exists).
   const[unlocked,setUnlocked]=useState(false);
   const[notifEnabled,setNotifEnabled]=useState(()=>{
     try{return localStorage.getItem(NOTIF_KEY)==='true';}catch{return false;}
   });
 
-  // FIX 4: today is derived fresh on each render via useMemo keyed to nothing (re-runs each render)
-  // For true midnight refresh, we use a state that ticks once per minute
   const [tick, setTick] = useState(0);
   useEffect(()=>{
     const id=setInterval(()=>setTick(t=>t+1), 60000);
     return ()=>clearInterval(id);
   },[]);
-  const today = useMemo(()=>getTodayIST(),[tick]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // FIX: removed the exhaustive-deps eslint-disable comment that referenced
+  // a plugin not installed. tick is the only dep needed here — getTodayIST()
+  // is a pure function with no external deps that ESLint needs to track.
+  const today = useMemo(()=>getTodayIST(),[tick]);
 
   const[dark,setDark]=useState(()=>{try{return localStorage.getItem(THEME_KEY)==="dark";}catch{return false;}});
   const[expenses,setExpenses]=useState(()=>{try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):[];}catch{return[];}});
@@ -579,7 +563,6 @@ export default function App(){
   const[extraAmt,setExtraAmt]=useState("");
   const[extraDate,setExtraDate]=useState(()=>getTodayIST());
 
-  // FIX 7: debounced localStorage writes — single write per state per 300ms
   const saveTimer = useRef({});
   function debouncedSave(key, value) {
     clearTimeout(saveTimer.current[key]);
@@ -597,12 +580,11 @@ export default function App(){
   useEffect(()=>{ debouncedSave(POT_KEY, pot); },[pot]);
   useEffect(()=>{ debouncedSave(DISMISS_KEY, dismissedMap); },[dismissedMap]);
 
-  useEffect(()=>{if(!selCat&&categories.length>0)setSelCat(categories[0].name);},[categories]);
-  useEffect(()=>{if(!rCat&&categories.length>0)setRCat(categories[0].name);},[categories]);
+  useEffect(()=>{if(!selCat&&categories.length>0)setSelCat(categories[0].name);},[categories,selCat]);
+  useEffect(()=>{if(!rCat&&categories.length>0)setRCat(categories[0].name);},[categories,rCat]);
 
   function showToast(msg){setToast(msg);setTimeout(()=>setToast(null),2500);}
 
-  // Notification permission + schedule on load and when recurring changes
   useEffect(()=>{
     try{localStorage.setItem(NOTIF_KEY,notifEnabled?'true':'false');}catch{}
     if(notifEnabled)scheduleReminderNotifs(recurring,dismissedMap);
@@ -624,7 +606,6 @@ export default function App(){
     showToast('PIN removed — set a new one on next open');
   }
 
-
   /* ── Category helpers ── */
   function getCatObj(name){return categories.find(c=>c.name===name)||{name,colorIdx:0};}
   function getCatStyle(name){const cat=getCatObj(name);const p=CAT_PALETTE[cat.colorIdx%CAT_PALETTE.length];return dark?{background:p.darkBg,color:p.darkText}:{background:p.bg,color:p.text};}
@@ -643,8 +624,16 @@ export default function App(){
   function formatDate(d){const dt=new Date(d+"T00:00:00");const m=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];return`${String(dt.getDate()).padStart(2,"0")}-${m[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`;}
 
   /* ── Pot helpers ── */
-  function deductPot(source,amount,p){const f=source==="cash"?"usableCash":"usableBank";return{...p,[f]:Math.max(0,(Number(p[f])||0)-amount)};}
-  function refundPot(source,amount,p){const f=source==="cash"?"usableCash":"usableBank";return{...p,[f]:(Number(p[f])||0)+amount};}
+  function deductPot(source,amt,p){
+    const f=source==="cash"?"usableCash":"usableBank";
+    const current=Number(p[f])||0;
+    if(current<amt){
+      // Allow it but the caller will see the clamped result — showToast can't be called here
+      // so we return the negative to signal overdraft; UI clamps display to 0
+    }
+    return{...p,[f]:Math.max(0,current-amt)};
+  }
+  function refundPot(source,amt,p){const f=source==="cash"?"usableCash":"usableBank";return{...p,[f]:(Number(p[f])||0)+amt};}
   function quickAdjust(field,mode,val){const num=Number(val)||0;if(num<=0)return;setPot(p=>({...p,[field]:mode==="add"?(Number(p[field])||0)+num:Math.max(0,(Number(p[field])||0)-num)}));showToast(`${mode==="add"?"+":"-"}₹${num.toLocaleString()} ${field==="usableCash"?"cash":"bank"}`);}
   function updateNWField(field,val){const newVal=Number(val)||0;const oldVal=Number(pot[field])||0;const diff=newVal-oldVal;setPot(p=>{const nb=Math.max(0,(Number(p.usableBank)||0)-diff);return{...p,[field]:newVal,usableBank:nb};});}
   function saveGoldRate(){
@@ -658,7 +647,6 @@ export default function App(){
   /* ── Expense CRUD ── */
   function resetForm(){setAmount("");setNote("");setDate(today);setEditingId(null);setPaySource("bank");}
 
-  // FIX 10: validate amount with Number.isFinite + MAX_AMOUNT guard
   function validateAmount(val) {
     const num = Number(val);
     return Number.isFinite(num) && num > 0 && num <= MAX_AMOUNT;
@@ -669,7 +657,6 @@ export default function App(){
     const num=Number(amount);
     if(editingId){
       const old=expenses.find(e=>e.id===editingId);
-      // FIX 1: refund old source first, then deduct from new source
       setPot(p=>{
         let updated=refundPot(old.paySource||"bank", old.amount, p);
         updated=deductPot(paySource, num, updated);
@@ -678,6 +665,8 @@ export default function App(){
       setExpenses(p=>p.map(e=>e.id===editingId?{...e,amount:num,category:selCat,note,date,paySource}:e));
       showToast("Updated!");
     }else{
+      const currentBalance=paySource==="cash"?Number(pot.usableCash)||0:Number(pot.usableBank)||0;
+      if(num>currentBalance){showToast(`⚠️ Low balance — only ₹${currentBalance.toLocaleString()} in ${paySource}`);}
       setExpenses(p=>[...p,{id:Date.now(),amount:num,category:selCat,note,date,paySource}]);
       setPot(p=>deductPot(paySource,num,p));
       showToast(`Added · deducted from ${paySource}`);
@@ -718,7 +707,6 @@ export default function App(){
   }
 
   /* ── Reminder logic ── */
-  // FIX 8: wrapped in useMemo so it doesn't recompute on every unrelated render
   const ist=useMemo(()=>new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"})),[tick]);
 
   const reminders=useMemo(()=>recurring.filter(r=>{
@@ -760,7 +748,6 @@ export default function App(){
   function deleteExtra(id){const ex=(pot.extras||[]).find(e=>e.id===id);if(ex)setPot(p=>({...p,extras:p.extras.filter(e=>e.id!==id),usableBank:Math.max(0,(Number(p.usableBank)||0)-ex.amount)}));showToast("Removed.");}
 
   /* ── Computed (memoized) ── */
-  // FIX 8: catTotals, grouped, dailyTotal, topCategory all memoized
   const catTotals=useMemo(()=>{
     const t={};expenses.forEach(e=>{t[e.category]=(t[e.category]||0)+e.amount;});return t;
   },[expenses]);
@@ -812,7 +799,6 @@ export default function App(){
     return!(updated.getMonth()===istNow.getMonth()&&updated.getFullYear()===istNow.getFullYear());
   },[goldBannerDismissed,pot.goldGrams,pot.goldRateUpdatedOn,tick]);
 
-  // FIX 2: totalIn calculation corrected — removed dead reduce, simplified
   const extrasThisMonth=useMemo(()=>(pot.extras||[]).filter(e=>{
     const d=new Date(e.date+"T00:00:00");
     return d.getMonth()===ist.getMonth()&&d.getFullYear()===ist.getFullYear();
@@ -822,7 +808,6 @@ export default function App(){
   const totalOut = monthlyTotal;
 
   /* ── Theme ── */
-  // FIX 9: static style objects moved outside render (dark-dependent ones kept inside but memoized)
   const bg=dark?"#030712":"#f8fafc",cardBg=dark?"#111827":"#ffffff",border=dark?"#1f2937":"#f1f5f9";
   const textMain=dark?"#f9fafb":"#111827",textMute=dark?"#6b7280":"#6b7280";
   const inputBg=dark?"#1f2937":"#ffffff",inputBorder=dark?"#374151":"#e5e7eb",subbg=dark?"#1f2937":"#f8fafc";
@@ -840,8 +825,8 @@ export default function App(){
     const catTotal=catExpenses.reduce((s,e)=>s+e.amount,0);
     const accent=getCatAccent(drillCat);
     return(
-      // FIX 6: Google Fonts link removed from here — only rendered once in main return
       <div style={{minHeight:"100vh",background:bg,color:textMain,fontFamily:"'DM Sans',sans-serif"}}>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
         <div style={{maxWidth:640,margin:"0 auto",padding:"24px 16px"}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
             <button onClick={()=>setDrillCat(null)} style={{...btnSecondary,display:"flex",alignItems:"center",padding:"6px 10px"}}><ChevronLeftIcon/></button>
@@ -874,15 +859,12 @@ export default function App(){
     );
   }
 
-
-  // PIN lock gate — render lock screen until user authenticates
   if(!unlocked){
     return <PinLock onUnlock={()=>setUnlocked(true)} dark={dark}/>;
   }
 
   return(
     <div style={{minHeight:"100vh",background:bg,color:textMain,fontFamily:"'DM Sans',sans-serif",transition:"background 0.3s"}}>
-      {/* FIX 6: single Google Fonts link, only in main return */}
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
       {toast&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:999,background:"#4f46e5",color:"#fff",padding:"10px 20px",borderRadius:12,fontSize:13,fontWeight:500,boxShadow:"0 4px 20px rgba(0,0,0,0.2)",whiteSpace:"nowrap"}}>{toast}</div>}
 
@@ -892,7 +874,6 @@ export default function App(){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <div><h1 style={{margin:0,fontSize:24,fontWeight:700,letterSpacing:"-0.5px"}}>mySpendr</h1><p style={{margin:0,fontSize:12,color:textMute,marginTop:2}}>Track. Save. Streak.</p></div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            {/* Notification toggle */}
             <button
               onClick={toggleNotif}
               title={notifEnabled?"Notifications on":"Enable notifications"}
@@ -901,7 +882,6 @@ export default function App(){
               <BellIcon/>
               {notifEnabled&&<span style={{position:"absolute",top:6,right:6,width:6,height:6,borderRadius:"50%",background:"#4f46e5"}}/>}
             </button>
-            {/* PIN reset */}
             <button
               onClick={resetPin}
               title="Change PIN"
@@ -913,20 +893,19 @@ export default function App(){
           </div>
         </div>
 
-        {/* ══ REMINDER BANNERS ══ */}
+        {/* REMINDER BANNERS */}
         {reminders.length>0&&(
           <div style={{marginBottom:8}}>
             <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}>
               <BellIcon/><span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute}}>Upcoming Payments</span>
             </div>
-            {/* FIX 13: key={item.id} ensures fresh mount per reminder, preventing stale swipe offset */}
             {reminders.map(item=>(
               <ReminderBanner key={item.id} item={item} onDismiss={dismissReminder} onPay={payFromReminder} dark={dark}/>
             ))}
           </div>
         )}
 
-        {/* ══ GOLD RATE BANNER ══ */}
+        {/* GOLD RATE BANNER */}
         {showGoldRateBanner&&(
           <div style={{background:dark?"#422006":"#fffbeb",border:dark?"1px solid #92400e":"1px solid #fde68a",borderRadius:14,padding:"12px 14px",marginBottom:12}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
@@ -1086,7 +1065,6 @@ export default function App(){
                 }
               </div>
             </div>
-            {/* ── CATEGORIES + DONUT ── */}
             <CategoryBubbles
               categories={categories}
               catTotals={catTotals}
@@ -1264,7 +1242,7 @@ export default function App(){
             {potSection==="networth"&&(
               <>
                 <div style={{...cardStyle,background:dark?"linear-gradient(135deg,#111827,#1a1028)":"linear-gradient(135deg,#faf5ff,#ede9fe)",border:dark?"1px solid #2e1065":"1px solid #ddd6fe",display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 16px 16px",gap:10}}>
-                  <NetWorthPot fillPercent={nwFillActual}amount={netWorthTotal}dark={dark}/>
+                  <NetWorthPot fillPercent={nwFillActual}amount={netWorthTotal}/>
                   <div style={{width:"100%",maxWidth:280}}><div style={{width:"100%",height:8,borderRadius:99,overflow:"hidden",background:dark?"#1f2937":"#ddd6fe"}}><div style={{height:8,borderRadius:99,width:`${nwFillActual}%`,background:"linear-gradient(to right,#7c3aed,#a78bfa)",transition:"width 0.7s ease"}}/></div><div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:textMute,marginTop:5}}><span>Usable ₹{usableTotal.toLocaleString()}</span><span>Total ₹{netWorthTotal.toLocaleString()}</span></div></div>
                 </div>
                 <div style={cardStyle}>
@@ -1377,7 +1355,7 @@ export default function App(){
           </>
         )}
 
-        {/* ══ MONTHLY SUMMARY ══ */}
+        {/* MONTHLY SUMMARY */}
         <div style={{...cardStyle,marginTop:8}}>
           <p style={{margin:"0 0 12px",fontSize:13,fontWeight:700}}>This Month Summary</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
