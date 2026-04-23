@@ -200,53 +200,118 @@ function daysFromToday(dateStr){
   return Math.round((d-ist)/86400000);
 }
 
+/* ════ BIOMETRIC HELPERS ════ */
+const BIO_CRED_KEY = "myspendr_bio_cred_v1";
+
+function bufferToBase64(buf){
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function base64ToBuffer(b64){
+  const bin=atob(b64);
+  const buf=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
+  return buf.buffer;
+}
+function saveBioCred(id){try{localStorage.setItem(BIO_CRED_KEY,bufferToBase64(id));}catch{}}
+function loadBioCred(){try{const s=localStorage.getItem(BIO_CRED_KEY);return s?base64ToBuffer(s):null;}catch{return null;}}
+
+async function isBiometricAvailable(){
+  if(!window.PublicKeyCredential)return false;
+  try{return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();}
+  catch{return false;}
+}
+
+async function registerBiometric(){
+  const cred=await navigator.credentials.create({
+    publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      rp:{name:"mySpendr",id:window.location.hostname||"localhost"},
+      user:{
+        id:crypto.getRandomValues(new Uint8Array(16)),
+        name:"myspendr-user",
+        displayName:"mySpendr User",
+      },
+      pubKeyCredParams:[
+        {type:"public-key",alg:-7},
+        {type:"public-key",alg:-257},
+      ],
+      authenticatorSelection:{
+        authenticatorAttachment:"platform",
+        userVerification:"required",
+        residentKey:"preferred",
+      },
+      timeout:60000,
+    },
+  });
+  saveBioCred(cred.rawId);
+  return true;
+}
+
+async function verifyBiometric(){
+  const credId=loadBioCred();
+  if(!credId)throw new Error("no-cred");
+  await navigator.credentials.get({
+    publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      rpId:window.location.hostname||"localhost",
+      allowCredentials:[{type:"public-key",id:credId}],
+      userVerification:"required",
+      timeout:60000,
+    },
+  });
+  return true;
+}
+
 /* ════ PIN LOCK ════ */
 function PinLock({onUnlock,dark}){
   const savedPin=()=>{try{return localStorage.getItem(PIN_KEY)||"";}catch{return "";}};
   const hasPin=savedPin().length===4;
+  const hasCred=!!loadBioCred();
+
   const[mode,setMode]=useState(hasPin?"enter":"setup");
   const[digits,setDigits]=useState([]);
   const[tempPin,setTempPin]=useState("");
   const[shake,setShake]=useState(false);
-  const[bioDone,setBioDone]=useState(false);
   const[bioAvail,setBioAvail]=useState(false);
   const[bioError,setBioError]=useState("");
+  const[bioLoading,setBioLoading]=useState(false);
+  const[offerBioSetup,setOfferBioSetup]=useState(false);
 
-  useEffect(()=>{
-    if(window.PublicKeyCredential){
-      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
-        .then(ok=>setBioAvail(ok)).catch(()=>setBioAvail(false));
-    }
-  },[]);
+  useEffect(()=>{isBiometricAvailable().then(setBioAvail);},[]);
 
+  // Auto-trigger verify on enter screen when a credential is already registered
   useEffect(()=>{
-    if(mode==="enter"&&bioAvail&&!bioDone)tryBiometric();
+    if(mode==="enter"&&bioAvail&&hasCred)tryVerify();
   },[mode,bioAvail]); // eslint-disable-line
 
-  async function tryBiometric(){
-    setBioError("");
+  async function tryVerify(){
+    setBioError("");setBioLoading(true);
+    try{await verifyBiometric();onUnlock();}
+    catch(e){
+      if(e.message==="no-cred"){setBioError("No biometric registered — use PIN");}
+      else if(e.name==="NotAllowedError"){setBioError("");}// silent cancel
+      else{setBioError("Biometric failed — use PIN");}
+    }finally{setBioLoading(false);}
+  }
+
+  async function tryRegister(){
+    setBioError("");setBioLoading(true);
     try{
-      await navigator.credentials.get({
-        publicKey:{
-          challenge:crypto.getRandomValues(new Uint8Array(32)),
-          timeout:30000,
-          userVerification:"required",
-          rpId:window.location.hostname||"localhost",
-          allowCredentials:[],
-        }
-      });
-      setBioDone(true);
+      await registerBiometric();
+      setOfferBioSetup(false);
       onUnlock();
     }catch(e){
-      if(e.name!=="NotAllowedError")setBioError("Biometric unavailable, use PIN");
-    }
+      // User declined or device error — just unlock anyway, PIN still works
+      setOfferBioSetup(false);
+      onUnlock();
+    }finally{setBioLoading(false);}
   }
 
   function press(d){
     if(digits.length>=4)return;
     const next=[...digits,d];
     setDigits(next);
-    if(next.length===4) setTimeout(()=>submit(next),120);
+    if(next.length===4)setTimeout(()=>submit(next),120);
   }
   function del(){setDigits(p=>p.slice(0,-1));}
 
@@ -257,7 +322,9 @@ function PinLock({onUnlock,dark}){
     } else if(mode==="confirm"){
       if(pin===tempPin){
         try{localStorage.setItem(PIN_KEY,pin);}catch{}
-        onUnlock();
+        // After confirming PIN, offer biometric setup if available and not yet registered
+        if(bioAvail&&!loadBioCred()){setOfferBioSetup(true);}
+        else{onUnlock();}
       } else {
         setShake(true);setDigits([]);
         setTimeout(()=>setShake(false),500);
@@ -272,8 +339,36 @@ function PinLock({onUnlock,dark}){
   const card=dark?"#111827":"#ffffff";
   const textMain=dark?"#f9fafb":"#111827";
   const textMute=dark?"#6b7280":"#9ca3af";
+
+  /* ── Biometric setup offer screen ── */
+  if(offerBioSetup){
+    return(
+      <div style={{minHeight:"100vh",background:bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24}}>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
+        <div style={{width:"100%",maxWidth:320,display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+          <div style={{fontSize:56}}>🔑</div>
+          <h1 style={{margin:0,fontSize:22,fontWeight:700,color:textMain,textAlign:"center",letterSpacing:"-0.5px"}}>Enable Face ID / Fingerprint?</h1>
+          <p style={{margin:"0 0 24px",fontSize:13,color:textMute,textAlign:"center",lineHeight:1.6}}>Skip the PIN next time and unlock instantly with your device biometrics.</p>
+          {bioError&&<p style={{margin:"0 0 8px",fontSize:12,color:"#ef4444",textAlign:"center"}}>{bioError}</p>}
+          <button
+            onClick={tryRegister}
+            disabled={bioLoading}
+            style={{width:"100%",padding:14,borderRadius:14,border:"none",background:"#4f46e5",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",opacity:bioLoading?0.7:1}}
+          >{bioLoading?"Setting up…":"Enable Biometrics"}</button>
+          <button
+            onClick={()=>{setOfferBioSetup(false);onUnlock();}}
+            style={{background:"none",border:"none",cursor:"pointer",color:textMute,fontSize:13,textDecoration:"underline"}}
+          >Skip for now</button>
+        </div>
+      </div>
+    );
+  }
+
   const title=mode==="setup"?"Set a PIN":mode==="confirm"?"Confirm PIN":"Welcome back";
-  const subtitle=mode==="setup"?"Choose a 4-digit PIN to secure your data":mode==="confirm"?"Re-enter your PIN to confirm":"Enter your PIN to continue";
+  const subtitle=mode==="setup"?"Choose a 4-digit PIN to secure your data"
+    :mode==="confirm"?"Re-enter your PIN to confirm"
+    :hasCred?"Unlock with biometrics or enter your PIN"
+    :"Enter your PIN to continue";
 
   return(
     <div style={{minHeight:"100vh",background:bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24}}>
@@ -283,10 +378,7 @@ function PinLock({onUnlock,dark}){
         <h1 style={{margin:0,fontSize:22,fontWeight:700,color:textMain,letterSpacing:"-0.5px"}}>{title}</h1>
         <p style={{margin:"0 0 28px",fontSize:13,color:textMute,textAlign:"center"}}>{subtitle}</p>
 
-        <div style={{
-          display:"flex",gap:14,marginBottom:32,
-          animation:shake?"shake 0.4s ease":"none",
-        }}>
+        <div style={{display:"flex",gap:14,marginBottom:32,animation:shake?"shake 0.4s ease":"none"}}>
           <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}`}</style>
           {[0,1,2,3].map(i=>(
             <div key={i} style={{
@@ -301,39 +393,42 @@ function PinLock({onUnlock,dark}){
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,width:"100%",maxWidth:280}}>
           {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k,i)=>(
             k===""
-              ? <div key={i}/>
-              : <button key={i} onClick={()=>k==="⌫"?del():press(k)}
-                  style={{
-                    height:64,borderRadius:16,border:`1px solid ${dark?"#1f2937":"#e5e7eb"}`,
-                    background:k==="⌫"?(dark?"#1f2937":"#f3f4f6"):card,
-                    color:textMain,fontSize:k==="⌫"?20:22,fontWeight:600,
-                    cursor:"pointer",transition:"background 0.1s",
-                    fontFamily:"'DM Mono',monospace",
-                  }}
-                >{k}</button>
+              ?<div key={i}/>
+              :<button key={i} onClick={()=>k==="⌫"?del():press(k)}
+                style={{
+                  height:64,borderRadius:16,border:`1px solid ${dark?"#1f2937":"#e5e7eb"}`,
+                  background:k==="⌫"?(dark?"#1f2937":"#f3f4f6"):card,
+                  color:textMain,fontSize:k==="⌫"?20:22,fontWeight:600,
+                  cursor:"pointer",transition:"background 0.1s",
+                  fontFamily:"'DM Mono',monospace",
+                }}
+              >{k}</button>
           ))}
         </div>
 
+        {/* Biometric button — shown on enter screen whenever device supports it */}
         {mode==="enter"&&bioAvail&&(
-          <button onClick={tryBiometric} style={{
-            marginTop:20,display:"flex",alignItems:"center",gap:8,
-            background:"none",border:`1px solid ${dark?"#374151":"#e5e7eb"}`,
-            borderRadius:12,padding:"10px 20px",cursor:"pointer",
-            color:dark?"#9ca3af":"#6b7280",fontSize:13,fontWeight:500,
-          }}>
+          <button
+            onClick={tryVerify}
+            disabled={bioLoading}
+            style={{
+              marginTop:20,display:"flex",alignItems:"center",gap:8,
+              background:"none",border:`1px solid ${dark?"#374151":"#e5e7eb"}`,
+              borderRadius:12,padding:"10px 20px",cursor:"pointer",
+              color:dark?"#9ca3af":"#6b7280",fontSize:13,fontWeight:500,
+              opacity:bioLoading?0.6:1,
+            }}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839-1.132c.09-.52.138-1.05.138-1.587 0-3.038-1.362-5.762-3.509-7.6"/>
             </svg>
-            Use Biometric
+            {bioLoading?"Verifying…":hasCred?"Use Face ID / Fingerprint":"Set up Biometrics"}
           </button>
         )}
         {bioError&&<p style={{margin:"8px 0 0",fontSize:12,color:"#ef4444",textAlign:"center"}}>{bioError}</p>}
 
         {mode==="setup"&&(
-          <button onClick={onUnlock} style={{
-            marginTop:16,background:"none",border:"none",cursor:"pointer",
-            color:textMute,fontSize:12,textDecoration:"underline",
-          }}>Skip for now</button>
+          <button onClick={onUnlock} style={{marginTop:16,background:"none",border:"none",cursor:"pointer",color:textMute,fontSize:12,textDecoration:"underline"}}>Skip for now</button>
         )}
       </div>
     </div>
@@ -600,8 +695,14 @@ export default function App(){
 
   function resetPin(){
     try{localStorage.removeItem(PIN_KEY);}catch{}
+    try{localStorage.removeItem(BIO_CRED_KEY);}catch{}
     setUnlocked(false);
-    showToast('PIN removed — set a new one on next open');
+    showToast('PIN & biometrics cleared — set a new PIN on next open');
+  }
+
+  function resetBiometric(){
+    try{localStorage.removeItem(BIO_CRED_KEY);}catch{}
+    showToast('Biometrics removed — will re-register on next PIN setup');
   }
 
   /* ── Category helpers ── */
@@ -886,6 +987,13 @@ export default function App(){
               style={{...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center"}}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </button>
+            <button
+              onClick={resetBiometric}
+              title="Reset biometrics"
+              style={{...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center"}}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571"/><path d="M5.477 5.938A9 9 0 0 1 21 12"/><path d="M3 3l18 18"/></svg>
             </button>
             <button onClick={()=>setDark(d=>!d)} style={{...btnSecondary,display:"flex",alignItems:"center",gap:6}}>{dark?<SunIcon/>:<MoonIcon/>}<span>{dark?"Light":"Dark"}</span></button>
           </div>
