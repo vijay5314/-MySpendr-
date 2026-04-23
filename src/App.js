@@ -219,11 +219,9 @@ function PinLock({onUnlock,dark}){
     }
   },[]);
 
-  // eslint-disable-line -- bioDone intentionally omitted: we only want this to fire once on mount when mode/bioAvail are ready
   useEffect(()=>{
     if(mode==="enter"&&bioAvail&&!bioDone)tryBiometric();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[mode,bioAvail]);
+  },[mode,bioAvail]); // eslint-disable-line
 
   async function tryBiometric(){
     setBioError("");
