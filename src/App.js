@@ -10,6 +10,7 @@ const POT_KEY       = "myspendr_pot_v3";
 const DISMISS_KEY   = "myspendr_dismiss_v1";
 const PIN_KEY       = "myspendr_pin_v1";
 const NOTIF_KEY     = "myspendr_notif_v1";
+const EMI_KEY       = "myspendr_emi_v1";
 
 function getTodayIST() {
   const ist = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
@@ -67,6 +68,17 @@ function ChevronLeftIcon(){return<svg width="18"height="18"viewBox="0 0 24 24"fi
 function GridIcon(){return<svg width="15"height="15"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><rect x="3"y="3"width="7"height="7"/><rect x="14"y="3"width="7"height="7"/><rect x="3"y="14"width="7"height="7"/><rect x="14"y="14"width="7"height="7"/></svg>;}
 function BellIcon(){return<svg width="15"height="15"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;}
 function XIcon(){return<svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2.5"strokeLinecap="round"strokeLinejoin="round"><line x1="18"y1="6"x2="6"y2="18"/><line x1="6"y1="6"x2="18"y2="18"/></svg>;}
+
+/* ════ NAV + FEATURE ICONS ════ */
+function HomeIcon({size=22}){return<svg width={size}height={size}viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;}
+function ListIcon({size=22}){return<svg width={size}height={size}viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><line x1="8"y1="6"x2="21"y2="6"/><line x1="8"y1="12"x2="21"y2="12"/><line x1="8"y1="18"x2="21"y2="18"/><line x1="3"y1="6"x2="3.01"y2="6"/><line x1="3"y1="12"x2="3.01"y2="12"/><line x1="3"y1="18"x2="3.01"y2="18"/></svg>;}
+function WalletIcon({size=22}){return<svg width={size}height={size}viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h2v-4z"/></svg>;}
+function EmiIcon({size=22}){return<svg width={size}height={size}viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><rect x="2"y="5"width="20"height="14"rx="2"/><line x1="2"y1="10"x2="22"y2="10"/><line x1="7"y1="15"x2="7"y2="15"/><line x1="12"y1="15"x2="12"y2="15"/></svg>;}
+function MicIcon({size=22}){return<svg width={size}height={size}viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12"y1="19"x2="12"y2="23"/><line x1="8"y1="23"x2="16"y2="23"/></svg>;}
+function CameraIcon({size=22}){return<svg width={size}height={size}viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12"cy="13"r="4"/></svg>;}
+function ScanIcon({size=20}){return<svg width={size}height={size}viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="3"y1="12"x2="21"y2="12"/></svg>;}
+function AddCircleIcon({size=44}){return<svg width={size}height={size}viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><circle cx="12"cy="12"r="10"/><line x1="12"y1="8"x2="12"y2="16"/><line x1="8"y1="12"x2="16"y2="12"/></svg>;}
+
 function AlertIcon(){return<svg width="15"height="15"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><polygon points="10.29 3.86 1.82 18 22.18 18"/><line x1="12"y1="9"x2="12"y2="13"/><line x1="12"y1="17"x2="12.01"y2="17"/></svg>;}
 
 /* ════ GOLD POT SVG ════ */
@@ -580,6 +592,561 @@ function CategoryBubbles({categories,catTotals,getCatStyle,getCatAccent,onSelect
 /* ════════════════════════════════════
    MAIN APP
 ════════════════════════════════════ */
+
+/* ════ EMI HELPERS ════ */
+function calcEMI(principal, annualRate, tenureMonths){
+  if(annualRate===0)return principal/tenureMonths;
+  const r=annualRate/12/100;
+  return principal*r*Math.pow(1+r,tenureMonths)/(Math.pow(1+r,tenureMonths)-1);
+}
+function buildAmortization(principal, annualRate, tenureMonths){
+  const emi=calcEMI(principal,annualRate,tenureMonths);
+  let balance=principal;
+  const rows=[];
+  for(let i=1;i<=tenureMonths;i++){
+    const interest=annualRate===0?0:balance*(annualRate/12/100);
+    const principalPart=emi-interest;
+    balance=Math.max(0,balance-principalPart);
+    rows.push({month:i,emi:Math.round(emi),interest:Math.round(interest),principal:Math.round(principalPart),balance:Math.round(balance)});
+  }
+  return rows;
+}
+
+/* ════ VOICE LOGGER ════ */
+function VoiceLogger({categories,onAdd,dark,cardBg,border,textMute,textMain,inputBg,inputBorder}){
+  const[listening,setListening]=useState(false);
+  const[transcript,setTranscript]=useState("");
+  const[parsed,setParsed]=useState(null);
+  const[error,setError]=useState("");
+  const[supported]=useState(()=>!!( window.SpeechRecognition||window.webkitSpeechRecognition));
+  const recRef=useRef(null);
+
+  function parseVoice(text){
+    const t=text.toLowerCase();
+    // Amount: find first number (supports "four fifty" style via digits only for now)
+    const amtMatch=t.match(/[₹rs\s]*([\d,]+(?:\.\d+)?)/);
+    const amount=amtMatch?parseFloat(amtMatch[1].replace(/,/g,"")):null;
+    // Category: match against known categories
+    const catNames=categories.map(c=>c.name.toLowerCase());
+    let category=categories[0]?.name||"";
+    for(const c of catNames){if(t.includes(c)){category=categories.find(x=>x.name.toLowerCase()===c)?.name||category;break;}}
+    // Note: everything after the category or amount
+    const note=text.replace(/[₹\d,.]+/g,"").replace(new RegExp(category,"i"),"").trim().replace(/\s+/g," ").slice(0,60)||"";
+    return{amount,category,note};
+  }
+
+  function start(){
+    if(!supported){setError("Voice not supported in this browser. Try Chrome.");return;}
+    setError("");setTranscript("");setParsed(null);
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    const rec=new SR();
+    rec.lang="en-IN";rec.interimResults=true;rec.maxAlternatives=1;
+    recRef.current=rec;
+    rec.onresult=(e)=>{
+      const t=Array.from(e.results).map(r=>r[0].transcript).join("");
+      setTranscript(t);
+      if(e.results[e.results.length-1].isFinal){setParsed(parseVoice(t));setListening(false);}
+    };
+    rec.onerror=(e)=>{setError("Mic error: "+e.error);setListening(false);};
+    rec.onend=()=>setListening(false);
+    rec.start();setListening(true);
+  }
+  function stop(){recRef.current?.stop();setListening(false);}
+  function confirm(){if(parsed&&parsed.amount)onAdd(parsed);}
+  function reset(){setTranscript("");setParsed(null);setError("");}
+
+  const inputStyle={background:inputBg,border:`1px solid ${inputBorder}`,color:textMain,borderRadius:12,padding:"8px 12px",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box"};
+
+  return(
+    <div style={{background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:16,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <MicIcon size={18}/>
+        <span style={{fontSize:14,fontWeight:700,color:textMain}}>Voice Log</span>
+        <span style={{fontSize:11,color:textMute,marginLeft:"auto"}}>Say amount + category + note</span>
+      </div>
+      {!supported&&<p style={{margin:0,fontSize:13,color:"#ef4444"}}>Not supported — use Chrome on Android/iOS</p>}
+      {supported&&(
+        <>
+          <button
+            onClick={listening?stop:start}
+            style={{
+              width:"100%",padding:"14px",borderRadius:14,border:"none",cursor:"pointer",
+              background:listening?"#ef4444":"#4f46e5",color:"#fff",
+              fontSize:15,fontWeight:700,
+              display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+              boxShadow:listening?"0 0 0 4px rgba(239,68,68,0.25)":"none",
+              transition:"all 0.2s",
+            }}
+          >
+            <MicIcon size={18}/>{listening?"Stop Listening":"Tap to Speak"}
+          </button>
+          {listening&&<div style={{textAlign:"center",fontSize:12,color:"#4f46e5",marginTop:8,fontWeight:500}}>🎙 Listening… speak now</div>}
+          {transcript&&<div style={{marginTop:10,padding:"10px 12px",background:dark?"#1f2937":"#f8fafc",borderRadius:10,fontSize:13,color:textMute,fontStyle:"italic"}}>"{transcript}"</div>}
+          {error&&<p style={{margin:"8px 0 0",fontSize:12,color:"#ef4444"}}>{error}</p>}
+          {parsed&&parsed.amount&&(
+            <div style={{marginTop:12,padding:"12px",background:dark?"#052e16":"#f0fdf4",borderRadius:12,border:dark?"1px solid #065f46":"1px solid #bbf7d0"}}>
+              <p style={{margin:"0 0 6px",fontSize:12,color:textMute,fontWeight:600}}>Detected — confirm to add:</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                <div><p style={{margin:"0 0 3px",fontSize:11,color:textMute}}>Amount</p><p style={{margin:0,fontSize:18,fontWeight:800,color:"#16a34a",fontFamily:"monospace"}}>₹{parsed.amount.toLocaleString()}</p></div>
+                <div><p style={{margin:"0 0 3px",fontSize:11,color:textMute}}>Category</p>
+                  <select value={parsed.category} onChange={e=>setParsed(p=>({...p,category:e.target.value}))} style={{...inputStyle,padding:"4px 8px",fontSize:13}}>
+                    {categories.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              {parsed.note&&<p style={{margin:"0 0 8px",fontSize:12,color:textMute}}>Note: {parsed.note}</p>}
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={confirm} style={{flex:1,padding:"10px",borderRadius:12,border:"none",background:"#16a34a",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>✓ Add Expense</button>
+                <button onClick={reset} style={{padding:"10px 14px",borderRadius:12,border:`1px solid ${border}`,background:"none",color:textMute,cursor:"pointer"}}>✕</button>
+              </div>
+            </div>
+          )}
+          {parsed&&!parsed.amount&&<p style={{margin:"8px 0 0",fontSize:12,color:"#ef4444"}}>Couldn't detect an amount. Try again: "450 food lunch"</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ════ RECEIPT SCANNER ════ */
+function ReceiptScanner({categories,onAdd,dark,cardBg,border,textMute,textMain,inputBg,inputBorder}){
+  const[scanning,setScanning]=useState(false);
+  const[preview,setPreview]=useState(null);
+  const[rawText,setRawText]=useState("");
+  const[parsed,setParsed]=useState(null);
+  const[progress,setProgress]=useState("");
+  const[error,setError]=useState("");
+  const fileRef=useRef(null);
+
+  function parseReceiptText(text){
+    const lines=text.split("\n").map(l=>l.trim()).filter(Boolean);
+    // Find largest number as total (receipts usually have total as biggest amount)
+    const amounts=[];
+    lines.forEach(l=>{
+      const m=l.match(/[\d,]+\.?\d{0,2}/g);
+      if(m)m.forEach(n=>{const v=parseFloat(n.replace(/,/g,""));if(v>0&&v<MAX_AMOUNT)amounts.push(v);});
+    });
+    amounts.sort((a,b)=>b-a);
+    const amount=amounts[0]||null;
+    // Guess category from keywords
+    const lower=text.toLowerCase();
+    let category=categories[0]?.name||"Food";
+    const hints=[
+      ["food","restaurant","cafe","swiggy","zomato","hotel","dhaba","mess","biryani","pizza","burger","dosa","idli","chai","coffee","tea","bakery","canteen"],
+      ["grocery","supermarket","mart","bigbasket","blinkit","zepto","kirana","vegetables","fruits","dairy","provisions"],
+      ["travel","uber","ola","rapido","auto","bus","train","metro","flight","fuel","petrol","diesel","parking","toll"],
+      ["shopping","amazon","flipkart","myntra","cloth","shoes","apparels","fashion","mall","retail"],
+      ["bill","electricity","water","gas","internet","broadband","mobile","recharge","insurance","emi"],
+      ["entertainment","movie","pvr","inox","netflix","spotify","gaming","amusement"],
+    ];
+    const catNames=["Food","Groceries","Travel","Shopping","Bills","Entertainment"];
+    for(let i=0;i<hints.length;i++){
+      if(hints[i].some(k=>lower.includes(k))){
+        const match=categories.find(c=>c.name===catNames[i])||categories.find(c=>c.name.toLowerCase()===catNames[i].toLowerCase());
+        if(match){category=match.name;break;}
+      }
+    }
+    // Note: first meaningful non-amount line
+    const note=lines.find(l=>!/^[\d\s.,:₹Rs/-]+$/.test(l)&&l.length>2&&l.length<50)||"";
+    return{amount,category,note};
+  }
+
+  async function handleFile(e){
+    const file=e.target.files[0];
+    if(!file)return;
+    setError("");setParsed(null);setRawText("");
+    const url=URL.createObjectURL(file);
+    setPreview(url);setScanning(true);
+    setProgress("Loading OCR engine…");
+    try{
+      // Dynamically load Tesseract from CDN
+      if(!window.Tesseract){
+        await new Promise((res,rej)=>{
+          const s=document.createElement("script");
+          s.src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+          s.onload=res;s.onerror=()=>rej(new Error("Failed to load Tesseract"));
+          document.head.appendChild(s);
+        });
+      }
+      setProgress("Reading receipt…");
+      const result=await window.Tesseract.recognize(file,"eng",{
+        logger:m=>{if(m.status==="recognizing text")setProgress(`Scanning… ${Math.round(m.progress*100)}%`);}
+      });
+      const text=result.data.text;
+      setRawText(text);
+      const p=parseReceiptText(text);
+      setParsed(p);
+      setProgress("");
+    }catch(err){
+      setError("OCR failed: "+err.message);
+      setProgress("");
+    }finally{
+      setScanning(false);
+      if(fileRef.current)fileRef.current.value="";
+    }
+  }
+
+  function confirm(){if(parsed&&parsed.amount)onAdd(parsed);}
+  function reset(){setPreview(null);setRawText("");setParsed(null);setError("");setProgress("");}
+
+  const inputStyle={background:inputBg,border:`1px solid ${inputBorder}`,color:textMain,borderRadius:12,padding:"8px 12px",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box"};
+
+  return(
+    <div style={{background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:16,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <CameraIcon size={18}/>
+        <span style={{fontSize:14,fontWeight:700,color:textMain}}>Receipt Scanner</span>
+        <span style={{fontSize:11,color:textMute,marginLeft:"auto"}}>OCR · fully local</span>
+      </div>
+      {!preview&&(
+        <button
+          onClick={()=>fileRef.current?.click()}
+          style={{width:"100%",padding:"20px",borderRadius:14,border:`2px dashed ${border}`,background:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:8,color:textMute}}
+        >
+          <CameraIcon size={32}/>
+          <span style={{fontSize:14,fontWeight:600,color:textMain}}>Take Photo or Upload</span>
+          <span style={{fontSize:12}}>Tap to open camera / gallery</span>
+        </button>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{display:"none"}}/>
+
+      {preview&&(
+        <div style={{position:"relative",marginBottom:12}}>
+          <img src={preview} alt="receipt" style={{width:"100%",borderRadius:12,maxHeight:200,objectFit:"cover"}}/>
+          <button onClick={reset} style={{position:"absolute",top:8,right:8,background:"rgba(0,0,0,0.6)",border:"none",borderRadius:99,padding:"4px 8px",color:"#fff",cursor:"pointer",fontSize:12}}>✕ Clear</button>
+        </div>
+      )}
+      {scanning&&(
+        <div style={{textAlign:"center",padding:"16px 0"}}>
+          <div style={{fontSize:24,marginBottom:6}}>🔍</div>
+          <p style={{margin:0,fontSize:13,color:"#4f46e5",fontWeight:600}}>{progress||"Processing…"}</p>
+          <p style={{margin:"4px 0 0",fontSize:11,color:textMute}}>This may take 5–10 seconds</p>
+        </div>
+      )}
+      {error&&<p style={{margin:"8px 0",fontSize:12,color:"#ef4444"}}>{error}</p>}
+      {parsed&&(
+        <div style={{padding:"12px",background:dark?"#052e16":"#f0fdf4",borderRadius:12,border:dark?"1px solid #065f46":"1px solid #bbf7d0"}}>
+          <p style={{margin:"0 0 8px",fontSize:12,color:textMute,fontWeight:600}}>Detected from receipt:</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div>
+              <p style={{margin:"0 0 3px",fontSize:11,color:textMute}}>Amount</p>
+              <input type="number" value={parsed.amount||""} onChange={e=>setParsed(p=>({...p,amount:Number(e.target.value)}))} style={{...inputStyle,fontWeight:700,color:"#16a34a"}}/>
+            </div>
+            <div>
+              <p style={{margin:"0 0 3px",fontSize:11,color:textMute}}>Category</p>
+              <select value={parsed.category} onChange={e=>setParsed(p=>({...p,category:e.target.value}))} style={{...inputStyle,padding:"8px 12px"}}>
+                {categories.map(c=><option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{marginBottom:8}}>
+            <p style={{margin:"0 0 3px",fontSize:11,color:textMute}}>Note</p>
+            <input value={parsed.note||""} onChange={e=>setParsed(p=>({...p,note:e.target.value}))} placeholder="Add note" style={inputStyle}/>
+          </div>
+          {!parsed.amount&&<p style={{margin:"0 0 8px",fontSize:12,color:"#f97316"}}>⚠️ No amount detected — enter manually above</p>}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={confirm} disabled={!parsed.amount} style={{flex:1,padding:"10px",borderRadius:12,border:"none",background:parsed.amount?"#16a34a":"#9ca3af",color:"#fff",fontSize:14,fontWeight:700,cursor:parsed.amount?"pointer":"not-allowed"}}>✓ Add Expense</button>
+            <button onClick={reset} style={{padding:"10px 14px",borderRadius:12,border:`1px solid ${border}`,background:"none",color:textMute,cursor:"pointer"}}>✕</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════ EMI TRACKER TAB ════ */
+function EmiTab({dark,cardBg,border,textMute,textMain,subbg,inputBg,inputBorder,categories,setExpenses,setPot,showToast,today,logDay}){
+  const[emis,setEmis]=useState(()=>{try{const s=localStorage.getItem(EMI_KEY);return s?JSON.parse(s):[]}catch{return[];}});
+  const[showForm,setShowForm]=useState(false);
+  const[loanName,setLoanName]=useState("");
+  const[principal,setPrincipal]=useState("");
+  const[rate,setRate]=useState("");
+  const[tenure,setTenure]=useState("");
+  const[startDate,setStartDate]=useState(today);
+  const[editId,setEditId]=useState(null);
+  const[expandedId,setExpandedId]=useState(null);
+
+  useEffect(()=>{try{localStorage.setItem(EMI_KEY,JSON.stringify(emis));}catch{}},[emis]);
+
+  const inputStyle={background:inputBg,border:`1px solid ${inputBorder}`,color:textMain,borderRadius:12,padding:"8px 12px",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box"};
+  const btnPrimary={background:"#4f46e5",color:"#fff",border:"none",borderRadius:12,padding:"10px 16px",fontSize:14,fontWeight:600,cursor:"pointer"};
+  const btnSecondary={background:dark?"#374151":"#f3f4f6",color:dark?"#d1d5db":"#374151",border:"none",borderRadius:12,padding:"8px 12px",fontSize:13,fontWeight:500,cursor:"pointer"};
+  const btnDanger={background:"none",border:"none",cursor:"pointer",color:textMute,padding:4};
+
+  function resetForm(){setLoanName("");setPrincipal("");setRate("");setTenure("");setStartDate(today);setEditId(null);setShowForm(false);}
+
+  function saveEmi(){
+    const p=Number(principal),r=Number(rate),t=Number(tenure);
+    if(!loanName.trim()||p<=0||r<0||t<=0)return;
+    const emi=Math.round(calcEMI(p,r,t));
+    const entry={id:editId||Date.now(),name:loanName.trim(),principal:p,rate:r,tenure:t,emi,startDate,paidMonths:editId?(emis.find(e=>e.id===editId)?.paidMonths||[]):[]};
+    if(editId){setEmis(prev=>prev.map(e=>e.id===editId?entry:e));showToast("EMI updated!");}
+    else{setEmis(prev=>[...prev,entry]);showToast("EMI loan added!");}
+    resetForm();
+  }
+
+  function deleteEmi(id){setEmis(prev=>prev.filter(e=>e.id!==id));showToast("Loan removed.");}
+
+  function payEmi(loan){
+    const monthKey=today.slice(0,7); // YYYY-MM
+    if((loan.paidMonths||[]).includes(monthKey)){showToast("Already paid this month!");return;}
+    setEmis(prev=>prev.map(e=>e.id!==loan.id?e:{...e,paidMonths:[...(e.paidMonths||[]),monthKey]}));
+    setExpenses(prev=>[...prev,{id:Date.now(),amount:loan.emi,category:"Bills",note:`${loan.name} EMI`,date:today,paySource:"bank"}]);
+    setPot(p=>({...p,usableBank:Math.max(0,(Number(p.usableBank)||0)-loan.emi)}));
+    logDay(today);
+    showToast(`₹${loan.emi.toLocaleString()} EMI logged!`);
+  }
+
+  function editEmi(loan){setEditId(loan.id);setLoanName(loan.name);setPrincipal(loan.principal);setRate(loan.rate);setTenure(loan.tenure);setStartDate(loan.startDate);setShowForm(true);}
+
+  const totalEmiPerMonth=emis.reduce((s,e)=>s+e.emi,0);
+
+  return(
+    <div style={{paddingBottom:20}}>
+      {/* Summary card */}
+      {emis.length>0&&(
+        <div style={{background:dark?"linear-gradient(135deg,#172554,#1e1b4b)":"linear-gradient(135deg,#eff6ff,#eef2ff)",border:dark?"1px solid #1e3a8a":"1px solid #bfdbfe",borderRadius:16,padding:16,marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <p style={{margin:0,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",color:dark?"#93c5fd":"#2563eb"}}>Total EMI / Month</p>
+            <p style={{margin:"4px 0 0",fontSize:28,fontWeight:800,fontFamily:"monospace",color:dark?"#93c5fd":"#1d4ed8",letterSpacing:"-1px"}}>₹{totalEmiPerMonth.toLocaleString()}</p>
+          </div>
+          <div style={{fontSize:36}}>🏦</div>
+        </div>
+      )}
+
+      {/* Add button or form */}
+      {!showForm
+        ?<button onClick={()=>setShowForm(true)} style={{...btnPrimary,width:"100%",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            <PlusIcon/> Add Loan / EMI
+          </button>
+        :<div style={{background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:16,marginBottom:12}}>
+          <h2 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:textMain}}>{editId?"Edit Loan":"New Loan / EMI"}</h2>
+          <input value={loanName} onChange={e=>setLoanName(e.target.value)} placeholder="Loan name (e.g. Home Loan, Car Loan)" style={{...inputStyle,marginBottom:8}}/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div><p style={{margin:"0 0 4px",fontSize:11,color:textMute}}>Principal (₹)</p><input type="number" value={principal} onChange={e=>setPrincipal(e.target.value)} placeholder="500000" style={inputStyle}/></div>
+            <div><p style={{margin:"0 0 4px",fontSize:11,color:textMute}}>Annual Rate (%)</p><input type="number" value={rate} onChange={e=>setRate(e.target.value)} placeholder="8.5" style={inputStyle}/></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div><p style={{margin:"0 0 4px",fontSize:11,color:textMute}}>Tenure (months)</p><input type="number" value={tenure} onChange={e=>setTenure(e.target.value)} placeholder="60" style={inputStyle}/></div>
+            <div><p style={{margin:"0 0 4px",fontSize:11,color:textMute}}>Start date</p><input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} style={inputStyle}/></div>
+          </div>
+          {principal>0&&rate>=0&&tenure>0&&(
+            <div style={{background:dark?"#1f2937":"#f8fafc",borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+              <p style={{margin:0,fontSize:12,color:textMute}}>Monthly EMI</p>
+              <p style={{margin:"2px 0 0",fontSize:22,fontWeight:800,color:"#4f46e5",fontFamily:"monospace"}}>₹{Math.round(calcEMI(Number(principal),Number(rate),Number(tenure))).toLocaleString()}</p>
+              <p style={{margin:"2px 0 0",fontSize:11,color:textMute}}>Total payable: ₹{Math.round(calcEMI(Number(principal),Number(rate),Number(tenure))*Number(tenure)).toLocaleString()} · Interest: ₹{Math.round(calcEMI(Number(principal),Number(rate),Number(tenure))*Number(tenure)-Number(principal)).toLocaleString()}</p>
+            </div>
+          )}
+          <div style={{display:"flex",gap:8}}><button onClick={saveEmi} style={{...btnPrimary,flex:1}}>{editId?"Update":"Add Loan"}</button><button onClick={resetForm} style={btnSecondary}>Cancel</button></div>
+        </div>
+      }
+
+      {/* Loan list */}
+      {emis.length===0&&!showForm&&(
+        <div style={{background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:40,textAlign:"center"}}>
+          <div style={{fontSize:40,marginBottom:8}}>🏦</div>
+          <p style={{margin:0,fontSize:14,fontWeight:600,color:textMain}}>No loans tracked yet</p>
+          <p style={{margin:"4px 0 0",fontSize:12,color:textMute}}>Add home loan, car loan, personal loan EMIs</p>
+        </div>
+      )}
+
+      {emis.map(loan=>{
+        const monthKey=today.slice(0,7);
+        const paidThisMonth=(loan.paidMonths||[]).includes(monthKey);
+        const paidCount=(loan.paidMonths||[]).length;
+        const remaining=loan.tenure-paidCount;
+        const paidPct=Math.round((paidCount/loan.tenure)*100);
+        const isExpanded=expandedId===loan.id;
+        const amortization=isExpanded?buildAmortization(loan.principal,loan.rate,loan.tenure):[];
+
+        return(
+          <div key={loan.id} style={{background:cardBg,border:`1px solid ${border}`,borderRadius:16,marginBottom:10,overflow:"hidden"}}>
+            <div style={{padding:"14px 16px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                <div>
+                  <p style={{margin:0,fontSize:15,fontWeight:700,color:textMain}}>{loan.name}</p>
+                  <p style={{margin:"2px 0 0",fontSize:12,color:textMute}}>₹{loan.principal.toLocaleString()} · {loan.rate}% · {loan.tenure}mo</p>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <p style={{margin:0,fontSize:20,fontWeight:800,color:"#4f46e5",fontFamily:"monospace"}}>₹{loan.emi.toLocaleString()}<span style={{fontSize:11,color:textMute,fontWeight:400}}>/mo</span></p>
+                  {paidThisMonth&&<span style={{fontSize:11,color:"#16a34a",fontWeight:600}}>✓ Paid this month</span>}
+                </div>
+              </div>
+              {/* Progress bar */}
+              <div style={{marginBottom:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:textMute,marginBottom:4}}>
+                  <span>{paidCount} paid</span><span>{remaining} remaining</span>
+                </div>
+                <div style={{height:6,borderRadius:99,background:dark?"#1f2937":"#f3f4f6",overflow:"hidden"}}>
+                  <div style={{height:6,borderRadius:99,width:`${paidPct}%`,background:"linear-gradient(to right,#6366f1,#8b5cf6)",transition:"width 0.5s"}}/>
+                </div>
+                <p style={{margin:"3px 0 0",fontSize:11,color:textMute}}>{paidPct}% complete · ₹{Math.round(loan.emi*remaining).toLocaleString()} outstanding</p>
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {!paidThisMonth&&<button onClick={()=>payEmi(loan)} style={{...btnPrimary,fontSize:12,padding:"6px 14px",background:"#16a34a"}}>Pay ₹{loan.emi.toLocaleString()} Now</button>}
+                <button onClick={()=>setExpandedId(isExpanded?null:loan.id)} style={{...btnSecondary,fontSize:12,padding:"6px 12px"}}>{isExpanded?"Hide":"View"} Schedule</button>
+                <button onClick={()=>editEmi(loan)} style={btnDanger}><svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button onClick={()=>deleteEmi(loan.id)} style={btnDanger}><svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg></button>
+              </div>
+            </div>
+            {/* Amortization table */}
+            {isExpanded&&(
+              <div style={{borderTop:`1px solid ${border}`,overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                  <thead>
+                    <tr style={{background:dark?"#1f2937":"#f8fafc"}}>
+                      {["Mo","EMI","Principal","Interest","Balance"].map(h=>(
+                        <th key={h} style={{padding:"6px 10px",textAlign:"right",fontWeight:600,color:textMute,whiteSpace:"nowrap"}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {amortization.slice(0,24).map(row=>{
+                      const mKey=new Date(loan.startDate+"T00:00:00");
+                      mKey.setMonth(mKey.getMonth()+row.month-1);
+                      const mk=mKey.toISOString().slice(0,7);
+                      const paid=(loan.paidMonths||[]).includes(mk);
+                      return(
+                        <tr key={row.month} style={{borderTop:`1px solid ${border}`,background:paid?(dark?"rgba(22,163,74,0.08)":"rgba(22,163,74,0.05)"):"transparent"}}>
+                          <td style={{padding:"5px 10px",color:paid?"#16a34a":textMute,fontWeight:paid?700:400}}>{row.month}{paid?" ✓":""}</td>
+                          <td style={{padding:"5px 10px",textAlign:"right",fontFamily:"monospace",color:textMain}}>₹{row.emi.toLocaleString()}</td>
+                          <td style={{padding:"5px 10px",textAlign:"right",fontFamily:"monospace",color:"#4f46e5"}}>₹{row.principal.toLocaleString()}</td>
+                          <td style={{padding:"5px 10px",textAlign:"right",fontFamily:"monospace",color:"#ef4444"}}>₹{row.interest.toLocaleString()}</td>
+                          <td style={{padding:"5px 10px",textAlign:"right",fontFamily:"monospace",color:textMute}}>₹{row.balance.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                    {amortization.length>24&&<tr><td colSpan={5} style={{padding:"6px 10px",textAlign:"center",color:textMute,fontSize:11}}>Showing first 24 months of {amortization.length}</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ════ EXPENSE DATE LIST (collapsible, today open by default) ════ */
+function ExpenseDateList({grouped,dailyTotal,today,dark,cardBg,border,subbg,textMute,getCatStyle,editExpense,deleteExpense,setDrillCat,formatDate}){
+  const sortedDates=Object.keys(grouped).sort((a,b)=>new Date(b)-new Date(a));
+  // Track which dates are open; today is open by default, all others closed
+  const[openDates,setOpenDates]=useState(()=>{
+    const init={};
+    sortedDates.forEach(d=>{init[d]=d===today;});
+    return init;
+  });
+
+  // When today changes (midnight tick) or new dates appear, ensure today stays open
+  useEffect(()=>{
+    setOpenDates(prev=>{
+      const next={...prev};
+      sortedDates.forEach(d=>{
+        if(!(d in next))next[d]=d===today;
+      });
+      // Keep today always open
+      next[today]=true;
+      return next;
+    });
+  },[today,sortedDates.join(",")]); // eslint-disable-line
+
+  function toggle(dk){
+    // Today's group cannot be collapsed
+    if(dk===today)return;
+    setOpenDates(prev=>({...prev,[dk]:!prev[dk]}));
+  }
+
+  const btnDanger={background:"none",border:"none",cursor:"pointer",color:textMute,padding:4};
+
+  return(
+    <div style={{background:cardBg,border:`1px solid ${border}`,borderRadius:16,overflow:"hidden"}}>
+      <div style={{padding:"12px 16px",borderBottom:`1px solid ${border}`}}>
+        <h2 style={{margin:0,fontSize:14,fontWeight:600}}>All Expenses</h2>
+      </div>
+      {sortedDates.map((dk,idx)=>{
+        const daySpend=dailyTotal[dk]||0;
+        const isToday=dk===today;
+        const isOpen=openDates[dk];
+        const items=grouped[dk];
+        const isLast=idx===sortedDates.length-1;
+        return(
+          <div key={dk} style={{borderBottom:!isLast||isOpen?`1px solid ${border}`:"none"}}>
+            {/* Date header row — acts as toggle for non-today dates */}
+            <div
+              onClick={()=>toggle(dk)}
+              style={{
+                padding:"10px 16px",
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+                background:isToday?(dark?"rgba(79,70,229,0.08)":"rgba(79,70,229,0.04)"):subbg,
+                cursor:isToday?"default":"pointer",
+                userSelect:"none",
+                borderBottom:isOpen?`1px solid ${border}`:"none",
+              }}
+            >
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {isToday&&(
+                  <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background:"#4f46e5",color:"#fff",letterSpacing:"0.05em"}}>TODAY</span>
+                )}
+                <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:isToday?(dark?"#818cf8":"#4f46e5"):textMute}}>
+                  {formatDate(dk)}
+                </span>
+                <span style={{fontSize:11,color:textMute}}>{items.length} item{items.length!==1?"s":""}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:12,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#ef4444",background:dark?"rgba(239,68,68,0.1)":"#fff1f2",padding:"1px 8px",borderRadius:99}}>
+                  −₹{daySpend.toLocaleString()}
+                </span>
+                {!isToday&&(
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                    style={{transform:isOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s",flexShrink:0}}>
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                )}
+              </div>
+            </div>
+            {/* Expense rows — shown when open */}
+            {isOpen&&items.map((item,i)=>(
+              <div key={item.id} style={{
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+                padding:"11px 16px",
+                borderBottom:i<items.length-1?`1px solid ${border}`:"none",
+              }}>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span
+                    style={{...getCatStyle(item.category),padding:"3px 9px",borderRadius:99,fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}
+                    onClick={()=>setDrillCat(item.category)}
+                  >{item.category}</span>
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <p style={{margin:0,fontSize:14,fontWeight:700}}>₹{item.amount.toLocaleString()}</p>
+                      <span style={{display:"flex",alignItems:"center",gap:2,fontSize:10,fontWeight:600,padding:"1px 5px",borderRadius:6,
+                        background:item.paySource==="cash"?(dark?"#052e16":"#dcfce7"):(dark?"#172554":"#dbeafe"),
+                        color:item.paySource==="cash"?(dark?"#86efac":"#16a34a"):(dark?"#93c5fd":"#2563eb")}}>
+                        {item.paySource==="cash"?<svg width="13"height="13"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><rect x="1"y="4"width="22"height="16"rx="2"/><line x1="1"y1="10"x2="23"y2="10"/></svg>:<svg width="13"height="13"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><line x1="3"y1="22"x2="21"y2="22"/><line x1="6"y1="18"x2="6"y2="11"/><line x1="10"y1="18"x2="10"y2="11"/><line x1="14"y1="18"x2="14"y2="11"/><line x1="18"y1="18"x2="18"y2="11"/><polygon points="12 2 20 7 4 7"/></svg>}
+                        {item.paySource==="cash"?"Cash":"Bank"}
+                      </span>
+                    </div>
+                    {item.note&&<p style={{margin:0,fontSize:12,color:textMute}}>{item.note}</p>}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:10}}>
+                  <button onClick={()=>editExpense(item)} style={btnDanger}>
+                    <svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                  <button onClick={()=>deleteExpense(item.id)} style={btnDanger}>
+                    <svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function App(){
   const[unlocked,setUnlocked]=useState(false);
   const[notifEnabled,setNotifEnabled]=useState(()=>{
@@ -625,9 +1192,10 @@ export default function App(){
   const[newCatName,setNewCatName]=useState("");
   const[addingCat,setAddingCat]=useState(false);
   const[toast,setToast]=useState(null);
-  const[tab,setTab]=useState("expenses");
+  const[tab,setTab]=useState("home");
   const tabRef=useRef(null);
   const[drillCat,setDrillCat]=useState(null);
+  const[showQuickAdd,setShowQuickAdd]=useState(false);
 
   const[rName,setRName]=useState("");
   const[rAmount,setRAmount]=useState("");
@@ -774,6 +1342,26 @@ export default function App(){
   }
   function editExpense(item){setEditingId(item.id);setAmount(item.amount);setSelCat(item.category);setNote(item.note);setDate(item.date);setPaySource(item.paySource||"bank");}
   function deleteExpense(id){const exp=expenses.find(e=>e.id===id);if(exp)setPot(p=>refundPot(exp.paySource||"bank",exp.amount,p));setExpenses(p=>p.filter(e=>e.id!==id));showToast("Deleted & refunded.");}
+  function handleVoiceAdd({amount,category,note}){
+    if(!amount||amount<=0)return;
+    const cat=categories.find(c=>c.name===category)?.name||categories[0]?.name||"";
+    setExpenses(p=>[...p,{id:Date.now(),amount:Number(amount),category:cat,note:note||"",date:today,paySource:"bank"}]);
+    setPot(p=>deductPot("bank",Number(amount),p));
+    logDay(today);
+    showToast("Voice expense added!");
+    setTab("expenses");
+  }
+
+  function handleReceiptAdd({amount,category,note}){
+    if(!amount||amount<=0)return;
+    const cat=categories.find(c=>c.name===category)?.name||categories[0]?.name||"";
+    setExpenses(p=>[...p,{id:Date.now(),amount:Number(amount),category:cat,note:note||"",date:today,paySource:"bank"}]);
+    setPot(p=>deductPot("bank",Number(amount),p));
+    logDay(today);
+    showToast("Receipt expense added!");
+    setTab("expenses");
+  }
+
   function logNoSpend(){if(todayLogged){showToast("Already logged!");return;}logDay(today);showToast("No-spend day logged!");}
   function switchTab(t,section){
     setTab(t);
@@ -1088,66 +1676,86 @@ export default function App(){
           )}
         </div>
 
-        {/* STREAK */}
-        <div style={{...cardStyle,position:"relative",overflow:"hidden"}}>
-          {streak.count>0&&<div style={{position:"absolute",right:-32,top:-32,width:128,height:128,background:"rgba(249,115,22,0.08)",borderRadius:"50%",filter:"blur(24px)",pointerEvents:"none"}}/>}
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-            <div>
-              <p style={{margin:0,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.1em",color:textMute,marginBottom:4}}>Current Streak</p>
-              <div style={{display:"flex",alignItems:"flex-end",gap:8}}><span style={{fontSize:52,fontWeight:700,fontFamily:"'DM Mono',monospace",lineHeight:1}}>{streak.count}</span><span style={{fontSize:18,color:textMute,marginBottom:4}}>days</span></div>
-              {streakMilestone&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4,color:"#f97316",fontSize:12,fontWeight:600}}><TrophyIcon/>{streakMilestone}</div>}
-              <p style={{margin:0,fontSize:12,color:textMute,marginTop:4}}>Longest: <strong>{streak.longestStreak||0} days</strong></p>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:12,fontSize:13,fontWeight:600,background:streak.count>0?(dark?"rgba(194,65,12,0.2)":"#ffedd5"):subbg,color:streak.count>0?"#f97316":textMute}}><FlameIcon size={16}/>{streak.count}</div>
-              {!todayLogged
-                ?<button onClick={logNoSpend} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:12,fontSize:12,fontWeight:600,background:"transparent",border:dark?"1px solid #065f46":"1px solid #6ee7b7",color:dark?"#34d399":"#059669",cursor:"pointer"}}><ShieldIcon/>No-Spend Day</button>
-                :<div style={{display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:500,color:dark?"#34d399":"#059669"}}><ShieldIcon/>Today logged</div>
-              }
-            </div>
-          </div>
-          <div style={{marginTop:16}}>
-            <p style={{margin:0,fontSize:12,color:textMute,marginBottom:8}}>Last 14 days</p>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:4}}>
-              {last14.map(d=>{const lg=streak.loggedDates.includes(d),it=d===today;return<div key={d}title={d}style={{height:20,borderRadius:4,background:lg?"#f97316":it?"transparent":(dark?"#1f2937":"#f3f4f6"),border:it&&!lg?(dark?"1px solid rgba(249,115,22,0.4)":"1px solid #fdba74"):"none",transition:"background 0.2s"}}/>;})}</div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:textMute,marginTop:4}}><span>14 days ago</span><span>Today</span></div>
-          </div>
-        </div>
 
-        {/* INSIGHTS */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-          {[{label:"This Month",value:`₹${monthlyTotal.toLocaleString()}`},{label:"Top Category",value:topCategory||"—"},{label:"Total Entries",value:expenses.length},{label:"Remaining",value:`₹${remaining.toLocaleString()}`,red:remaining<0}].map(({label,value,red})=>(
-            <div key={label} style={{...cardStyle,marginBottom:0}}><p style={{margin:0,fontSize:11,color:textMute,marginBottom:4}}>{label}</p><p style={{margin:0,fontSize:20,fontWeight:700,color:red?"#ef4444":textMain}}>{value}</p></div>
-          ))}
-        </div>
 
-        {/* RECURRING PILL */}
-        {recurring.length>0&&(
-          <div style={{...cardStyle,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}><RepeatIcon/><div><p style={{margin:0,fontSize:12,color:textMute}}>Recurring/month</p><p style={{margin:0,fontSize:18,fontWeight:700}}>₹{recurringMonthly.toLocaleString()}</p></div></div>
-            {reminders.length>0&&<div style={{background:"#fef3c7",color:"#92400e",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600}}>{reminders.length} reminder{reminders.length>1?"s":""}</div>}
-          </div>
+        {/* bottom nav replaces old tab bar */}
+
+        {/* ══ HOME (summary dashboard) ══ */}
+        {tab==="home"&&(
+          <>
+            {/* Streak */}
+            <div style={{...cardStyle,position:"relative",overflow:"hidden",marginBottom:12}}>
+              {streak.count>0&&<div style={{position:"absolute",right:-32,top:-32,width:128,height:128,background:"rgba(249,115,22,0.08)",borderRadius:"50%",filter:"blur(24px)",pointerEvents:"none"}}/>}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div>
+                  <p style={{margin:0,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.1em",color:textMute,marginBottom:4}}>Current Streak</p>
+                  <div style={{display:"flex",alignItems:"flex-end",gap:8}}><span style={{fontSize:52,fontWeight:700,fontFamily:"'DM Mono',monospace",lineHeight:1}}>{streak.count}</span><span style={{fontSize:18,color:textMute,marginBottom:4}}>days</span></div>
+                  {streakMilestone&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:4,color:"#f97316",fontSize:12,fontWeight:600}}><TrophyIcon/>{streakMilestone}</div>}
+                  <p style={{margin:0,fontSize:12,color:textMute,marginTop:4}}>Longest: <strong>{streak.longestStreak||0} days</strong></p>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:12,fontSize:13,fontWeight:600,background:streak.count>0?(dark?"rgba(194,65,12,0.2)":"#ffedd5"):subbg,color:streak.count>0?"#f97316":textMute}}><FlameIcon size={16}/>{streak.count}</div>
+                  {!todayLogged
+                    ?<button onClick={logNoSpend} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:12,fontSize:12,fontWeight:600,background:"transparent",border:dark?"1px solid #065f46":"1px solid #6ee7b7",color:dark?"#34d399":"#059669",cursor:"pointer"}}><ShieldIcon/>No-Spend Day</button>
+                    :<div style={{display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:500,color:dark?"#34d399":"#059669"}}><ShieldIcon/>Today logged</div>
+                  }
+                </div>
+              </div>
+              <div style={{marginTop:16}}>
+                <p style={{margin:0,fontSize:12,color:textMute,marginBottom:8}}>Last 14 days</p>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:4}}>
+                  {last14.map(d=>{const lg=streak.loggedDates.includes(d),it=d===today;return<div key={d}title={d}style={{height:20,borderRadius:4,background:lg?"#f97316":it?"transparent":(dark?"#1f2937":"#f3f4f6"),border:it&&!lg?(dark?"1px solid rgba(249,115,22,0.4)":"1px solid #fdba74"):"none",transition:"background 0.2s"}}/>;})}</div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:textMute,marginTop:4}}><span>14 days ago</span><span>Today</span></div>
+              </div>
+            </div>
+            {/* Insights grid */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              {[{label:"This Month",value:`₹${monthlyTotal.toLocaleString()}`},{label:"Top Category",value:topCategory||"—"},{label:"Total Entries",value:expenses.length},{label:"Remaining",value:`₹${remaining.toLocaleString()}`,red:remaining<0}].map(({label,value,red})=>(
+                <div key={label} style={{...cardStyle,marginBottom:0}}><p style={{margin:0,fontSize:11,color:textMute,marginBottom:4}}>{label}</p><p style={{margin:0,fontSize:20,fontWeight:700,color:red?"#ef4444":textMain}}>{value}</p></div>
+              ))}
+            </div>
+            {/* Recurring pill */}
+            {recurring.length>0&&(
+              <div style={{...cardStyle,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><RepeatIcon/><div><p style={{margin:0,fontSize:12,color:textMute}}>Recurring/month</p><p style={{margin:0,fontSize:18,fontWeight:700}}>₹{recurringMonthly.toLocaleString()}</p></div></div>
+                {reminders.length>0&&<div style={{background:"#fef3c7",color:"#92400e",borderRadius:99,padding:"4px 12px",fontSize:12,fontWeight:600}}>{reminders.length} reminder{reminders.length>1?"s":""}</div>}
+              </div>
+            )}
+            {/* Budget */}
+            <div style={cardStyle}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span style={{fontSize:14,fontWeight:500}}>Monthly Budget</span>
+                <button onClick={()=>{setEditingBudget(e=>!e);setBudgetInput(budget||"");}}style={btnSecondary}>{editingBudget?"Cancel":"Edit"}</button>
+              </div>
+              {editingBudget&&<div style={{display:"flex",gap:8,marginBottom:12}}><input type="number"value={budgetInput}onChange={e=>setBudgetInput(e.target.value)}placeholder="Enter budget"style={inputStyle}/><button onClick={saveBudget}style={btnPrimary}>Save</button></div>}
+              <div style={{width:"100%",height:12,borderRadius:99,overflow:"hidden",background:dark?"#1f2937":"#f3f4f6"}}><div style={{height:12,borderRadius:99,width:`${percentUsed}%`,background:percentUsed>=90?"linear-gradient(to right,#ef4444,#f97316)":"linear-gradient(to right,#6366f1,#8b5cf6)",transition:"width 0.5s"}}/></div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:textMute,marginTop:6}}><span>Spent ₹{spent.toLocaleString()}</span><span style={{color:percentUsed>=100?"#ef4444":textMute,fontWeight:percentUsed>=100?600:400}}>{percentUsed.toFixed(0)}% of ₹{budget.toLocaleString()}</span></div>
+            </div>
+            {/* Monthly summary */}
+            <div style={{...cardStyle,marginTop:8}}>
+              <p style={{margin:"0 0 12px",fontSize:13,fontWeight:700}}>This Month Summary</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{background:dark?"#052e16":"#f0fdf4",borderRadius:12,padding:"12px 14px",border:dark?"1px solid #065f46":"1px solid #bbf7d0"}}>
+                  <p style={{margin:0,fontSize:11,color:dark?"#34d399":"#16a34a",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>Total In</p>
+                  <p style={{margin:0,fontSize:20,fontWeight:800,fontFamily:"'DM Mono',monospace",color:dark?"#34d399":"#16a34a",letterSpacing:"-0.5px"}}>₹{totalIn.toLocaleString()}</p>
+                  <p style={{margin:"3px 0 0",fontSize:11,color:textMute}}>Income + extras</p>
+                </div>
+                <div style={{background:dark?"#450a0a":"#fff1f2",borderRadius:12,padding:"12px 14px",border:dark?"1px solid #7f1d1d":"1px solid #fca5a5"}}>
+                  <p style={{margin:0,fontSize:11,color:dark?"#f87171":"#dc2626",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:4}}>Total Out</p>
+                  <p style={{margin:0,fontSize:20,fontWeight:800,fontFamily:"'DM Mono',monospace",color:dark?"#f87171":"#dc2626",letterSpacing:"-0.5px"}}>₹{totalOut.toLocaleString()}</p>
+                  <p style={{margin:"3px 0 0",fontSize:11,color:textMute}}>All expenses</p>
+                </div>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:`1px solid ${border}`}}>
+                <span style={{fontSize:12,color:textMute,fontWeight:500}}>Net this month</span>
+                <span style={{fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:totalIn-totalOut>=0?(dark?"#34d399":"#16a34a"):"#ef4444"}}>
+                  {totalIn-totalOut>=0?"+":""}{(totalIn-totalOut).toLocaleString()}
+                </span>
+              </div>
+            </div>
+            <p style={{textAlign:"center",fontSize:12,color:textMute,marginTop:8}}>mySpendr · your money, your streak</p>
+          </>
         )}
-
-        {/* BUDGET */}
-        <div style={cardStyle}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <span style={{fontSize:14,fontWeight:500}}>Monthly Budget</span>
-            <button onClick={()=>{setEditingBudget(e=>!e);setBudgetInput(budget||"");}}style={btnSecondary}>{editingBudget?"Cancel":"Edit"}</button>
-          </div>
-          {editingBudget&&<div style={{display:"flex",gap:8,marginBottom:12}}><input type="number"value={budgetInput}onChange={e=>setBudgetInput(e.target.value)}placeholder="Enter budget"style={inputStyle}/><button onClick={saveBudget}style={btnPrimary}>Save</button></div>}
-          <div style={{width:"100%",height:12,borderRadius:99,overflow:"hidden",background:dark?"#1f2937":"#f3f4f6"}}><div style={{height:12,borderRadius:99,width:`${percentUsed}%`,background:percentUsed>=90?"linear-gradient(to right,#ef4444,#f97316)":"linear-gradient(to right,#6366f1,#8b5cf6)",transition:"width 0.5s"}}/></div>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:textMute,marginTop:6}}><span>Spent ₹{spent.toLocaleString()}</span><span style={{color:percentUsed>=100?"#ef4444":textMute,fontWeight:percentUsed>=100?600:400}}>{percentUsed.toFixed(0)}% of ₹{budget.toLocaleString()}</span></div>
-        </div>
-
-        {/* TABS */}
-        <div ref={tabRef} style={{display:"flex",gap:4,marginBottom:12,background:subbg,borderRadius:14,padding:4,border:`1px solid ${border}`}}>
-          {["expenses","recurring","pot"].map(t=>(
-            <button key={t} onClick={()=>switchTab(t)} style={{flex:1,padding:"8px 0",borderRadius:10,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:tab===t?cardBg:"transparent",color:tab===t?textMain:textMute,boxShadow:tab===t?"0 1px 4px rgba(0,0,0,0.08)":"none",transition:"all 0.2s",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
-              {t==="recurring"?<><RepeatIcon/>Recurring</>:t==="pot"?<><PotTabIcon/>My Pot</>:"Expenses"}
-            </button>
-          ))}
-        </div>
 
         {/* ══ EXPENSES ══ */}
         {tab==="expenses"&&(
@@ -1185,40 +1793,21 @@ export default function App(){
             />
             {expenses.length===0
               ?<div style={{...cardStyle,textAlign:"center",padding:40}}><p style={{color:textMute,margin:0}}>No expenses yet.</p></div>
-              :<div style={{background:cardBg,border:`1px solid ${border}`,borderRadius:16,overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",borderBottom:`1px solid ${border}`}}><h2 style={{margin:0,fontSize:14,fontWeight:600}}>All Expenses</h2></div>
-                {Object.keys(grouped).map(dk=>{
-                  const daySpend=dailyTotal[dk]||0;
-                  return(
-                    <div key={dk}>
-                      <div style={{padding:"6px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",background:subbg,borderBottom:`1px solid ${border}`}}>
-                        <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute}}>{formatDate(dk)}</span>
-                        <span style={{fontSize:12,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#ef4444",background:dark?"rgba(239,68,68,0.1)":"#fff1f2",padding:"1px 8px",borderRadius:99}}>−₹{daySpend.toLocaleString()}</span>
-                      </div>
-                      {grouped[dk].map(item=>(
-                        <div key={item.id}style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 16px",borderBottom:`1px solid ${border}`}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <span style={{...getCatStyle(item.category),padding:"3px 9px",borderRadius:99,fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}onClick={()=>setDrillCat(item.category)}>{item.category}</span>
-                            <div>
-                              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                <p style={{margin:0,fontSize:14,fontWeight:700}}>₹{item.amount.toLocaleString()}</p>
-                                <span style={{display:"flex",alignItems:"center",gap:2,fontSize:10,fontWeight:600,padding:"1px 5px",borderRadius:6,background:item.paySource==="cash"?(dark?"#052e16":"#dcfce7"):(dark?"#172554":"#dbeafe"),color:item.paySource==="cash"?(dark?"#86efac":"#16a34a"):(dark?"#93c5fd":"#2563eb")}}>
-                                  {item.paySource==="cash"?<CashIcon/>:<BankIcon/>}{item.paySource==="cash"?"Cash":"Bank"}
-                                </span>
-                              </div>
-                              {item.note&&<p style={{margin:0,fontSize:12,color:textMute}}>{item.note}</p>}
-                            </div>
-                          </div>
-                          <div style={{display:"flex",gap:10}}>
-                            <button onClick={()=>editExpense(item)}style={btnDanger}><EditIcon/></button>
-                            <button onClick={()=>deleteExpense(item.id)}style={btnDanger}><TrashIcon/></button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
+              :<ExpenseDateList
+                  grouped={grouped}
+                  dailyTotal={dailyTotal}
+                  today={today}
+                  dark={dark}
+                  cardBg={cardBg}
+                  border={border}
+                  subbg={subbg}
+                  textMute={textMute}
+                  getCatStyle={getCatStyle}
+                  editExpense={editExpense}
+                  deleteExpense={deleteExpense}
+                  setDrillCat={setDrillCat}
+                  formatDate={formatDate}
+              />
             }
           </>
         )}
@@ -1461,6 +2050,54 @@ export default function App(){
           </>
         )}
 
+        {/* ══ SCAN & VOICE ══ */}
+        {tab==="scanvoice"&&(
+          <>
+            <VoiceLogger
+              categories={categories}
+              onAdd={handleVoiceAdd}
+              dark={dark}
+              cardBg={cardBg}
+              border={border}
+              textMute={textMute}
+              textMain={textMain}
+              inputBg={inputBg}
+              inputBorder={inputBorder}
+            />
+            <ReceiptScanner
+              categories={categories}
+              onAdd={handleReceiptAdd}
+              dark={dark}
+              cardBg={cardBg}
+              border={border}
+              textMute={textMute}
+              textMain={textMain}
+              inputBg={inputBg}
+              inputBorder={inputBorder}
+            />
+          </>
+        )}
+
+        {/* ══ EMI ══ */}
+        {tab==="emi"&&(
+          <EmiTab
+            dark={dark}
+            cardBg={cardBg}
+            border={border}
+            textMute={textMute}
+            textMain={textMain}
+            subbg={subbg}
+            inputBg={inputBg}
+            inputBorder={inputBorder}
+            categories={categories}
+            setExpenses={setExpenses}
+            setPot={setPot}
+            showToast={showToast}
+            today={today}
+            logDay={logDay}
+          />
+        )}
+
         {/* MONTHLY SUMMARY */}
         <div style={{...cardStyle,marginTop:8}}>
           <p style={{margin:"0 0 12px",fontSize:13,fontWeight:700}}>This Month Summary</p>
@@ -1484,8 +2121,60 @@ export default function App(){
           </div>
         </div>
 
-        <p style={{textAlign:"center",fontSize:12,color:textMute,marginTop:8}}>mySpendr · your money, your streak</p>
       </div>
+
+      {/* ══ BOTTOM NAV ══ */}
+      <div style={{
+        position:"fixed",bottom:0,left:0,right:0,
+        background:dark?"rgba(3,7,18,0.92)":"rgba(255,255,255,0.92)",
+        backdropFilter:"blur(16px)",
+        WebkitBackdropFilter:"blur(16px)",
+        borderTop:`1px solid ${border}`,
+        display:"flex",alignItems:"stretch",
+        zIndex:100,
+        paddingBottom:"env(safe-area-inset-bottom,0px)",
+      }}>
+        {[
+          {id:"home",   label:"Home",    icon:<HomeIcon size={22}/>},
+          {id:"expenses",label:"Expenses",icon:<ListIcon size={22}/>},
+          {id:"scanvoice",label:"Scan & Voice",icon:<div style={{
+            width:52,height:52,borderRadius:"50%",
+            background:"linear-gradient(135deg,#4f46e5,#7c3aed)",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            boxShadow:"0 4px 16px rgba(79,70,229,0.4)",
+            marginTop:-20,
+            border:`3px solid ${dark?"#030712":"#fff"}`,
+          }}><ScanIcon size={22}/></div>},
+          {id:"emi",    label:"EMI",     icon:<EmiIcon size={22}/>},
+          {id:"pot",    label:"My Pot",  icon:<WalletIcon size={22}/>},
+        ].map(({id,label,icon})=>{
+          const active=tab===id||(id==="home"&&tab==="home");
+          const isScan=id==="scanvoice";
+          return(
+            <button
+              key={id}
+              onClick={()=>setTab(id)}
+              style={{
+                flex:1,
+                display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                gap:isScan?0:3,
+                padding:isScan?"0 0 4px":"10px 0 8px",
+                background:"none",border:"none",cursor:"pointer",
+                color:active&&!isScan?(dark?"#818cf8":"#4f46e5"):textMute,
+                transition:"color 0.15s",
+                minWidth:0,
+                position:"relative",
+              }}
+            >
+              {icon}
+              {!isScan&&<span style={{fontSize:10,fontWeight:active?700:500,whiteSpace:"nowrap"}}>{label}</span>}
+              {active&&!isScan&&<div style={{position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",width:20,height:2,borderRadius:99,background:"#4f46e5"}}/>}
+            </button>
+          );
+        })}
+      </div>
+      {/* spacer so content isn't hidden behind nav */}
+      <div style={{height:72}}/>
     </div>
   );
 }
