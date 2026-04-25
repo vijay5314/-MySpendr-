@@ -596,7 +596,7 @@ function CategoryBubbles({categories,catTotals,getCatStyle,getCatAccent,onSelect
 function getGreeting(name){
   const h=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"})).getHours();
   const part=h<12?"Good morning":h<17?"Good afternoon":"Good evening";
-  return name?`${part}, ${name.split(" ")[0]} 👋`:part+" 👋";
+  return name?`${part}, ${name.split(" ")[0]} 👋`:part+"!";
 }
 function getInitials(name){
   if(!name)return"?";
