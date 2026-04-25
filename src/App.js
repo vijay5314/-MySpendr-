@@ -321,7 +321,7 @@ function PinLock({onUnlock,dark,accent}){
       didAttemptBio.current = true;
       tryVerify();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line
   },[mode, bioAvail]);
 
   async function tryVerify(){
@@ -1235,7 +1235,7 @@ function ExpenseDateList({grouped,dailyTotal,today,dark,cardBg,border,subbg,text
       sortedDates.forEach(d=>{if(!(d in next))next[d]=false;});
       return next;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line
   },[sortedDates.length]);
 
   // Always keep today open, separately
@@ -1690,7 +1690,7 @@ export default function App(){
       });
       return changed?next.slice(0,50):prev;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line
   },[today]); // Only re-run on day change, not on every reminder mutation
 
   function payFromReminder(item,source){const r=recurring.find(x=>x.id===item.id);if(r)markPaid(r,source);}
