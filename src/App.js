@@ -5,6 +5,17 @@ const BUDGET_KEY    = "myspendr_budget_v3";
 const CATEGORY_KEY  = "myspendr_categories_v3";
 const STREAK_KEY    = "myspendr_streak_v3";
 const THEME_KEY     = "myspendr_theme_v3";
+const ACCENT_KEY    = "myspendr_accent_v1";
+
+const ACCENTS=[
+  {id:"indigo", label:"Indigo",  light:"#4f46e5", dark:"#818cf8"},
+  {id:"violet", label:"Violet",  light:"#7c3aed", dark:"#a78bfa"},
+  {id:"rose",   label:"Rose",    light:"#e11d48", dark:"#fb7185"},
+  {id:"emerald",label:"Emerald", light:"#059669", dark:"#34d399"},
+  {id:"amber",  label:"Amber",   light:"#d97706", dark:"#fbbf24"},
+  {id:"sky",    label:"Sky",     light:"#0284c7", dark:"#38bdf8"},
+  {id:"slate",  label:"Slate",   light:"#475569", dark:"#94a3b8"},
+];
 const RECURRING_KEY = "myspendr_recurring_v1";
 const POT_KEY       = "myspendr_pot_v3";
 const DISMISS_KEY   = "myspendr_dismiss_v1";
@@ -12,6 +23,7 @@ const PIN_KEY       = "myspendr_pin_v1";
 const NOTIF_KEY     = "myspendr_notif_v1";
 const EMI_KEY       = "myspendr_emi_v1";
 const USER_KEY      = "myspendr_user_v1";
+const NOTIF_LOG_KEY = "myspendr_notif_log_v1";
 const GOALS_KEY     = "myspendr_goals_v1";
 
 function getTodayIST() {
@@ -20,6 +32,11 @@ function getTodayIST() {
 }
 
 const RECUR_FREQ = ["Monthly","Weekly","Yearly"];
+
+/* ════ HAPTIC ════ */
+function haptic(pattern=10){
+  try{if(navigator.vibrate)navigator.vibrate(pattern);}catch{}
+}
 const MAX_AMOUNT = 10_000_000;
 
 const CAT_PALETTE = [
@@ -368,7 +385,7 @@ function PinLock({onUnlock,dark}){
           <button
             onClick={tryRegister}
             disabled={bioLoading}
-            style={{width:"100%",padding:14,borderRadius:14,border:"none",background:"#4f46e5",color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",opacity:bioLoading?0.7:1}}
+            style={{width:"100%",padding:14,borderRadius:14,border:"none",background:accent,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",opacity:bioLoading?0.7:1}}
           >{bioLoading?"Setting up…":"Enable Biometrics"}</button>
           <button
             onClick={()=>{setOfferBioSetup(false);onUnlock();}}
@@ -596,7 +613,7 @@ function CategoryBubbles({categories,catTotals,getCatStyle,getCatAccent,onSelect
 function getGreeting(name){
   const h=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"})).getHours();
   const part=h<12?"Good morning":h<17?"Good afternoon":"Good evening";
-  return name?`${part}, ${name.split(" ")[0]} 👋`:part+"!";
+  return name?`${part}, ${name.split(" ")[0]}!`:part+"!";
 }
 function getInitials(name){
   if(!name)return"?";
@@ -700,7 +717,7 @@ function VoiceLogger({categories,onAdd,dark,cardBg,border,textMute,textMain,inpu
           >
             <MicIcon size={18}/>{listening?"Stop Listening":"Tap to Speak"}
           </button>
-          {listening&&<div style={{textAlign:"center",fontSize:12,color:"#4f46e5",marginTop:8,fontWeight:500}}>🎙 Listening… speak now</div>}
+          {listening&&<div style={{textAlign:"center",fontSize:12,color:accent,marginTop:8,fontWeight:500}}>🎙 Listening… speak now</div>}
           {transcript&&<div style={{marginTop:10,padding:"10px 12px",background:dark?"#1f2937":"#f8fafc",borderRadius:10,fontSize:13,color:textMute,fontStyle:"italic"}}>"{transcript}"</div>}
           {error&&<p style={{margin:"8px 0 0",fontSize:12,color:"#ef4444"}}>{error}</p>}
           {parsed&&parsed.amount&&(
@@ -839,7 +856,7 @@ function ReceiptScanner({categories,onAdd,dark,cardBg,border,textMute,textMain,i
       {scanning&&(
         <div style={{textAlign:"center",padding:"16px 0"}}>
           <div style={{fontSize:24,marginBottom:6}}>🔍</div>
-          <p style={{margin:0,fontSize:13,color:"#4f46e5",fontWeight:600}}>{progress||"Processing…"}</p>
+          <p style={{margin:0,fontSize:13,color:accent,fontWeight:600}}>{progress||"Processing…"}</p>
           <p style={{margin:"4px 0 0",fontSize:11,color:textMute}}>This may take 5–10 seconds</p>
         </div>
       )}
@@ -889,7 +906,7 @@ function EmiTab({dark,cardBg,border,textMute,textMain,subbg,inputBg,inputBorder,
   useEffect(()=>{try{localStorage.setItem(EMI_KEY,JSON.stringify(emis));}catch{}},[emis]);
 
   const inputStyle={background:inputBg,border:`1px solid ${inputBorder}`,color:textMain,borderRadius:12,padding:"8px 12px",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box"};
-  const btnPrimary={background:"#4f46e5",color:"#fff",border:"none",borderRadius:12,padding:"10px 16px",fontSize:14,fontWeight:600,cursor:"pointer"};
+  const btnPrimary={background:accent,color:"#fff",border:"none",borderRadius:12,padding:"10px 16px",fontSize:14,fontWeight:600,cursor:"pointer"};
   const btnSecondary={background:dark?"#374151":"#f3f4f6",color:dark?"#d1d5db":"#374151",border:"none",borderRadius:12,padding:"8px 12px",fontSize:13,fontWeight:500,cursor:"pointer"};
   const btnDanger={background:"none",border:"none",cursor:"pointer",color:textMute,padding:4};
 
@@ -953,7 +970,7 @@ function EmiTab({dark,cardBg,border,textMute,textMain,subbg,inputBg,inputBorder,
           {principal>0&&rate>=0&&tenure>0&&(
             <div style={{background:dark?"#1f2937":"#f8fafc",borderRadius:10,padding:"10px 12px",marginBottom:8}}>
               <p style={{margin:0,fontSize:12,color:textMute}}>Monthly EMI</p>
-              <p style={{margin:"2px 0 0",fontSize:22,fontWeight:800,color:"#4f46e5",fontFamily:"monospace"}}>₹{Math.round(calcEMI(Number(principal),Number(rate),Number(tenure))).toLocaleString()}</p>
+              <p style={{margin:"2px 0 0",fontSize:22,fontWeight:800,color:accent,fontFamily:"monospace"}}>₹{Math.round(calcEMI(Number(principal),Number(rate),Number(tenure))).toLocaleString()}</p>
               <p style={{margin:"2px 0 0",fontSize:11,color:textMute}}>Total payable: ₹{Math.round(calcEMI(Number(principal),Number(rate),Number(tenure))*Number(tenure)).toLocaleString()} · Interest: ₹{Math.round(calcEMI(Number(principal),Number(rate),Number(tenure))*Number(tenure)-Number(principal)).toLocaleString()}</p>
             </div>
           )}
@@ -988,7 +1005,7 @@ function EmiTab({dark,cardBg,border,textMute,textMain,subbg,inputBg,inputBorder,
                   <p style={{margin:"2px 0 0",fontSize:12,color:textMute}}>₹{loan.principal.toLocaleString()} · {loan.rate}% · {loan.tenure}mo</p>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <p style={{margin:0,fontSize:20,fontWeight:800,color:"#4f46e5",fontFamily:"monospace"}}>₹{loan.emi.toLocaleString()}<span style={{fontSize:11,color:textMute,fontWeight:400}}>/mo</span></p>
+                  <p style={{margin:0,fontSize:20,fontWeight:800,color:accent,fontFamily:"monospace"}}>₹{loan.emi.toLocaleString()}<span style={{fontSize:11,color:textMute,fontWeight:400}}>/mo</span></p>
                   {paidThisMonth&&<span style={{fontSize:11,color:"#16a34a",fontWeight:600}}>✓ Paid this month</span>}
                 </div>
               </div>
@@ -1030,7 +1047,7 @@ function EmiTab({dark,cardBg,border,textMute,textMain,subbg,inputBg,inputBorder,
                         <tr key={row.month} style={{borderTop:`1px solid ${border}`,background:paid?(dark?"rgba(22,163,74,0.08)":"rgba(22,163,74,0.05)"):"transparent"}}>
                           <td style={{padding:"5px 10px",color:paid?"#16a34a":textMute,fontWeight:paid?700:400}}>{row.month}{paid?" ✓":""}</td>
                           <td style={{padding:"5px 10px",textAlign:"right",fontFamily:"monospace",color:textMain}}>₹{row.emi.toLocaleString()}</td>
-                          <td style={{padding:"5px 10px",textAlign:"right",fontFamily:"monospace",color:"#4f46e5"}}>₹{row.principal.toLocaleString()}</td>
+                          <td style={{padding:"5px 10px",textAlign:"right",fontFamily:"monospace",color:accent}}>₹{row.principal.toLocaleString()}</td>
                           <td style={{padding:"5px 10px",textAlign:"right",fontFamily:"monospace",color:"#ef4444"}}>₹{row.interest.toLocaleString()}</td>
                           <td style={{padding:"5px 10px",textAlign:"right",fontFamily:"monospace",color:textMute}}>₹{row.balance.toLocaleString()}</td>
                         </tr>
@@ -1054,7 +1071,7 @@ function SavingsGoals({goals,savings,dark,cardBg,border,textMute,textMain,subbg,
   goalDeadline,setGoalDeadline,goalEditId,setGoalEditId,
   saveGoal,deleteGoal,editGoal}){
   const inputStyle={background:inputBg,border:`1px solid ${inputBorder}`,color:textMain,borderRadius:12,padding:"8px 12px",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box"};
-  const btnPrimary={background:"#4f46e5",color:"#fff",border:"none",borderRadius:12,padding:"10px 16px",fontSize:14,fontWeight:600,cursor:"pointer"};
+  const btnPrimary={background:accent,color:"#fff",border:"none",borderRadius:12,padding:"10px 16px",fontSize:14,fontWeight:600,cursor:"pointer"};
   const btnSecondary={background:dark?"#374151":"#f3f4f6",color:dark?"#d1d5db":"#374151",border:"none",borderRadius:12,padding:"8px 12px",fontSize:13,fontWeight:500,cursor:"pointer"};
 
   function daysLeft(deadline){
@@ -1194,6 +1211,47 @@ function SpendingTrendChart({data,dark,cardBg,border,textMute,textMain}){
   );
 }
 
+/* ════ SWIPEABLE ROW ════ */
+function SwipeableRow({onDelete,children,border,dark}){
+  const startX=useRef(null);
+  const[offset,setOffset]=useState(0);
+  const[deleting,setDeleting]=useState(false);
+  const THRESHOLD=80;
+
+  function handleTouchStart(e){startX.current=e.touches[0].clientX;}
+  function handleTouchMove(e){
+    if(startX.current===null)return;
+    const dx=e.touches[0].clientX-startX.current;
+    if(dx<0)setOffset(Math.max(dx,-120));
+  }
+  function handleTouchEnd(){
+    if(offset<-THRESHOLD){
+      haptic([10,40,10]);
+      setDeleting(true);
+      setTimeout(()=>onDelete(),250);
+    } else {setOffset(0);}
+    startX.current=null;
+  }
+
+  return(
+    <div style={{position:"relative",overflow:"hidden",opacity:deleting?0:1,transition:deleting?"opacity 0.2s":"none"}}>
+      {/* Red delete reveal */}
+      <div style={{position:"absolute",right:0,top:0,bottom:0,width:80,background:"#ef4444",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      </div>
+      {/* Content */}
+      <div
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{transform:`translateX(${offset}px)`,transition:offset===0&&!deleting?"transform 0.3s":"none",background:"inherit"}}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /* ════ EXPENSE DATE LIST (collapsible, today open by default) ════ */
 function ExpenseDateList({grouped,dailyTotal,today,dark,cardBg,border,subbg,textMute,getCatStyle,editExpense,deleteExpense,setDrillCat,formatDate}){
   const sortedDates=Object.keys(grouped).sort((a,b)=>new Date(b)-new Date(a));
@@ -1252,7 +1310,7 @@ function ExpenseDateList({grouped,dailyTotal,today,dark,cardBg,border,subbg,text
             >
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 {isToday&&(
-                  <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background:"#4f46e5",color:"#fff",letterSpacing:"0.05em"}}>TODAY</span>
+                  <span style={{fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background:accent,color:"#fff",letterSpacing:"0.05em"}}>TODAY</span>
                 )}
                 <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:isToday?(dark?"#818cf8":"#4f46e5"):textMute}}>
                   {formatDate(dk)}
@@ -1273,7 +1331,8 @@ function ExpenseDateList({grouped,dailyTotal,today,dark,cardBg,border,subbg,text
             </div>
             {/* Expense rows — shown when open */}
             {isOpen&&items.map((item,i)=>(
-              <div key={item.id} style={{
+              <SwipeableRow key={item.id} onDelete={()=>deleteExpense(item.id)} border={border} dark={dark}>
+              <div style={{
                 display:"flex",justifyContent:"space-between",alignItems:"center",
                 padding:"11px 16px",
                 borderBottom:i<items.length-1?`1px solid ${border}`:"none",
@@ -1297,14 +1356,15 @@ function ExpenseDateList({grouped,dailyTotal,today,dark,cardBg,border,subbg,text
                   </div>
                 </div>
                 <div style={{display:"flex",gap:10}}>
-                  <button onClick={()=>editExpense(item)} style={btnDanger}>
+                  <button onClick={()=>{haptic(5);editExpense(item);}} style={btnDanger}>
                     <svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                   </button>
-                  <button onClick={()=>deleteExpense(item.id)} style={btnDanger}>
+                  <button onClick={()=>{haptic([10,40,10]);deleteExpense(item.id);}} style={btnDanger}>
                     <svg width="14"height="14"viewBox="0 0 24 24"fill="none"stroke="currentColor"strokeWidth="2"strokeLinecap="round"strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                   </button>
                 </div>
               </div>
+              </SwipeableRow>
             ))}
           </div>
         );
@@ -1325,12 +1385,32 @@ export default function App(){
     return ()=>clearInterval(id);
   },[]);
 
+  // Lock on app backgrounding (tab switch, home button) — NOT on pull-to-refresh
+  const hiddenAtRef=useRef(null);
+  useEffect(()=>{
+    function onVis(){
+      if(document.hidden){
+        hiddenAtRef.current=Date.now();
+      } else {
+        const elapsed=hiddenAtRef.current?Date.now()-hiddenAtRef.current:0;
+        // Lock if app was in background for more than 3 minutes
+        if(elapsed>3*60*1000){setUnlocked(false);}
+        hiddenAtRef.current=null;
+      }
+    }
+    document.addEventListener("visibilitychange",onVis);
+    return()=>document.removeEventListener("visibilitychange",onVis);
+  },[]);
+
   // FIX: removed the exhaustive-deps eslint-disable comment that referenced
   // a plugin not installed. tick is the only dep needed here — getTodayIST()
   // is a pure function with no external deps that ESLint needs to track.
   const today = useMemo(()=>getTodayIST(),[tick]);
 
   const[dark,setDark]=useState(()=>{try{return localStorage.getItem(THEME_KEY)==="dark";}catch{return false;}});
+  const[accentId,setAccentId]=useState(()=>{try{return localStorage.getItem(ACCENT_KEY)||"indigo";}catch{return "indigo";}});
+  const accentObj=ACCENTS.find(a=>a.id===accentId)||ACCENTS[0];
+  const accent=dark?accentObj.dark:accentObj.light;
   const[expenses,setExpenses]=useState(()=>{try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):[];}catch{return[];}});
   const[budget,setBudget]=useState(()=>{try{const s=localStorage.getItem(BUDGET_KEY);return s?Number(s):0;}catch{return 0;}});
   const[categories,setCategories]=useState(()=>{
@@ -1365,6 +1445,8 @@ export default function App(){
   const[drillCat,setDrillCat]=useState(null);
   const[showQuickAdd,setShowQuickAdd]=useState(false);
   const[showSettings,setShowSettings]=useState(false);
+  const[showNotifPanel,setShowNotifPanel]=useState(false);
+  const[notifLog,setNotifLog]=useState(()=>{try{const s=localStorage.getItem(NOTIF_LOG_KEY);return s?JSON.parse(s):[];}catch{return [];}});
   const[userName,setUserName]=useState(()=>{try{return localStorage.getItem(USER_KEY)||"";}catch{return "";}});
   const[editingName,setEditingName]=useState(false);
   const[nameInput,setNameInput]=useState("");
@@ -1411,6 +1493,7 @@ export default function App(){
   }
 
   useEffect(()=>{ debouncedSave(THEME_KEY, dark?"dark":"light"); },[dark]);
+  useEffect(()=>{ try{localStorage.setItem(ACCENT_KEY,accentId);}catch{} },[accentId]);
   useEffect(()=>{ debouncedSave(STORAGE_KEY, expenses); },[expenses]);
   useEffect(()=>{ debouncedSave(BUDGET_KEY, budget.toString()); },[budget]);
   useEffect(()=>{ debouncedSave(CATEGORY_KEY, categories); },[categories]);
@@ -1419,6 +1502,7 @@ export default function App(){
   useEffect(()=>{ debouncedSave(POT_KEY, pot); },[pot]);
   useEffect(()=>{ debouncedSave(DISMISS_KEY, dismissedMap); },[dismissedMap]);
   useEffect(()=>{ try{localStorage.setItem(USER_KEY,userName);}catch{} },[userName]);
+  useEffect(()=>{ try{localStorage.setItem(NOTIF_LOG_KEY,JSON.stringify(notifLog));}catch{} },[notifLog]);
   useEffect(()=>{ debouncedSave(GOALS_KEY, goals); },[goals]);
 
   useEffect(()=>{if(!selCat&&categories.length>0)setSelCat(categories[0].name);},[categories,selCat]);
@@ -1612,6 +1696,17 @@ export default function App(){
   })).sort((a,b)=>a.daysUntil-b.daysUntil),[recurring,dismissedMap,today,ist]);
 
   function dismissReminder(id){setDismissedMap(prev=>({...prev,[id]:today}));}
+
+  // Push reminders into the notification log for the panel
+  useEffect(()=>{
+    reminders.forEach(r=>{
+      const key=`${r.id}-${today}`;
+      setNotifLog(prev=>{
+        if(prev.some(n=>n.key===key))return prev;
+        return [{key,id:r.id,name:r.name,amount:r.amount,daysUntil:r.daysUntil,dueDateStr:r.dueDateStr,ts:Date.now()},...prev].slice(0,50);
+      });
+    });
+  },[reminders,today]); // eslint-disable-line
   function payFromReminder(item,source){const r=recurring.find(x=>x.id===item.id);if(r)markPaid(r,source);}
 
   /* ── Pot income/extras ── */
@@ -1719,7 +1814,7 @@ export default function App(){
   const inputBg=dark?"#1f2937":"#ffffff",inputBorder=dark?"#374151":"#e5e7eb",subbg=dark?"#1f2937":"#f8fafc";
   const cardStyle=useMemo(()=>({background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:16,marginBottom:12}),[cardBg,border]);
   const inputStyle=useMemo(()=>({background:inputBg,border:`1px solid ${inputBorder}`,color:textMain,borderRadius:12,padding:"8px 12px",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box"}),[inputBg,inputBorder,textMain]);
-  const btnPrimary={background:"#4f46e5",color:"#fff",border:"none",borderRadius:12,padding:"10px 16px",fontSize:14,fontWeight:600,cursor:"pointer"};
+  const btnPrimary={background:accent,color:"#fff",border:"none",borderRadius:12,padding:"10px 16px",fontSize:14,fontWeight:600,cursor:"pointer"};
   const btnSecondary={background:dark?"#374151":"#f3f4f6",color:dark?"#d1d5db":"#374151",border:"none",borderRadius:12,padding:"8px 12px",fontSize:13,fontWeight:500,cursor:"pointer"};
   const btnGreen={background:dark?"#064e3b":"#d1fae5",color:dark?"#34d399":"#065f46",border:"none",borderRadius:12,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:4};
   const btnGold={background:dark?"#422006":"#fef3c7",color:dark?"#fbbf24":"#92400e",border:"none",borderRadius:12,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:4};
@@ -1772,7 +1867,7 @@ export default function App(){
   return(
     <div style={{minHeight:"100vh",background:bg,color:textMain,fontFamily:"'DM Sans',sans-serif",transition:"background 0.3s"}}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
-      {toast&&<div style={{position:"fixed",top:"env(safe-area-inset-top,16px)",left:"50%",transform:"translateX(-50%)",zIndex:999,background:"#4f46e5",color:"#fff",padding:"10px 20px",borderRadius:12,fontSize:13,fontWeight:500,boxShadow:"0 4px 20px rgba(0,0,0,0.2)",whiteSpace:"nowrap"}}>{toast}</div>}
+      {toast&&<div style={{position:"fixed",top:"env(safe-area-inset-top,16px)",left:"50%",transform:"translateX(-50%)",zIndex:999,background:accent,color:"#fff",padding:"10px 20px",borderRadius:12,fontSize:13,fontWeight:500,boxShadow:"0 4px 20px rgba(0,0,0,0.2)",whiteSpace:"nowrap"}}>{toast}</div>}
 
       <div style={{maxWidth:640,margin:"0 auto",padding:"24px 16px"}} key={tab} className="tabContent">
 
@@ -1780,7 +1875,7 @@ export default function App(){
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             {/* Avatar — taps to open settings */}
-            <button onClick={()=>setShowSettings(true)} style={{width:40,height:40,borderRadius:"50%",background:avatarColor(userName),border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
+            <button onClick={()=>{haptic(8);setShowSettings(true);}} style={{width:40,height:40,borderRadius:"50%",background:avatarColor(userName),border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>
               <span style={{fontSize:15,fontWeight:800,color:"#fff",letterSpacing:"-0.5px"}}>{getInitials(userName)}</span>
             </button>
             <div>
@@ -1790,14 +1885,14 @@ export default function App(){
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
             <button
-              onClick={toggleNotif}
-              title={notifEnabled?"Notifications on":"Enable notifications"}
+              onClick={()=>{haptic(8);setShowNotifPanel(true);}}
+              title="Notifications"
               style={{...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center",position:"relative"}}
             >
               <BellIcon/>
-              {notifEnabled&&<span style={{position:"absolute",top:6,right:6,width:6,height:6,borderRadius:"50%",background:"#4f46e5"}}/>}
+              {reminders.length>0&&<span style={{position:"absolute",top:5,right:5,width:8,height:8,borderRadius:"50%",background:"#ef4444",border:`2px solid ${cardBg}`}}/>}
             </button>
-            <button onClick={()=>setDark(d=>!d)} style={{...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center"}}>
+            <button onClick={()=>{haptic(8);setDark(d=>!d);}} style={{...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center"}}>
               {dark?<SunIcon/>:<MoonIcon/>}
             </button>
 
@@ -1829,7 +1924,7 @@ export default function App(){
                 <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
                   <div style={{display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:12,fontSize:13,fontWeight:600,background:streak.count>0?(dark?"rgba(194,65,12,0.2)":"#ffedd5"):subbg,color:streak.count>0?"#f97316":textMute}}><FlameIcon size={16}/>{streak.count}</div>
                   {!todayLogged
-                    ?<button onClick={logNoSpend} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:12,fontSize:12,fontWeight:600,background:"transparent",border:dark?"1px solid #065f46":"1px solid #6ee7b7",color:dark?"#34d399":"#059669",cursor:"pointer"}}><ShieldIcon/>No-Spend Day</button>
+                    ?<button onClick={()=>{haptic([10,50,10]);logNoSpend();}} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:12,fontSize:12,fontWeight:600,background:"transparent",border:dark?"1px solid #065f46":"1px solid #6ee7b7",color:dark?"#34d399":"#059669",cursor:"pointer"}}><ShieldIcon/>No-Spend Day</button>
                     :<div style={{display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:500,color:dark?"#34d399":"#059669"}}><ShieldIcon/>Today logged</div>
                   }
                 </div>
@@ -1860,12 +1955,19 @@ export default function App(){
                 </p>
                 <p style={{margin:"3px 0 0",fontSize:11,color:textMute}}>{budget>0?(remaining>=0?"available":"over budget"):"income − expenses"}</p>
               </div>
-              {/* Top category */}
-              <div style={{background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:"14px 16px"}}>
+              {/* Top category — tappable */}
+              <div
+                onClick={()=>{if(topCategory){haptic(8);setDrillCat(topCategory);}}}
+                style={{background:cardBg,border:`1px solid ${topCategory?(dark?"#374151":"#e0e7ff"):border}`,borderRadius:16,padding:"14px 16px",cursor:topCategory?"pointer":"default",transition:"border-color 0.15s"}}
+              >
                 <p style={{margin:0,fontSize:11,color:textMute,fontWeight:500,marginBottom:4}}>Top category</p>
                 {topCategory
-                  ?<><p style={{margin:0,fontSize:16,fontWeight:700,color:textMain}}>{topCategory}</p>
-                    <p style={{margin:"2px 0 0",fontSize:11,color:textMute}}>₹{(catTotals[topCategory]||0).toLocaleString()} spent</p></>
+                  ?<>
+                    <p style={{margin:0,fontSize:16,fontWeight:700,color:textMain,display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{...getCatStyle(topCategory),padding:"2px 8px",borderRadius:99,fontSize:12}}>{topCategory}</span>
+                    </p>
+                    <p style={{margin:"5px 0 0",fontSize:11,color:textMute}}>₹{(catTotals[topCategory]||0).toLocaleString()} · tap to view →</p>
+                  </>
                   :<p style={{margin:0,fontSize:16,fontWeight:700,color:textMute}}>—</p>
                 }
               </div>
@@ -1924,7 +2026,7 @@ export default function App(){
                 <div style={{...cardStyle,textAlign:"center",padding:"20px 16px"}}>
                   <p style={{margin:0,fontSize:13,fontWeight:600,color:textMain}}>Nothing spent today</p>
                   <p style={{margin:"4px 0 0 0",fontSize:12,color:textMute,marginBottom:12}}>Tap below to log your first spend</p>
-                  <button onClick={()=>setTab("expenses")} style={{background:"#4f46e5",color:"#fff",border:"none",borderRadius:12,padding:"9px 20px",fontSize:13,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+                  <button onClick={()=>setTab("expenses")} style={{background:accent,color:"#fff",border:"none",borderRadius:12,padding:"9px 20px",fontSize:13,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Log a spend
                   </button>
@@ -1997,6 +2099,7 @@ export default function App(){
                     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
                       {[1,2,3,4,5,6,7,8,9,".",0,"⌫"].map((k,i)=>(
                         <button key={i} onClick={()=>{
+                          haptic(5);
                           if(k==="⌫"){setAmount(p=>p.slice(0,-1));}
                           else if(k==="."){if(!String(amount).includes("."))setAmount(p=>p+k);}
                           else{const next=String(amount)+String(k);if(Number(next)<=MAX_AMOUNT)setAmount(next);}
@@ -2008,7 +2111,7 @@ export default function App(){
                         }}>{k}</button>
                       ))}
                     </div>
-                    <button onClick={()=>setShowNumpad(false)} style={{width:"100%",marginTop:8,padding:"9px",borderRadius:12,border:"none",background:"#4f46e5",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>Done</button>
+                    <button onClick={()=>{haptic(8);setShowNumpad(false);}} style={{width:"100%",marginTop:8,padding:"9px",borderRadius:12,border:"none",background:accent,color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>Done</button>
                   </div>
                 )}
               </div>
@@ -2019,7 +2122,7 @@ export default function App(){
               <p style={{margin:"0 0 6px",fontSize:12,color:textMute,fontWeight:500}}>Pay from</p>
               <SourcePill value={paySource}onChange={setPaySource}dark={dark}subbg={subbg}border={border}textMute={textMute}/>
               <div style={{display:"flex",gap:8,marginTop:10}}>
-                <button onClick={saveExpense}style={{...btnPrimary,flex:1}}>{editingId?"Update":"Add Expense"}</button>
+                <button onClick={()=>{haptic([10,20,10]);saveExpense();}}style={{...btnPrimary,flex:1}}>{editingId?"Update":"Add Expense"}</button>
                 {editingId&&<button onClick={resetForm}style={btnSecondary}>Cancel</button>}
                 {!addingCat
                   ?<button onClick={()=>setAddingCat(true)}style={{...btnSecondary,padding:"8px 12px",display:"flex",alignItems:"center",gap:4}}><GridIcon/>+ Category</button>
@@ -2122,10 +2225,10 @@ export default function App(){
                         <div style={{display:"flex",gap:6,alignItems:"center",marginLeft:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
                           {!paidTM&&(
                           <div style={{display:"flex",gap:3,background:subbg,borderRadius:10,padding:3,border:`1px solid ${border}`}}>
-                            <button onClick={()=>markPaid(r,"bank")} style={{display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#2563eb",color:"#fff"}}>
+                            <button onClick={()=>{haptic([10,30,10]);markPaid(r,"bank");}} style={{display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#2563eb",color:"#fff"}}>
                               <BankIcon/>Bank
                             </button>
-                            <button onClick={()=>markPaid(r,"cash")} style={{display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#16a34a",color:"#fff"}}>
+                            <button onClick={()=>{haptic([10,30,10]);markPaid(r,"cash");}} style={{display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#16a34a",color:"#fff"}}>
                               <CashIcon/>Cash
                             </button>
                           </div>
@@ -2406,6 +2509,69 @@ export default function App(){
 
       </div>
 
+      {/* ══ NOTIFICATION PANEL ══ */}
+      {showNotifPanel&&(
+        <>
+          <div onClick={()=>setShowNotifPanel(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:200,backdropFilter:"blur(2px)"}}/>
+          <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,background:cardBg,borderRadius:"20px 20px 0 0",maxHeight:"75vh",display:"flex",flexDirection:"column",boxShadow:"0 -8px 32px rgba(0,0,0,0.18)"}}>
+            <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px",flexShrink:0}}>
+              <div style={{width:36,height:4,borderRadius:99,background:dark?"#374151":"#e5e7eb"}}/>
+            </div>
+            <div style={{padding:"0 20px 8px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+              <p style={{margin:0,fontSize:16,fontWeight:700,color:textMain}}>Notifications</p>
+              <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                {notifLog.length>0&&<button onClick={()=>{haptic(5);setNotifLog([]);}} style={{fontSize:11,color:textMute,background:"none",border:"none",cursor:"pointer",fontWeight:500}}>Clear all</button>}
+                {/* Enable/disable toggle inside panel */}
+                <button onClick={()=>{haptic(8);toggleNotif();}} style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:99,border:`1px solid ${border}`,background:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:notifEnabled?(dark?"#818cf8":"#4f46e5"):textMute}}>
+                  <BellIcon/>{notifEnabled?"On":"Off"}
+                </button>
+              </div>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"0 20px 20px"}}>
+              {/* Upcoming payments */}
+              {reminders.length>0&&(
+                <div style={{marginBottom:16}}>
+                  <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute}}>Due soon</p>
+                  {reminders.map(item=>(
+                    <div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:dark?"#1f2937":"#f8fafc",borderRadius:12,marginBottom:6,border:`1px solid ${border}`}}>
+                      <div style={{fontSize:18,flexShrink:0}}>{item.daysUntil<0?"⚠️":item.daysUntil===0?"🔔":"⏰"}</div>
+                      <div style={{flex:1}}>
+                        <p style={{margin:0,fontSize:13,fontWeight:700,color:item.daysUntil<0?"#ef4444":item.daysUntil===0?"#f97316":"#f59e0b"}}>{item.name}</p>
+                        <p style={{margin:"1px 0 0",fontSize:11,color:textMute}}>₹{item.amount.toLocaleString()} · {item.daysUntil<0?`${Math.abs(item.daysUntil)}d overdue`:item.daysUntil===0?"due today":`due in ${item.daysUntil}d`}</p>
+                      </div>
+                      <button onClick={()=>{haptic([10,30,10]);payFromReminder(item,"bank");setShowNotifPanel(false);}} style={{background:dark?"#064e3b":"#d1fae5",color:dark?"#34d399":"#065f46",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>Pay</button>
+                      <button onClick={()=>{haptic(5);dismissReminder(item.id);}} style={{background:"none",border:`1px solid ${border}`,borderRadius:8,padding:"5px 8px",cursor:"pointer",color:textMute,display:"flex",alignItems:"center"}}><XIcon/></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* History log */}
+              {notifLog.length>0&&(
+                <div>
+                  <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute}}>History</p>
+                  {notifLog.map(n=>(
+                    <div key={n.key} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderBottom:`1px solid ${border}`}}>
+                      <div style={{width:6,height:6,borderRadius:"50%",background:dark?"#374151":"#d1d5db",flexShrink:0}}/>
+                      <div style={{flex:1}}>
+                        <p style={{margin:0,fontSize:12,fontWeight:600,color:textMain}}>{n.name}</p>
+                        <p style={{margin:"1px 0 0",fontSize:11,color:textMute}}>₹{n.amount.toLocaleString()} · {n.dueDateStr}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {reminders.length===0&&notifLog.length===0&&(
+                <div style={{textAlign:"center",padding:"40px 0"}}>
+                  <p style={{fontSize:28,marginBottom:8}}>🔕</p>
+                  <p style={{margin:0,fontSize:13,fontWeight:600,color:textMain}}>All clear</p>
+                  <p style={{margin:"4px 0 0",fontSize:12,color:textMute}}>No upcoming payments</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ══ SETTINGS SHEET ══ */}
       {showSettings&&(
         <>
@@ -2448,9 +2614,29 @@ export default function App(){
                 {editingName&&(
                   <div style={{display:"flex",gap:6}}>
                     <input value={nameInput} onChange={e=>setNameInput(e.target.value)} placeholder="Your first name" onKeyDown={e=>e.key==="Enter"&&saveName()} style={{flex:1,background:dark?"#1f2937":"#f8fafc",border:`1px solid ${dark?"#374151":"#e5e7eb"}`,color:textMain,borderRadius:10,padding:"7px 12px",fontSize:13,outline:"none"}} autoFocus/>
-                    <button onClick={saveName} style={{background:"#4f46e5",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Save</button>
+                    <button onClick={saveName} style={{background:accent,color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>Save</button>
                   </div>
                 )}
+              </div>
+              {/* Accent colour */}
+              <div style={{padding:"12px 0",borderBottom:`1px solid ${border}`}}>
+                <p style={{margin:"0 0 10px",fontSize:14,color:textMain}}>Accent colour</p>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {ACCENTS.map(a=>(
+                    <button key={a.id} onClick={()=>{haptic(6);setAccentId(a.id);}} style={{
+                      display:"flex",flexDirection:"column",alignItems:"center",gap:4,
+                      background:"none",border:"none",cursor:"pointer",padding:4,
+                    }}>
+                      <div style={{
+                        width:28,height:28,borderRadius:"50%",
+                        background:dark?a.dark:a.light,
+                        border:accentId===a.id?`3px solid ${textMain}`:"3px solid transparent",
+                        boxSizing:"border-box",transition:"border 0.15s",
+                      }}/>
+                      <span style={{fontSize:9,color:accentId===a.id?textMain:textMute,fontWeight:accentId===a.id?700:400}}>{a.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
               {/* Notifications */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:`1px solid ${border}`}}>
@@ -2506,7 +2692,7 @@ export default function App(){
           {id:"expenses",  label:"Expenses", icon:<ListIcon size={22}/>},
           {id:"scanvoice", label:"Add",      icon:<div style={{
             width:52,height:52,borderRadius:"50%",
-            background:"linear-gradient(135deg,#4f46e5,#7c3aed)",
+            background:`linear-gradient(135deg,${accentObj.light},${accentObj.dark})`,
             display:"flex",alignItems:"center",justifyContent:"center",
             boxShadow:"0 4px 16px rgba(79,70,229,0.4)",
             marginTop:-20,
@@ -2520,7 +2706,7 @@ export default function App(){
           return(
             <button
               key={id}
-              onClick={()=>setTab(id)}
+              onClick={()=>{haptic(6);setTab(id);}}
               style={{
                 flex:1,
                 display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
@@ -2535,7 +2721,7 @@ export default function App(){
             >
               {icon}
               {!isScan&&<span style={{fontSize:10,fontWeight:active?700:500,whiteSpace:"nowrap"}}>{label}</span>}
-              {active&&!isScan&&<div style={{position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",width:20,height:2,borderRadius:99,background:"#4f46e5"}}/>}
+              {active&&!isScan&&<div style={{position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",width:20,height:2,borderRadius:99,background:accent}}/>}
             </button>
           );
         })}
