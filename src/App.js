@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
 // ════════════════════════════════════════════════════════════════════════════
 // STORAGE — safe localStorage wrapper (never throws)
@@ -1522,12 +1522,55 @@ export default function App() {
     logDay(today); showToast("No-spend day logged! 🛡️");
   }
 
-  // ── Derived / memoised ────────────────────────────────────────────────────
-  const catTotals = useMemo(() =>
-    expenses.reduce((acc,e) => { acc[e.category]=(acc[e.category]||0)+e.amount; return acc; }, {}),
-  [expenses]);
+  // ── Period selector state (Expenses tab) ─────────────────────────────────
+  // Compute currentYM inline so useState initializer can use it directly
+  const currentYM = (() => {
+    const d = nowIST();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  })();
 
-  const { grouped, dailyTotal } = useMemo(() => groupByDate(expenses), [expenses]);
+  const [viewMonth, setViewMonth] = useState(() => {
+    const d = nowIST();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  });
+  const [viewDay,   setViewDay]   = useState("all");
+
+  // Reset day when month changes
+  useEffect(() => { setViewDay("all"); }, [viewMonth]);
+
+  // All distinct "YYYY-MM" months that have expenses, newest first
+  const availableMonths = useMemo(() => {
+    const set = new Set(expenses.map(e => e.date.slice(0,7)));
+    // Always include current month even if empty
+    set.add(currentYM);
+    return [...set].sort((a,b) => b.localeCompare(a));
+  }, [expenses, currentYM]);
+
+  // Expenses filtered to selected month
+  const monthExpenses = useMemo(() => {
+    if (viewMonth === "all") return expenses;
+    return expenses.filter(e => e.date.startsWith(viewMonth));
+  }, [expenses, viewMonth]);
+
+  // Expenses filtered to selected month + optional day
+  const periodExpenses = useMemo(() => {
+    if (viewDay === "all") return monthExpenses;
+    return monthExpenses.filter(e => e.date === viewDay);
+  }, [monthExpenses, viewDay]);
+
+  // All distinct days in the selected month that have expenses
+  const availableDays = useMemo(() => {
+    const set = new Set(monthExpenses.map(e => e.date));
+    return [...set].sort((a,b) => b.localeCompare(a));
+  }, [monthExpenses]);
+
+  // ── Derived / memoised ────────────────────────────────────────────────────
+  // catTotals scoped to the selected period
+  const catTotals = useMemo(() =>
+    periodExpenses.reduce((acc,e) => { acc[e.category]=(acc[e.category]||0)+e.amount; return acc; }, {}),
+  [periodExpenses]);
+
+  const { grouped, dailyTotal } = useMemo(() => groupByDate(periodExpenses), [periodExpenses]);
 
   // FIX: monthly total now uses only current-month expenses
   const monthlyTotal = useMemo(() => computeMonthlyTotal(expenses), [expenses, today]);
@@ -1558,9 +1601,13 @@ export default function App() {
   const dailyAvg = daysElapsed > 0 ? Math.round(monthlyTotal/daysElapsed) : 0;
 
   const trendData = useMemo(() => buildTrendData(expenses), [expenses, today]);
+  // topCategory uses all-time totals, not the period-filtered catTotals
+  const allTimeCatTotals = useMemo(() =>
+    expenses.reduce((acc,e) => { acc[e.category]=(acc[e.category]||0)+e.amount; return acc; }, {}),
+  [expenses]);
   const topCategory = useMemo(() =>
-    Object.keys(catTotals).sort((a,b) => catTotals[b]-catTotals[a])[0],
-  [catTotals]);
+    Object.keys(allTimeCatTotals).sort((a,b) => allTimeCatTotals[b]-allTimeCatTotals[a])[0],
+  [allTimeCatTotals]);
 
   const streakMilestone = streak.count>=30?"30-day legend! 🏆":streak.count>=14?"2-week warrior!":streak.count>=7?"One week strong!":null;
   const last14 = useMemo(() => getLastNDays(14), [today]);
@@ -1790,8 +1837,10 @@ export default function App() {
 
   // ── CATEGORY DRILL-DOWN ───────────────────────────────────────────────────
   if (drillCat) {
-    const catExpenses = [...expenses].filter(e => e.category===drillCat).sort((a,b) => new Date(b.date)-new Date(a.date));
+    // Drill-down respects the active period filter
+    const catExpenses = [...periodExpenses].filter(e => e.category===drillCat).sort((a,b) => new Date(b.date)-new Date(a.date));
     const catTotal = catExpenses.reduce((s,e) => s+e.amount, 0);
+    const periodLabel = viewDay !== "all" ? formatDate(viewDay) : (() => { const [yr,mo] = viewMonth.split("-"); return MONTH_LABELS[Number(mo)-1]+" "+yr; })();
     const catAccent = getCatAccent(drillCat);
     return (
       <ErrorBoundary dark={dark}>
@@ -1804,8 +1853,13 @@ export default function App() {
               <span style={{ ...getCatStyle(drillCat), padding:"4px 12px", borderRadius:99, fontSize:13, fontWeight:700 }}>{drillCat}</span>
               <span style={{ fontSize:20, fontWeight:800, fontFamily:"'DM Mono',monospace", color:catAccent, marginLeft:"auto" }}>₹{catTotal.toLocaleString()}</span>
             </div>
+            {/* Period label */}
+            <div style={{ marginBottom:12,padding:"6px 12px",background:dark?"rgba(79,70,229,0.08)":"rgba(79,70,229,0.05)",borderRadius:10,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+              <span style={{ fontSize:11,color:dark?"#818cf8":"#4f46e5",fontWeight:600 }}>{periodLabel}</span>
+              <span style={{ fontSize:11,color:textMute }}>{catExpenses.length} expense{catExpenses.length!==1?"s":""} · ₹{catTotal.toLocaleString()}</span>
+            </div>
             {catExpenses.length===0
-              ? <div style={{ ...cardStyle, textAlign:"center", padding:40 }}><p style={{ color:textMute, margin:0 }}>No expenses in {drillCat} yet.</p></div>
+              ? <div style={{ ...cardStyle, textAlign:"center", padding:40 }}><p style={{ color:textMute, margin:0 }}>No expenses in {drillCat} for this period.</p></div>
               : catExpenses.map(item => (
                   <div key={item.id} style={{ ...cardStyle, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <div>
@@ -1946,7 +2000,7 @@ export default function App() {
                     ? <><p style={{ margin:0,fontSize:16,fontWeight:700,color:textMain,display:"flex",alignItems:"center",gap:4 }}>
                           <span style={{ ...getCatStyle(topCategory),padding:"2px 8px",borderRadius:99,fontSize:12 }}>{topCategory}</span>
                         </p>
-                        <p style={{ margin:"5px 0 0",fontSize:11,color:textMute }}>₹{(catTotals[topCategory]||0).toLocaleString()} · tap →</p>
+                        <p style={{ margin:"5px 0 0",fontSize:11,color:textMute }}>₹{(allTimeCatTotals[topCategory]||0).toLocaleString()} · tap →</p>
                       </>
                     : <p style={{ margin:0,fontSize:16,fontWeight:700,color:textMute }}>—</p>
                   }
@@ -2047,12 +2101,86 @@ export default function App() {
           ════════════════════════════════════════════════════════════════ */}
           {tab==="expenses" && (
             <>
+              {/* ── Period selector card ── */}
+              <div style={{ background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:"12px 14px",marginBottom:12 }}>
+                {/* Row 1: Month + Day dropdowns */}
+                <div style={{ display:"flex",gap:8,marginBottom:periodExpenses.length>0?10:0 }}>
+                  {/* Month */}
+                  <div style={{ flex:"0 0 56%" }}>
+                    <label style={{ display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute,marginBottom:5 }}>📅 Month</label>
+                    <select
+                      value={viewMonth}
+                      onChange={e => setViewMonth(e.target.value)}
+                      style={{ background:dark?"#1f2937":"#f8fafc",border:`1px solid ${viewMonth!==currentYM?(dark?"#818cf8":"#6366f1"):inputBorder}`,color:textMain,borderRadius:10,padding:"8px 10px",fontSize:13,fontWeight:600,outline:"none",width:"100%",cursor:"pointer",boxSizing:"border-box" }}
+                    >
+                      {availableMonths.map(ym => {
+                        const [yr, mo] = ym.split("-");
+                        const label = `${MONTH_LABELS[Number(mo)-1]} ${yr}`;
+                        const isCur = ym === currentYM;
+                        return <option key={ym} value={ym}>{isCur ? `★ ${label}` : label}</option>;
+                      })}
+                    </select>
+                  </div>
+                  {/* Day — always show, disable when no data */}
+                  <div style={{ flex:1 }}>
+                    <label style={{ display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute,marginBottom:5 }}>📆 Day</label>
+                    <select
+                      value={viewDay}
+                      onChange={e => setViewDay(e.target.value)}
+                      disabled={availableDays.length===0}
+                      style={{ background:dark?"#1f2937":"#f8fafc",border:`1px solid ${viewDay!=="all"?(dark?"#818cf8":"#6366f1"):inputBorder}`,color:availableDays.length===0?textMute:textMain,borderRadius:10,padding:"8px 10px",fontSize:13,fontWeight:600,outline:"none",width:"100%",cursor:availableDays.length===0?"not-allowed":"pointer",opacity:availableDays.length===0?0.5:1,boxSizing:"border-box" }}
+                    >
+                      <option value="all">All days</option>
+                      {availableDays.map(d => (
+                        <option key={d} value={d}>{formatDate(d)}{d===today?" ★":""}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Back-to-current button */}
+                  {viewMonth !== currentYM && (
+                    <div style={{ display:"flex",flexDirection:"column",justifyContent:"flex-end" }}>
+                      <button
+                        onClick={() => { setViewMonth(currentYM); setViewDay("all"); }}
+                        title="Back to current month"
+                        style={{ background:dark?"rgba(129,140,248,0.15)":"rgba(99,102,241,0.1)",border:`1px solid ${dark?"rgba(129,140,248,0.3)":"rgba(99,102,241,0.25)"}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",fontSize:12,color:dark?"#818cf8":"#4f46e5",fontWeight:700,whiteSpace:"nowrap" }}
+                      >
+                        Now
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {/* Row 2: Summary strip */}
+                {periodExpenses.length > 0 && (
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",background:dark?"rgba(239,68,68,0.06)":"rgba(239,68,68,0.04)",border:`1px solid ${dark?"rgba(239,68,68,0.15)":"rgba(239,68,68,0.1)"}`,borderRadius:8,padding:"7px 12px" }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+                      <span style={{ fontSize:12,fontWeight:700,color:dark?"#f9fafb":"#111827" }}>
+                        {viewDay !== "all"
+                          ? formatDate(viewDay)
+                          : (() => { const [yr,mo] = viewMonth.split("-"); return `${MONTH_LABELS[Number(mo)-1]} ${yr}`; })()
+                        }
+                      </span>
+                      <span style={{ fontSize:11,color:textMute }}>· {periodExpenses.length} item{periodExpenses.length!==1?"s":""}</span>
+                    </div>
+                    <span style={{ fontSize:14,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#ef4444",letterSpacing:"-0.5px" }}>
+                      −₹{periodExpenses.reduce((s,e)=>s+e.amount,0).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Category donut — scoped to selected period */}
               <CategoryBubbles categories={categories} catTotals={catTotals} getCatStyle={getCatStyle} getCatAccent={getCatAccent} onSelect={name => setDrillCat(name)} dark={dark} cardBg={cardBg} border={border} textMute={textMute}/>
-              {expenses.length===0
+
+              {/* Expense list — scoped to selected period */}
+              {periodExpenses.length===0
                 ? <div style={{ ...cardStyle,textAlign:"center",padding:40 }}>
                     <p style={{ fontSize:24,margin:"0 0 8px" }}>🧾</p>
-                    <p style={{ color:textMain,margin:0,fontSize:14,fontWeight:600 }}>No expenses yet</p>
-                    <p style={{ color:textMute,margin:"4px 0 0",fontSize:12 }}>Tap + to log your first expense</p>
+                    <p style={{ color:textMain,margin:0,fontSize:14,fontWeight:600 }}>
+                      {expenses.length===0 ? "No expenses yet" : "No expenses for this period"}
+                    </p>
+                    <p style={{ color:textMute,margin:"4px 0 0",fontSize:12 }}>
+                      {expenses.length===0 ? "Tap + to log your first expense" : "Try a different month or day above"}
+                    </p>
                   </div>
                 : <ExpenseDateList grouped={grouped} dailyTotal={dailyTotal} today={today} dark={dark} cardBg={cardBg} border={border} subbg={subbg} textMute={textMute} getCatStyle={getCatStyle}
                     editExpense={item => { editExpense(item); setTab("scanvoice"); }}
@@ -2165,7 +2293,7 @@ export default function App() {
                   <div style={cardStyle}>
                     <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:cashMode?10:0 }}>
                       <div style={{ width:10,height:10,borderRadius:"50%",background:"#16a34a" }}/>
-                      <span style={{ flex:1,fontSize:14,fontWeight:600 }}>Cash</span>
+                      <span style={{ flex:1,fontSize:14,fontWeight:600 }}>Cash in Hand</span>
                       <span style={{ fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#16a34a" }}>₹{(Number(pot.usableCash)||0).toLocaleString()}</span>
                       <div style={{ display:"flex",gap:4 }}>
                         <button onClick={() => setCashMode(cashMode==="add"?null:"add")} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:cashMode==="add"?"#16a34a":(dark?"#1f2937":"#f0fdf4"),color:cashMode==="add"?"#fff":(dark?"#34d399":"#16a34a"),lineHeight:1 }}>+</button>
@@ -2185,7 +2313,7 @@ export default function App() {
                   <div style={cardStyle}>
                     <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:bankMode?10:0 }}>
                       <div style={{ width:10,height:10,borderRadius:"50%",background:"#2563eb" }}/>
-                      <span style={{ flex:1,fontSize:14,fontWeight:600 }}>Bank</span>
+                      <span style={{ flex:1,fontSize:14,fontWeight:600 }}>Bank Balance</span>
                       <span style={{ fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#2563eb" }}>₹{(Number(pot.usableBank)||0).toLocaleString()}</span>
                       <div style={{ display:"flex",gap:4 }}>
                         <button onClick={() => setBankMode(bankMode==="add"?null:"add")} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:bankMode==="add"?"#16a34a":(dark?"#1f2937":"#f0fdf4"),color:bankMode==="add"?"#fff":(dark?"#34d399":"#16a34a"),lineHeight:1 }}>+</button>
