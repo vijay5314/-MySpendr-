@@ -187,10 +187,10 @@ function getStreakRank(count) {
 }
 
 // ── PLANET HOPPER GAME COMPONENT ─────────────────────────────────────────────
-function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopData, dark, onLog, onFreeze }) {
+function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopData, dark, onLog, onFreeze, launchRocket, onLaunchDone }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
-  const stateRef = useRef({ t:0, particles:[], stars:[], nebulae:[], prevIdx:-1, transitioning:false, transX:0, transDir:1 });
+  const stateRef = useRef({ t:0, particles:[], stars:[], nebulae:[], prevIdx:-1, transitioning:false, transX:0, transDir:1, rocketLaunchT:-1, rocketLaunching:false });
 
   const PLANETS = [
     {
@@ -284,163 +284,390 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     ctx.save();
     ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
 
-    // Rich base gradient with highlight/shadow
-    const base = ctx.createRadialGradient(cx-r*0.32,cy-r*0.32,r*0.04,cx+r*0.1,cy+r*0.1,r*1.1);
-    base.addColorStop(0, p.highlight||lighten(p.base,50));
-    base.addColorStop(0.38, p.base);
-    base.addColorStop(0.75, darken(p.base,22));
-    base.addColorStop(1, p.shadow||darken(p.base,50));
+    // ── BASE GRADIENT ─────────────────────────────────────────────────────────
+    const base = ctx.createRadialGradient(cx-r*0.32,cy-r*0.32,r*0.04,cx+r*0.1,cy+r*0.1,r*1.15);
+    base.addColorStop(0, p.highlight||lighten(p.base,55));
+    base.addColorStop(0.25, p.base);
+    base.addColorStop(0.6, darken(p.base,18));
+    base.addColorStop(0.88, darken(p.base,35));
+    base.addColorStop(1, p.shadow||darken(p.base,60));
     ctx.fillStyle = base; ctx.fillRect(cx-r,cy-r,r*2,r*2);
 
-    // Surface noise texture overlay for realism
-    const noiseSeeds = [0.17,0.43,0.71,0.29,0.58,0.82,0.13,0.67];
-    noiseSeeds.forEach((ns,i)=>{
-      const nx=cx+(Math.cos(ns*Math.PI*6+i)*r*0.8);
-      const ny=cy+(Math.sin(ns*Math.PI*4+i)*r*0.7);
-      const ng=ctx.createRadialGradient(nx,ny,0,nx,ny,r*0.4);
-      ng.addColorStop(0,`rgba(255,255,255,0.04)`);
+    // ── SUBSURFACE SCATTER — warm inner glow ─────────────────────────────────
+    const scatter = ctx.createRadialGradient(cx,cy,r*0.1,cx,cy,r*0.85);
+    scatter.addColorStop(0,'rgba(255,240,200,0.07)');
+    scatter.addColorStop(0.5,'rgba(255,200,100,0.03)');
+    scatter.addColorStop(1,'transparent');
+    ctx.fillStyle=scatter; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+
+    // ── MULTI-LAYER SURFACE NOISE (realistic micro-texture) ──────────────────
+    // Large geological features
+    const geoSeeds = [
+      [0.17,0.43,0.52,0.08],[0.71,0.29,0.38,0.06],[0.58,0.82,0.44,0.05],
+      [0.13,0.67,0.61,0.07],[0.91,0.35,0.29,0.06],[0.45,0.78,0.53,0.05]
+    ];
+    geoSeeds.forEach(([a,b,c,alpha],i)=>{
+      const nx=cx+Math.cos(a*Math.PI*5+i*0.8)*r*0.75;
+      const ny=cy+Math.sin(b*Math.PI*4+i*1.1)*r*0.65;
+      const nr=r*(c*0.5+0.15);
+      const ng=ctx.createRadialGradient(nx,ny,0,nx,ny,nr);
+      ng.addColorStop(0,`rgba(255,255,255,${alpha})`);
+      ng.addColorStop(0.5,`rgba(200,200,200,${alpha*0.4})`);
+      ng.addColorStop(1,'transparent');
+      ctx.fillStyle=ng; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+    });
+    // Dark geological depressions
+    const darkSeeds = [[0.3,0.6,0.3],[0.75,0.2,0.25],[0.55,0.85,0.2],[0.15,0.45,0.28]];
+    darkSeeds.forEach(([a,b,c],i)=>{
+      const nx=cx+Math.cos(a*Math.PI*7+i)*r*0.7;
+      const ny=cy+Math.sin(b*Math.PI*5+i*1.4)*r*0.6;
+      const ng=ctx.createRadialGradient(nx,ny,0,nx,ny,r*c);
+      ng.addColorStop(0,`rgba(0,0,0,0.12)`);
       ng.addColorStop(1,'transparent');
       ctx.fillStyle=ng; ctx.fillRect(cx-r,cy-r,r*2,r*2);
     });
 
-    // Venus swirling cloud bands
-    if(p.venusSwirl){
-      for(let i=0;i<5;i++){
-        const by = cy - r*0.8 + i*(r*1.6/4);
-        const wave1 = Math.sin(t*0.1+i*0.8)*r*0.12;
-        const wave2 = Math.cos(t*0.08+i*1.3)*r*0.08;
-        const g = ctx.createLinearGradient(cx-r,by+wave1,cx+r,by+wave2);
-        const opacity = 0.15+0.12*(i%2);
-        g.addColorStop(0,`rgba(240,220,130,${opacity})`);
-        g.addColorStop(0.5,`rgba(255,240,160,${opacity+0.08})`);
-        g.addColorStop(1,`rgba(200,170,80,${opacity})`);
-        ctx.fillStyle=g;
-        ctx.beginPath(); ctx.ellipse(cx,by+wave1+(wave2*0.5),r,r*0.14+Math.abs(wave1)*0.3,0.1,0,Math.PI*2); ctx.fill();
+    // ── MOUNTAIN RIDGES / TERRAIN LINES (all rocky worlds) ───────────────────
+    if(p.craters || p.continents || p.dust){
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      for(let i=0;i<6;i++){
+        const ang = (i/6)*Math.PI*2 + t*0.008 + i*0.5;
+        const bx1 = cx + Math.cos(ang)*r*0.3;
+        const by1 = cy + Math.sin(ang)*r*0.3;
+        const bx2 = cx + Math.cos(ang+0.6)*r*0.85;
+        const by2 = cy + Math.sin(ang+0.6)*r*0.85;
+        const mx  = cx + Math.cos(ang+0.3)*r*0.55;
+        const my  = cy + Math.sin(ang+0.3)*r*0.55 - r*0.08;
+        ctx.beginPath();
+        ctx.moveTo(bx1,by1);
+        ctx.quadraticCurveTo(mx,my,bx2,by2);
+        ctx.strokeStyle = i%2===0 ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
       }
+      ctx.restore();
     }
 
-    // Atmospheric bands (Jupiter, Saturn, Neptune)
+    // ── TECTONIC FISSURES (fiery cracks for hot/volcanic planets) ────────────
+    if(p.dust || p.base.includes('c03') || p.base.includes('c83')){
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      for(let i=0;i<4;i++){
+        const ang = i*0.8 + t*0.006;
+        const fx  = cx + Math.cos(ang)*r*0.2;
+        const fy  = cy + Math.sin(ang)*r*0.2;
+        ctx.beginPath();
+        ctx.moveTo(fx,fy);
+        // zigzag crack
+        for(let j=1;j<5;j++){
+          const jf = j/4;
+          ctx.lineTo(
+            fx + Math.cos(ang+j*0.35)*r*0.7*jf + Math.sin(j*2.3)*r*0.06,
+            fy + Math.sin(ang+j*0.35)*r*0.7*jf + Math.cos(j*1.8)*r*0.06
+          );
+        }
+        const cg = ctx.createLinearGradient(fx,fy,fx+Math.cos(ang)*r,fy+Math.sin(ang)*r);
+        cg.addColorStop(0,'rgba(255,100,0,0.9)');
+        cg.addColorStop(0.4,'rgba(255,60,0,0.6)');
+        cg.addColorStop(1,'rgba(180,20,0,0)');
+        ctx.strokeStyle = cg;
+        ctx.lineWidth = 0.8 + Math.sin(t*0.15+i)*0.4;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // ── VENUS SWIRLING CLOUD BANDS (enhanced) ─────────────────────────────────
+    if(p.venusSwirl){
+      for(let i=0;i<7;i++){
+        const by = cy - r*0.85 + i*(r*1.7/6);
+        const wave1 = Math.sin(t*0.09+i*0.85)*r*0.13;
+        const wave2 = Math.cos(t*0.07+i*1.4)*r*0.09;
+        const g = ctx.createLinearGradient(cx-r,by+wave1,cx+r,by+wave2);
+        const opacity = 0.12+0.14*(i%3===0?1:0.6);
+        g.addColorStop(0,`rgba(240,220,130,${opacity*0.7})`);
+        g.addColorStop(0.3,`rgba(255,245,170,${opacity})`);
+        g.addColorStop(0.7,`rgba(230,200,100,${opacity})`);
+        g.addColorStop(1,`rgba(200,165,70,${opacity*0.6})`);
+        ctx.fillStyle=g;
+        ctx.beginPath(); ctx.ellipse(cx,by+wave1+(wave2*0.5),r*1.01,r*0.13+Math.abs(wave1)*0.4,0.08,0,Math.PI*2); ctx.fill();
+      }
+      // Swirl vortex
+      ctx.save(); ctx.globalAlpha=0.12;
+      const vx=cx+r*0.3, vy=cy-r*0.1;
+      for(let ring=0;ring<3;ring++){
+        ctx.beginPath();
+        ctx.arc(vx,vy,r*(0.08+ring*0.06),0,Math.PI*2);
+        ctx.strokeStyle='rgba(255,240,150,0.8)'; ctx.lineWidth=0.8; ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // ── ATMOSPHERIC BANDS (Jupiter, Saturn, Neptune) — enhanced ──────────────
     if(p.bands && p.bands.length){
       p.bands.forEach((c,i)=>{
         const frac = (i+0.5)/p.bands.length;
         const by = cy - r + frac*r*2;
         const bh = r*2/p.bands.length;
-        const wave = Math.sin(t*0.12+i*1.3+frac*5)*r*0.06;
-        const wave2 = Math.cos(t*0.08+i*0.9)*r*0.04;
+        const wave = Math.sin(t*0.11+i*1.4+frac*5.5)*r*0.065;
+        const wave2 = Math.cos(t*0.07+i*0.95)*r*0.042;
+        // Main band
         ctx.fillStyle = c+'cc';
-        ctx.beginPath(); ctx.ellipse(cx,by+wave,r*1.01,bh*0.48+Math.abs(wave2),0.05,0,Math.PI*2); ctx.fill();
-        // Band edge shimmer
-        ctx.fillStyle = lighten(c,25)+'55';
-        ctx.beginPath(); ctx.ellipse(cx,by+wave-bh*0.22,r*0.98,bh*0.1,0,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(cx,by+wave,r*1.01,bh*0.5+Math.abs(wave2),0.04,0,Math.PI*2); ctx.fill();
+        // Turbulent edge — bright shimmer
+        ctx.fillStyle = lighten(c,30)+'44';
+        ctx.beginPath(); ctx.ellipse(cx,by+wave-bh*0.2,r*0.99,bh*0.09,0,0,Math.PI*2); ctx.fill();
+        // Dark underbelly
+        ctx.fillStyle = darken(c,20)+'33';
+        ctx.beginPath(); ctx.ellipse(cx,by+wave+bh*0.25,r*0.97,bh*0.12,0,0,Math.PI*2); ctx.fill();
+        // Mini turbulence knots every other band
+        if(i%2===0){
+          for(let k=0;k<3;k++){
+            const kx=cx+(k-1)*r*0.4+Math.sin(t*0.1+k)*r*0.06;
+            const ky=by+wave+Math.cos(t*0.13+k*1.5)*bh*0.15;
+            const kg=ctx.createRadialGradient(kx,ky,0,kx,ky,bh*0.35);
+            kg.addColorStop(0,lighten(c,20)+'55');
+            kg.addColorStop(1,'transparent');
+            ctx.fillStyle=kg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+          }
+        }
       });
     }
 
-    // Earth continents with detail
+    // ── EARTH CONTINENTS with rivers, mountain snow, cloud wisps ─────────────
     if(p.continents){
-      p.continents.forEach(([ox,oy,sz])=>{
+      p.continents.forEach(([ox,oy,sz],ci)=>{
         // Main landmass
         const g=ctx.createRadialGradient(cx+ox*r,cy+oy*r,0,cx+ox*r,cy+oy*r,sz*r);
-        g.addColorStop(0,'#2d8a4e'); g.addColorStop(0.5,'#1a6e38'); g.addColorStop(0.85,'#155a2e'); g.addColorStop(1,'transparent');
+        g.addColorStop(0,'#3a9a5a'); g.addColorStop(0.35,'#2a7a44'); g.addColorStop(0.7,'#1e6232'); g.addColorStop(0.88,'#185028'); g.addColorStop(1,'transparent');
         ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx+ox*r,cy+oy*r,sz*r,0,Math.PI*2); ctx.fill();
-        // Desert/highland variation
-        const hx=cx+ox*r+sz*r*0.3, hy=cy+oy*r-sz*r*0.2;
-        const hg=ctx.createRadialGradient(hx,hy,0,hx,hy,sz*r*0.45);
-        hg.addColorStop(0,'rgba(180,140,60,0.35)'); hg.addColorStop(1,'transparent');
-        ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(hx,hy,sz*r*0.45,0,Math.PI*2); ctx.fill();
+        // Highland/desert blotch
+        const hx=cx+ox*r+sz*r*0.28, hy=cy+oy*r-sz*r*0.22;
+        const hg=ctx.createRadialGradient(hx,hy,0,hx,hy,sz*r*0.42);
+        hg.addColorStop(0,'rgba(190,155,65,0.45)'); hg.addColorStop(0.6,'rgba(150,110,40,0.2)'); hg.addColorStop(1,'transparent');
+        ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(hx,hy,sz*r*0.42,0,Math.PI*2); ctx.fill();
+        // Mountain snow cap
+        const mx2=cx+ox*r-sz*r*0.15, my2=cy+oy*r+sz*r*0.1;
+        const mg=ctx.createRadialGradient(mx2,my2,0,mx2,my2,sz*r*0.22);
+        mg.addColorStop(0,'rgba(240,248,255,0.55)'); mg.addColorStop(1,'transparent');
+        ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(mx2,my2,sz*r*0.22,0,Math.PI*2); ctx.fill();
+        // Tiny river lines
+        ctx.save(); ctx.globalAlpha=0.2;
+        ctx.beginPath();
+        ctx.moveTo(cx+ox*r,cy+oy*r-sz*r*0.4);
+        ctx.quadraticCurveTo(cx+ox*r+sz*r*0.3,cy+oy*r,cx+ox*r+sz*r*0.5,cy+oy*r+sz*r*0.5);
+        ctx.strokeStyle='rgba(80,160,220,0.7)'; ctx.lineWidth=0.7; ctx.stroke();
+        ctx.restore();
       });
+      // Moving cloud wisps over oceans
+      for(let w=0;w<4;w++){
+        const wx=cx+Math.cos(t*0.04+w*1.6)*r*0.55;
+        const wy=cy+Math.sin(t*0.03+w*1.2)*r*0.4;
+        const wg=ctx.createRadialGradient(wx,wy,0,wx,wy,r*0.18);
+        wg.addColorStop(0,'rgba(255,255,255,0.14)');
+        wg.addColorStop(0.5,'rgba(255,255,255,0.06)');
+        wg.addColorStop(1,'transparent');
+        ctx.fillStyle=wg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      }
     }
 
-    // Polar caps
+    // ── POLAR CAPS — layered ice with crevasses ───────────────────────────────
     if(p.polar){
       [-1,1].forEach((side,si)=>{
-        const poleY = side < 0 ? cy-r*0.72 : cy+r*0.72;
-        const cg=ctx.createRadialGradient(cx,poleY,0,cx,poleY,r*p.polarSize*(si===0?1:0.5));
-        cg.addColorStop(0,p.polar+'ff'); cg.addColorStop(0.6,p.polar+'99'); cg.addColorStop(1,'transparent');
+        const poleY = side < 0 ? cy-r*0.68 : cy+r*0.68;
+        // Base ice
+        const cg=ctx.createRadialGradient(cx,poleY,0,cx,poleY,r*p.polarSize*(si===0?1.1:0.55));
+        cg.addColorStop(0,p.polar+'ff'); cg.addColorStop(0.5,p.polar+'dd'); cg.addColorStop(0.8,p.polar+'66'); cg.addColorStop(1,'transparent');
         ctx.fillStyle=cg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+        // Ice crevasse lines
+        ctx.save(); ctx.globalAlpha=0.18;
+        for(let c2=0;c2<3;c2++){
+          const ca = c2*1.1+Math.PI/4;
+          ctx.beginPath();
+          ctx.moveTo(cx+Math.cos(ca)*r*0.05, poleY+Math.sin(ca)*r*0.04);
+          ctx.lineTo(cx+Math.cos(ca)*r*(p.polarSize*0.7), poleY+Math.sin(ca)*r*(p.polarSize*0.5));
+          ctx.strokeStyle='rgba(180,220,255,0.7)'; ctx.lineWidth=0.7; ctx.stroke();
+        }
+        ctx.restore();
+        // Bright center reflection
+        const cr2=ctx.createRadialGradient(cx-r*0.05,poleY-r*0.04,0,cx,poleY,r*p.polarSize*0.35);
+        cr2.addColorStop(0,'rgba(255,255,255,0.35)'); cr2.addColorStop(1,'transparent');
+        ctx.fillStyle=cr2; ctx.fillRect(cx-r,cy-r,r*2,r*2);
       });
     }
 
-    // Craters (Mercury, Mars)
+    // ── CRATERS (Mercury, Mars) — deep with ejecta rays ──────────────────────
     if(p.craters){
       p.craters.forEach(([ox,oy,sz])=>{
         const cx2=cx+ox*r, cy2=cy+oy*r, cr=sz*r;
+        // Ejecta rays (radiating bright streaks)
+        ctx.save(); ctx.globalAlpha=0.12;
+        for(let ray=0;ray<8;ray++){
+          const ra=(ray/8)*Math.PI*2;
+          const r1=cr*1.1, r2=cr*(2.2+Math.sin(ray*1.3)*0.5);
+          ctx.beginPath();
+          ctx.moveTo(cx2+Math.cos(ra)*r1,cy2+Math.sin(ra)*r1);
+          ctx.lineTo(cx2+Math.cos(ra)*r2,cy2+Math.sin(ra)*r2);
+          ctx.strokeStyle='rgba(220,210,190,0.7)'; ctx.lineWidth=cr*0.15; ctx.stroke();
+        }
+        ctx.restore();
         // Shadow bowl
-        const cg=ctx.createRadialGradient(cx2+cr*0.15,cy2+cr*0.15,cr*0.1,cx2,cy2,cr);
-        cg.addColorStop(0,'rgba(0,0,0,0.28)'); cg.addColorStop(0.7,'rgba(0,0,0,0.12)'); cg.addColorStop(1,'transparent');
-        ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(cx2,cy2,cr,0,Math.PI*2); ctx.fill();
-        // Rim highlight
-        ctx.beginPath(); ctx.arc(cx2-cr*0.25,cy2-cr*0.25,cr*0.65,0,Math.PI*2);
-        ctx.fillStyle='rgba(255,255,255,0.11)'; ctx.fill();
-        // Inner floor
-        ctx.beginPath(); ctx.arc(cx2+cr*0.05,cy2+cr*0.05,cr*0.35,0,Math.PI*2);
-        ctx.fillStyle='rgba(0,0,0,0.1)'; ctx.fill();
+        const cg=ctx.createRadialGradient(cx2+cr*0.18,cy2+cr*0.18,cr*0.08,cx2,cy2,cr);
+        cg.addColorStop(0,'rgba(0,0,0,0.38)'); cg.addColorStop(0.55,'rgba(0,0,0,0.18)'); cg.addColorStop(0.85,'rgba(0,0,0,0.06)'); cg.addColorStop(1,'transparent');
+        ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(cx2,cy2,cr*1.05,0,Math.PI*2); ctx.fill();
+        // Rim bright ring
+        ctx.beginPath(); ctx.arc(cx2,cy2,cr,0,Math.PI*2);
+        ctx.strokeStyle='rgba(255,255,255,0.16)'; ctx.lineWidth=cr*0.12; ctx.stroke();
+        // Inner floor (flat, slightly lighter)
+        const ig=ctx.createRadialGradient(cx2,cy2,0,cx2,cy2,cr*0.4);
+        ig.addColorStop(0,'rgba(180,160,140,0.2)'); ig.addColorStop(1,'transparent');
+        ctx.fillStyle=ig; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+        // Central peak on large craters
+        if(cr>r*0.14){
+          ctx.beginPath(); ctx.arc(cx2,cy2,cr*0.08,0,Math.PI*2);
+          ctx.fillStyle='rgba(200,190,170,0.3)'; ctx.fill();
+        }
       });
     }
 
-    // Mars dust storms
+    // ── MARS DUST STORMS (enhanced with swirling streaks) ─────────────────────
     if(p.dust){
-      for(let i=0;i<3;i++){
-        const ds=Math.sin(t*0.07+i*2.1);
-        const dx=cx+Math.cos(i*2.1+t*0.05)*r*0.5;
-        const dy=cy+Math.sin(i*1.8)*r*0.35+ds*3;
-        const dg=ctx.createRadialGradient(dx,dy,0,dx,dy,r*0.28);
-        dg.addColorStop(0,'rgba(200,100,50,0.18)');
+      for(let i=0;i<4;i++){
+        const ds=Math.sin(t*0.065+i*2.1);
+        const dx=cx+Math.cos(i*2.1+t*0.045)*r*0.55;
+        const dy=cy+Math.sin(i*1.8)*r*0.38+ds*4;
+        const dg=ctx.createRadialGradient(dx,dy,0,dx,dy,r*0.3);
+        dg.addColorStop(0,'rgba(210,110,55,0.22)');
+        dg.addColorStop(0.5,'rgba(190,85,40,0.1)');
         dg.addColorStop(1,'transparent');
         ctx.fillStyle=dg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
       }
+      // Dust devil streaks
+      ctx.save(); ctx.globalAlpha=0.1;
+      for(let d=0;d<3;d++){
+        const dang = t*0.03+d*1.1;
+        ctx.beginPath();
+        ctx.arc(cx+Math.cos(dang)*r*0.3, cy+Math.sin(dang)*r*0.25, r*0.12, 0, Math.PI*2);
+        ctx.strokeStyle='rgba(210,130,70,0.8)'; ctx.lineWidth=1.5; ctx.stroke();
+      }
+      ctx.restore();
     }
 
-    // Jupiter Great Red Spot
+    // ── JUPITER GREAT RED SPOT (with spiral structure) ───────────────────────
     if(p.spot){
-      const sx=cx+r*0.18, sy=cy+r*0.08+Math.sin(t*0.12)*r*0.04;
-      // Outer swirl
-      for(let ring=3;ring>=0;ring--){
-        const rw=r*(0.26-ring*0.04), rh=r*(0.16-ring*0.025);
-        const rc=ring===0?'#d04020':ring===1?'#c83818':ring===2?'#e05030':'#c03010';
+      const sx=cx+r*0.17, sy=cy+r*0.09+Math.sin(t*0.11)*r*0.04;
+      // Outer haze
+      const ohg=ctx.createRadialGradient(sx,sy,r*0.15,sx,sy,r*0.35);
+      ohg.addColorStop(0,'rgba(180,60,30,0.15)'); ohg.addColorStop(1,'transparent');
+      ctx.fillStyle=ohg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      // Concentric rings
+      for(let ring=4;ring>=0;ring--){
+        const rw=r*(0.27-ring*0.043), rh=r*(0.165-ring*0.026);
+        const rc=['#b83010','#c83818','#d04820','#e05530','#ff7755'][ring];
         ctx.beginPath(); ctx.ellipse(sx,sy,rw,rh,0,0,Math.PI*2);
         ctx.fillStyle=rc+(ring===0?'ff':'cc'); ctx.fill();
       }
-      // Highlight
-      ctx.beginPath(); ctx.ellipse(sx-r*0.06,sy-r*0.04,r*0.08,r*0.05,-0.3,0,Math.PI*2);
-      ctx.fillStyle='rgba(255,180,120,0.4)'; ctx.fill();
+      // Spiral arm wisps
+      ctx.save(); ctx.globalAlpha=0.25;
+      for(let arm=0;arm<3;arm++){
+        const aa=arm*(Math.PI*2/3)+t*0.08;
+        ctx.beginPath();
+        for(let k=0;k<20;k++){
+          const kf=k/19, ra=aa+kf*Math.PI*1.2, rd=r*(0.27+kf*0.06);
+          if(k===0) ctx.moveTo(sx+Math.cos(ra)*rd*0.9,sy+Math.sin(ra)*rd*0.55);
+          else       ctx.lineTo(sx+Math.cos(ra)*rd*0.9,sy+Math.sin(ra)*rd*0.55);
+        }
+        ctx.strokeStyle='rgba(255,160,80,0.4)'; ctx.lineWidth=0.8; ctx.stroke();
+      }
+      ctx.restore();
+      // Bright core highlight
+      ctx.beginPath(); ctx.ellipse(sx-r*0.05,sy-r*0.035,r*0.07,r*0.045,-0.3,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,200,140,0.45)'; ctx.fill();
     }
 
-    // Neptune storm
+    // ── NEPTUNE STORM with turbulent halo ────────────────────────────────────
     if(p.stormSpot){
-      const sx=cx-r*0.28, sy=cy+r*0.06;
-      ctx.beginPath(); ctx.ellipse(sx,sy,r*0.22,r*0.13,0,0,Math.PI*2);
+      const sx=cx-r*0.27, sy=cy+r*0.07+Math.sin(t*0.09)*r*0.03;
+      // Turbulence halo
+      const hg=ctx.createRadialGradient(sx,sy,r*0.08,sx,sy,r*0.38);
+      hg.addColorStop(0,'rgba(40,80,200,0.22)'); hg.addColorStop(1,'transparent');
+      ctx.fillStyle=hg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      // Main oval
+      ctx.beginPath(); ctx.ellipse(sx,sy,r*0.23,r*0.14,0,0,Math.PI*2);
       ctx.fillStyle='#102880cc'; ctx.fill();
-      ctx.beginPath(); ctx.ellipse(sx,sy,r*0.12,r*0.07,0,0,Math.PI*2);
-      ctx.fillStyle='#1838b0aa'; ctx.fill();
-      ctx.beginPath(); ctx.ellipse(sx-r*0.03,sy-r*0.02,r*0.05,r*0.03,0,0,Math.PI*2);
-      ctx.fillStyle='rgba(100,160,255,0.5)'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(sx,sy,r*0.13,r*0.075,0,0,Math.PI*2);
+      ctx.fillStyle='#2040c0aa'; ctx.fill();
+      // Bright eye
+      ctx.beginPath(); ctx.ellipse(sx-r*0.025,sy-r*0.018,r*0.052,r*0.032,0,0,Math.PI*2);
+      ctx.fillStyle='rgba(120,180,255,0.55)'; ctx.fill();
+      // Rotating streaks
+      ctx.save(); ctx.globalAlpha=0.15;
+      for(let s2=0;s2<4;s2++){
+        const sa=s2*(Math.PI/2)+t*0.12;
+        ctx.beginPath();
+        ctx.moveTo(sx+Math.cos(sa)*r*0.1, sy+Math.sin(sa)*r*0.06);
+        ctx.lineTo(sx+Math.cos(sa)*r*0.28, sy+Math.sin(sa)*r*0.17);
+        ctx.strokeStyle='rgba(100,160,255,0.7)'; ctx.lineWidth=1.2; ctx.stroke();
+      }
+      ctx.restore();
     }
 
-    // Black hole accretion disk
+    // ── BLACK HOLE accretion disk ─────────────────────────────────────────────
     if(p.accretion){
       ctx.fillStyle='#000'; ctx.fillRect(cx-r,cy-r,r*2,r*2);
-      // Event horizon glow
-      const ehg=ctx.createRadialGradient(cx,cy,r*0.3,cx,cy,r*0.9);
-      ehg.addColorStop(0,'rgba(80,0,120,0.9)'); ehg.addColorStop(0.5,'rgba(160,40,200,0.4)'); ehg.addColorStop(1,'transparent');
+      // Deep gravity well gradient
+      const ehg=ctx.createRadialGradient(cx,cy,r*0.25,cx,cy,r*0.95);
+      ehg.addColorStop(0,'rgba(100,0,150,0.95)');
+      ehg.addColorStop(0.3,'rgba(180,50,220,0.55)');
+      ehg.addColorStop(0.65,'rgba(100,20,160,0.3)');
+      ehg.addColorStop(1,'transparent');
       ctx.fillStyle=ehg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
       // Spinning disk rings
-      for(let ring=0;ring<5;ring++){
-        const rr=r*(0.45+ring*0.12), spin=t*(0.6+ring*0.18)*(ring%2===0?1:-1);
-        const rc=ring%2===0?`rgba(180,60,255,${0.65-ring*0.1})`:`rgba(255,80,180,${0.55-ring*0.1})`;
-        ctx.beginPath(); ctx.ellipse(cx+Math.cos(spin)*1.5,cy+Math.sin(spin)*0.8,rr,rr*0.2,spin*0.08,0,Math.PI*2);
-        ctx.strokeStyle=rc; ctx.lineWidth=2.5-ring*0.35; ctx.stroke();
+      for(let ring=0;ring<6;ring++){
+        const rr=r*(0.42+ring*0.11), spin=t*(0.55+ring*0.16)*(ring%2===0?1:-1);
+        const bright=0.7-ring*0.09;
+        const col1=ring<3?`rgba(200,80,255,${bright})`:`rgba(255,100,200,${bright*0.85})`;
+        ctx.beginPath();
+        ctx.ellipse(cx+Math.cos(spin)*2,cy+Math.sin(spin)*1,rr,rr*0.22,spin*0.09,0,Math.PI*2);
+        ctx.strokeStyle=col1; ctx.lineWidth=2.8-ring*0.35; ctx.stroke();
       }
+      // Relativistic jet streaks
+      ctx.save(); ctx.globalAlpha=0.22;
+      for(let j=0;j<2;j++){
+        const jang = j*Math.PI + t*0.04;
+        ctx.beginPath();
+        ctx.moveTo(cx,cy);
+        ctx.lineTo(cx+Math.cos(jang)*r*0.95, cy+Math.sin(jang)*r*0.95);
+        const jg=ctx.createLinearGradient(cx,cy,cx+Math.cos(jang)*r,cy+Math.sin(jang)*r);
+        jg.addColorStop(0,'rgba(255,200,100,0.6)'); jg.addColorStop(1,'transparent');
+        ctx.strokeStyle=jg; ctx.lineWidth=2; ctx.stroke();
+      }
+      ctx.restore();
       // Core
-      ctx.beginPath(); ctx.arc(cx,cy,r*0.36,0,Math.PI*2); ctx.fillStyle='#000'; ctx.fill();
-      // Photon ring
-      ctx.beginPath(); ctx.arc(cx,cy,r*0.38,0,Math.PI*2);
-      ctx.strokeStyle='rgba(255,200,80,0.7)'; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx,cy,r*0.34,0,Math.PI*2); ctx.fillStyle='#000'; ctx.fill();
+      // Photon ring + inner glow
+      ctx.beginPath(); ctx.arc(cx,cy,r*0.36,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,220,80,0.75)'; ctx.lineWidth=1.8; ctx.stroke();
+      const innerGlow=ctx.createRadialGradient(cx,cy,r*0.36,cx,cy,r*0.5);
+      innerGlow.addColorStop(0,'rgba(255,180,50,0.18)'); innerGlow.addColorStop(1,'transparent');
+      ctx.fillStyle=innerGlow; ctx.fillRect(cx-r,cy-r,r*2,r*2);
     }
 
-    // Specular highlight (light reflection)
-    const spec=ctx.createRadialGradient(cx-r*0.35,cy-r*0.35,0,cx-r*0.35,cy-r*0.35,r*0.75);
-    spec.addColorStop(0,'rgba(255,255,255,0.22)'); spec.addColorStop(1,'transparent');
+    // ── SPECULAR HIGHLIGHT — polished sphere sheen ────────────────────────────
+    const spec=ctx.createRadialGradient(cx-r*0.33,cy-r*0.33,0,cx-r*0.2,cy-r*0.2,r*0.78);
+    spec.addColorStop(0,'rgba(255,255,255,0.28)');
+    spec.addColorStop(0.3,'rgba(255,255,255,0.08)');
+    spec.addColorStop(1,'transparent');
     ctx.fillStyle=spec; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+
+    // ── LIMB DARKENING (edges darker, physically accurate) ────────────────────
+    const limb=ctx.createRadialGradient(cx,cy,r*0.5,cx,cy,r*1.02);
+    limb.addColorStop(0,'transparent');
+    limb.addColorStop(0.75,'transparent');
+    limb.addColorStop(1,'rgba(0,0,0,0.45)');
+    ctx.fillStyle=limb; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+
     ctx.restore();
   }
 
@@ -473,9 +700,165 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     }
   }
 
+  // Draw a horizontal rocket (nose pointing RIGHT by default; ctx should be pre-rotated for angle)
+  function drawRocketH(ctx, x, y, sc, flameOn){
+    ctx.save(); ctx.translate(x, y);
+    // Rocket points RIGHT (+x). Flame shoots LEFT (−x).
+
+    // === FLAME (behind body, on left) ===
+    if(flameOn){
+      const flameL = (10 + Math.sin(Date.now()*0.018)*4) * sc;
+      const fg1 = ctx.createRadialGradient(-8*sc, 0, 0, -8*sc-flameL*0.5, 0, flameL);
+      fg1.addColorStop(0,'rgba(255,255,255,0.95)');
+      fg1.addColorStop(0.12,'rgba(255,230,60,0.9)');
+      fg1.addColorStop(0.4,'rgba(255,120,20,0.75)');
+      fg1.addColorStop(0.75,'rgba(255,50,0,0.4)');
+      fg1.addColorStop(1,'rgba(255,20,0,0)');
+      ctx.beginPath();
+      ctx.moveTo(-8*sc, -3.5*sc);
+      ctx.quadraticCurveTo(-8*sc-flameL*0.5, -5*sc, -8*sc-flameL, 0);
+      ctx.quadraticCurveTo(-8*sc-flameL*0.5,  5*sc, -8*sc,  3.5*sc);
+      ctx.closePath();
+      ctx.fillStyle=fg1; ctx.fill();
+      // Inner hot core
+      const fl2 = flameL * 0.52;
+      ctx.beginPath();
+      ctx.moveTo(-8*sc, -1.8*sc);
+      ctx.quadraticCurveTo(-8*sc-fl2*0.5, -2*sc, -8*sc-fl2, 0);
+      ctx.quadraticCurveTo(-8*sc-fl2*0.5,  2*sc, -8*sc,  1.8*sc);
+      ctx.closePath();
+      const fg2 = ctx.createLinearGradient(-8*sc, 0, -8*sc-fl2, 0);
+      fg2.addColorStop(0,'rgba(255,255,220,1)');
+      fg2.addColorStop(0.5,'rgba(255,200,60,0.9)');
+      fg2.addColorStop(1,'rgba(255,100,0,0)');
+      ctx.fillStyle=fg2; ctx.fill();
+    }
+
+    // === FINS (top and bottom, swept back) ===
+    // Top fin
+    ctx.beginPath();
+    ctx.moveTo(-3*sc, -4*sc);
+    ctx.lineTo(-8*sc, -8*sc);
+    ctx.lineTo(-6*sc, -4*sc);
+    ctx.closePath();
+    ctx.fillStyle='#e0e8f0'; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.5*sc; ctx.stroke();
+    // Bottom fin
+    ctx.beginPath();
+    ctx.moveTo(-3*sc,  4*sc);
+    ctx.lineTo(-8*sc,  8*sc);
+    ctx.lineTo(-6*sc,  4*sc);
+    ctx.closePath();
+    ctx.fillStyle='#e0e8f0'; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.5*sc; ctx.stroke();
+
+    // === BODY ===
+    const bodyGrad = ctx.createLinearGradient(0, -4*sc, 0, 4*sc);
+    bodyGrad.addColorStop(0,'#c8d8e8');
+    bodyGrad.addColorStop(0.25,'#ffffff');
+    bodyGrad.addColorStop(0.65,'#f0f4f8');
+    bodyGrad.addColorStop(1,'#b0c0d0');
+    ctx.beginPath();
+    ctx.roundRect(-8*sc, -4*sc, 16*sc, 8*sc, 2*sc);
+    ctx.fillStyle=bodyGrad; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=0.6*sc; ctx.stroke();
+
+    // === NOSE CONE (right side) ===
+    const tipGrad = ctx.createLinearGradient(7*sc, -3.5*sc, 14*sc, 0);
+    tipGrad.addColorStop(0,'#ff4444');
+    tipGrad.addColorStop(0.4,'#ff2020');
+    tipGrad.addColorStop(1,'#cc0000');
+    ctx.beginPath();
+    ctx.moveTo(7*sc, -3.5*sc);
+    ctx.quadraticCurveTo(10*sc, -3*sc, 14*sc, 0);
+    ctx.quadraticCurveTo(10*sc,  3*sc,  7*sc,  3.5*sc);
+    ctx.closePath();
+    ctx.fillStyle=tipGrad; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=0.5*sc; ctx.stroke();
+    // Nose shine
+    ctx.beginPath();
+    ctx.moveTo(7.5*sc, -2*sc);
+    ctx.quadraticCurveTo(10*sc, -2.5*sc, 13*sc, -0.5*sc);
+    ctx.quadraticCurveTo(9*sc, -1.5*sc, 7.5*sc, 0);
+    ctx.closePath();
+    ctx.fillStyle='rgba(255,255,255,0.32)'; ctx.fill();
+
+    // === PORTHOLE ===
+    ctx.beginPath(); ctx.arc(1*sc, 0, 2.5*sc, 0, Math.PI*2);
+    const winGrad = ctx.createRadialGradient(0.3*sc,-0.8*sc,0.2*sc,1*sc,0,2.5*sc);
+    winGrad.addColorStop(0,'#aaddff'); winGrad.addColorStop(0.6,'#4499cc'); winGrad.addColorStop(1,'#1155aa');
+    ctx.fillStyle=winGrad; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=0.6*sc; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0.1*sc,-0.9*sc,0.9*sc,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.fill();
+
+    // === NOZZLE (left side) ===
+    ctx.beginPath();
+    ctx.moveTo(-7*sc, -3*sc);
+    ctx.lineTo(-9.5*sc, -2*sc);
+    ctx.lineTo(-9.5*sc,  2*sc);
+    ctx.lineTo(-7*sc,  3*sc);
+    ctx.closePath();
+    ctx.fillStyle='#8899aa'; ctx.fill();
+
+    ctx.restore();
+  }
+
+  // Draw sonic boom shockwave rings
+  function drawSonicBoom(ctx, x, y, age, maxAge){
+    const progress = age / maxAge; // 0→1
+    const alpha = Math.max(0, 1 - progress) * 0.7;
+    const coneH = 40 * progress;
+    const coneW = 18 * progress;
+
+    // Mach cone (V-shaped shockwave)
+    ctx.save(); ctx.globalAlpha = alpha * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - coneH, y - coneW);
+    ctx.lineTo(x - coneH, y + coneW);
+    ctx.closePath();
+    const cg = ctx.createLinearGradient(x, y, x - coneH, y);
+    cg.addColorStop(0,'rgba(200,230,255,0.9)');
+    cg.addColorStop(0.5,'rgba(150,200,255,0.5)');
+    cg.addColorStop(1,'rgba(100,180,255,0)');
+    ctx.fillStyle = cg; ctx.fill();
+    ctx.restore();
+
+    // Expanding rings radiating outward
+    for(let ring = 0; ring < 3; ring++){
+      const rp = Math.max(0, progress - ring * 0.15);
+      if(rp <= 0) continue;
+      const rAlpha = Math.max(0, (1 - rp) * 0.55 * alpha);
+      const rRad = rp * (22 + ring * 8);
+      const rScaleY = 0.35; // squash to oval (horizontal flight)
+      ctx.save();
+      ctx.globalAlpha = rAlpha;
+      ctx.beginPath();
+      ctx.ellipse(x - rRad * 0.4, y, rRad, rRad * rScaleY, 0, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(180,220,255,0.8)`;
+      ctx.lineWidth = 1.5 - ring * 0.3;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Bright flash at impact point
+    if(progress < 0.3){
+      const flashA = (0.3 - progress) / 0.3 * 0.6;
+      ctx.save();
+      ctx.globalAlpha = flashA;
+      const fg = ctx.createRadialGradient(x,y,0,x,y,14*(1-progress));
+      fg.addColorStop(0,'rgba(255,255,255,0.9)');
+      fg.addColorStop(0.4,'rgba(200,230,255,0.5)');
+      fg.addColorStop(1,'transparent');
+      ctx.fillStyle=fg; ctx.fillRect(x-20,y-20,40,40);
+      ctx.restore();
+    }
+  }
+
   function drawRocket(ctx, x, y, sc, flameOn){
     ctx.save(); ctx.translate(x, y);
-    // sc is scale factor, rocket points upward
+    // sc is scale factor, rocket points upward (original vertical version for idle hover)
 
     // === FLAME (drawn first, behind rocket body) ===
     if(flameOn){
@@ -508,7 +891,6 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     }
 
     // === FINS (bottom left & right) ===
-    // Left fin
     ctx.beginPath();
     ctx.moveTo(-4*sc, 4*sc);
     ctx.lineTo(-8*sc, 9*sc);
@@ -516,7 +898,6 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     ctx.closePath();
     ctx.fillStyle='#e0e8f0'; ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.5*sc; ctx.stroke();
-    // Right fin
     ctx.beginPath();
     ctx.moveTo(4*sc, 4*sc);
     ctx.lineTo(8*sc, 9*sc);
@@ -525,7 +906,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     ctx.fillStyle='#e0e8f0'; ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.5*sc; ctx.stroke();
 
-    // === BODY (white cylinder) ===
+    // === BODY ===
     const bodyGrad = ctx.createLinearGradient(-4*sc, 0, 4*sc, 0);
     bodyGrad.addColorStop(0,'#c8d8e8');
     bodyGrad.addColorStop(0.25,'#ffffff');
@@ -536,7 +917,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     ctx.fillStyle=bodyGrad; ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=0.6*sc; ctx.stroke();
 
-    // === RED TIP (nose cone) ===
+    // === RED TIP ===
     const tipGrad = ctx.createLinearGradient(-3.5*sc, -5*sc, 3.5*sc, -12*sc);
     tipGrad.addColorStop(0,'#ff4444');
     tipGrad.addColorStop(0.4,'#ff2020');
@@ -548,7 +929,6 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     ctx.closePath();
     ctx.fillStyle=tipGrad; ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=0.5*sc; ctx.stroke();
-    // Tip shine
     ctx.beginPath();
     ctx.moveTo(-1.5*sc, -6*sc);
     ctx.quadraticCurveTo(-1.2*sc, -9*sc, 0, -12*sc);
@@ -556,17 +936,16 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     ctx.closePath();
     ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.fill();
 
-    // === WINDOW (porthole) ===
+    // === WINDOW ===
     ctx.beginPath(); ctx.arc(0, -0.5*sc, 2.5*sc, 0, Math.PI*2);
     const winGrad = ctx.createRadialGradient(-0.8*sc,-1.2*sc,0.2*sc,0,-0.5*sc,2.5*sc);
     winGrad.addColorStop(0,'#aaddff'); winGrad.addColorStop(0.6,'#4499cc'); winGrad.addColorStop(1,'#1155aa');
     ctx.fillStyle=winGrad; ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=0.6*sc; ctx.stroke();
-    // Window shine
     ctx.beginPath(); ctx.arc(-0.8*sc,-1.3*sc,0.9*sc,0,Math.PI*2);
     ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.fill();
 
-    // === BOTTOM NOZZLE ===
+    // === NOZZLE ===
     ctx.beginPath();
     ctx.moveTo(-3*sc, 8*sc);
     ctx.lineTo(-2*sc, 9.5*sc);
@@ -577,6 +956,17 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
 
     ctx.restore();
   }
+
+  // Trigger rocket launch from parent
+  useEffect(()=>{
+    if(!launchRocket) return;
+    stateRef.current.rocketLaunching = true;
+    stateRef.current.rocketLaunchT = 0;
+    stateRef.current.rocketPhase = 'approach';
+    stateRef.current.sonicBooms = [];
+    window.__rocketDone = () => { onLaunchDone?.(); };
+    return () => { window.__rocketDone = null; };
+  },[launchRocket]);
 
   useEffect(()=>{
     const canvas = canvasRef.current;
@@ -789,35 +1179,148 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       moonMini.addColorStop(0,'rgba(255,255,255,0.7)'); moonMini.addColorStop(1,'rgba(255,255,255,0)');
       ctx.fillStyle=moonMini; ctx.beginPath(); ctx.arc(moonX,moonY,3,0,Math.PI*2); ctx.fill();
 
-      // Streak count on planet
-      ctx.font=`bold ${pR>24?12:pR>18?10:9}px 'DM Mono',monospace`;
-      ctx.textAlign='center';
-      ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=3;
-      ctx.strokeText(streak.count,curX,pY+5);
-      ctx.fillStyle='rgba(255,255,255,0.92)';
-      ctx.fillText(streak.count,curX,pY+5);
+      // ── HORIZONTAL ROCKET APPROACH ──────────────────────────────────────────
+      // State fields used: rocketPhase ('approach'|'orbit'|'launch'), rocketT, sonicBooms[]
+      if(!s.rocketPhase) s.rocketPhase = 'orbit';
+      if(!s.sonicBooms) s.sonicBooms = [];
 
-      // Rocket — white body, red tip, orange flame when logged
-      const groundY = pY - pR;
-      const bob = Math.sin(s.t*2.0)*2.2;
-      const sway = todayLogged ? Math.sin(s.t*1.3)*4 : Math.sin(s.t*0.4)*1.2;
-      const rocketSc = 0.9 + pR/90;
-      drawRocket(ctx, curX+sway, groundY-10+bob, rocketSc, todayLogged);
+      // Trigger approach when launchRocket fires (reused for the "first spend" flyby)
+      if(s.rocketLaunching){
+        // Override: use horizontal approach instead of old vertical launch
+        if(s.rocketPhase !== 'approach'){
+          s.rocketPhase = 'approach';
+          s.rocketT = 0;
+          s.sonicBooms = [];
+        }
+        s.rocketLaunchT += 0.013; // approach speed
+        const lt = Math.min(s.rocketLaunchT, 1);
 
-      // Exhaust particles (only when logged — active thruster)
-      if(todayLogged && Math.random()<0.4){
-        s.particles.push({
-          x: curX+sway, y: groundY-10+bob + 9*rocketSc,
-          vx:(Math.random()-0.5)*1.2, vy:1.2+Math.random()*1.5,
-          life:1, type:Math.floor(Math.random()*3)
+        // Bezier path: rocket enters from far left, arcs down curving toward planet
+        // Control point creates the dramatic curved dive
+        const startX = -40, startY = VH * 0.18;
+        const ctrlX  = VW * 0.25, ctrlY = VH * 0.0;   // upward arc midpoint
+        const endX   = curX - pR - 18, endY = pY - pR * 0.2; // arrives near planet surface
+
+        // Quadratic bezier position
+        const bx = (1-lt)*(1-lt)*startX + 2*(1-lt)*lt*ctrlX + lt*lt*endX;
+        const by = (1-lt)*(1-lt)*startY + 2*(1-lt)*lt*ctrlY + lt*lt*endY;
+
+        // Tangent direction for rotation
+        const tdx = 2*(1-lt)*(ctrlX-startX) + 2*lt*(endX-ctrlX);
+        const tdy = 2*(1-lt)*(ctrlY-startY) + 2*lt*(endY-ctrlY);
+        const rAngle = Math.atan2(tdy, tdx); // rocket nose follows path
+
+        // Draw motion blur trail
+        for(let mb=1;mb<=5;mb++){
+          const mlt = Math.max(0, lt - mb*0.022);
+          const mbx = (1-mlt)*(1-mlt)*startX + 2*(1-mlt)*mlt*ctrlX + mlt*mlt*endX;
+          const mby = (1-mlt)*(1-mlt)*startY + 2*(1-mlt)*mlt*ctrlY + mlt*mlt*endY;
+          ctx.save();
+          ctx.globalAlpha = (0.12 - mb*0.02) * (lt > 0.05 ? 1 : lt/0.05);
+          ctx.beginPath(); ctx.arc(mbx, mby, 3*(6-mb)/6, 0, Math.PI*2);
+          ctx.fillStyle='rgba(200,220,255,0.6)'; ctx.fill();
+          ctx.restore();
+        }
+
+        // Condensation trail (contrail behind rocket)
+        if(lt > 0.05 && Math.random() < 0.6){
+          s.particles.push({
+            x: bx - Math.cos(rAngle)*12, y: by - Math.sin(rAngle)*12,
+            vx: -Math.cos(rAngle)*0.3 + (Math.random()-0.5)*0.5,
+            vy: -Math.sin(rAngle)*0.3 + (Math.random()-0.5)*0.4,
+            life: 1, type: 3 // type 3 = contrail (white)
+          });
+        }
+        // Engine particles
+        if(Math.random() < 0.8){
+          s.particles.push({
+            x: bx - Math.cos(rAngle)*10, y: by - Math.sin(rAngle)*10,
+            vx: -Math.cos(rAngle)*1.5 + (Math.random()-0.5)*1.2,
+            vy: -Math.sin(rAngle)*1.5 + (Math.random()-0.5)*1.2,
+            life: 1, type: Math.floor(Math.random()*3)
+          });
+        }
+
+        // Draw horizontal rocket
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(rAngle);
+        drawRocketH(ctx, 0, 0, 1.05, true);
+        ctx.restore();
+
+        // Sonic boom at ~70% approach (near planet)
+        if(lt > 0.68 && lt < 0.72 && s.sonicBooms.length === 0){
+          s.sonicBooms.push({ x: bx, y: by, age: 0, maxAge: 35 });
+        }
+
+        // Draw sonic booms
+        s.sonicBooms.forEach(boom => {
+          boom.age++;
+          drawSonicBoom(ctx, boom.x, boom.y, boom.age, boom.maxAge);
         });
+        s.sonicBooms = s.sonicBooms.filter(b => b.age < b.maxAge);
+
+        // Done approaching — transition to orbit
+        if(lt >= 1){
+          s.rocketLaunching = false;
+          s.rocketLaunchT = 0;
+          s.rocketPhase = 'orbit';
+          if(window.__rocketDone) window.__rocketDone();
+        }
+
+      } else {
+        // ── ORBITING ROCKET ─────────────────────────────────────────────────
+        // Rocket orbits the planet horizontally, dipping closer when logged
+        const orbitR = pR + (todayLogged ? 18 : 24);
+        const orbitSpeed = todayLogged ? 0.018 : 0.008;
+        const orbitA = s.t * orbitSpeed;
+        // Tilted ellipse — looks 3D
+        const orX = curX + Math.cos(orbitA) * orbitR;
+        const orY = pY  + Math.sin(orbitA) * orbitR * 0.32 - pR * 0.15;
+        const orAngle = -orbitA + (Math.sin(orbitA) > 0 ? Math.PI : 0); // nose always forward
+
+        // Only draw when on the "near" side (in front of planet)
+        const inFront = Math.sin(orbitA) < 0.1;
+
+        if(inFront){
+          // Contrail arc segment behind rocket
+          ctx.save();
+          ctx.globalAlpha = 0.18;
+          ctx.beginPath();
+          for(let ta=0;ta<20;ta++){
+            const ta2 = orbitA - ta*0.045;
+            const tx2 = curX + Math.cos(ta2)*orbitR;
+            const ty2 = pY   + Math.sin(ta2)*orbitR*0.32 - pR*0.15;
+            if(ta===0) ctx.moveTo(tx2,ty2); else ctx.lineTo(tx2,ty2);
+          }
+          ctx.strokeStyle='rgba(200,230,255,0.5)'; ctx.lineWidth=1.5; ctx.setLineDash([3,4]); ctx.stroke();
+          ctx.restore();
+
+          ctx.save();
+          ctx.translate(orX, orY);
+          ctx.rotate(orAngle);
+          drawRocketH(ctx, 0, 0, 0.85, todayLogged);
+          ctx.restore();
+
+          // Exhaust particles when logged
+          if(todayLogged && Math.random() < 0.5){
+            s.particles.push({
+              x: orX - Math.cos(orAngle)*10, y: orY - Math.sin(orAngle)*10,
+              vx: -Math.cos(orAngle)*1.0 + (Math.random()-0.5)*0.8,
+              vy: -Math.sin(orAngle)*1.0 + (Math.random()-0.5)*0.8,
+              life: 1, type: Math.floor(Math.random()*3)
+            });
+          }
+        }
       }
       s.particles = s.particles.filter(p=>p.life>0);
       s.particles.forEach(p=>{
-        p.x+=p.vx; p.y+=p.vy; p.vy+=0.045; p.life-=0.034;
+        p.x+=p.vx; p.y+=p.vy; p.vy+=0.03; p.life-=0.028;
         const ps=2.8*p.life;
         ctx.beginPath(); ctx.arc(p.x,p.y,ps,0,Math.PI*2);
-        const col = p.type===0
+        const col = p.type===3
+          ? `rgba(220,235,255,${p.life*0.55})`  // white contrail
+          : p.type===0
           ? `rgba(251,191,36,${p.life*0.82})`   // golden
           : p.type===1
           ? `rgba(249,115,22,${p.life*0.78})`   // orange
@@ -2248,6 +2751,7 @@ export default function App() {
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
+  const [rocketLaunchKey, setRocketLaunchKey] = useState(0); // increment to trigger launch
 
   // ── Recurring form ────────────────────────────────────────────────────────
   const [rName, setRName] = useState("");
@@ -2470,6 +2974,7 @@ export default function App() {
       setAmountShake(true); setTimeout(() => setAmountShake(false), 500); return;
     }
     const num = Number(amount);
+    const isFirstSpendToday = !editingId && !expenses.some(e => e.date === date && e.id !== editingId) && date === today;
     if (editingId) {
       const old = expenses.find(e => e.id===editingId);
       setPot(p => { let u = refundPot(p, old.paySource||"bank", old.amount); return deductPot(u, paySource, num); });
@@ -2483,6 +2988,11 @@ export default function App() {
       showToast(`Added · deducted from ${paySource}`);
     }
     logDay(date);
+    // First spend of today → rocket launch animation then go home
+    if (isFirstSpendToday) {
+      setTab("home");
+      setTimeout(() => setRocketLaunchKey(k => k + 1), 120);
+    }
     resetExpenseForm();
   }
 
@@ -2744,6 +3254,8 @@ export default function App() {
                 onLog={() => { haptic([10,50,10]); logNoSpend(); }}
                 onFreeze={() => { haptic([10,30,10]); usePitStop(); }}
                 haptic={haptic}
+                launchRocket={rocketLaunchKey}
+                onLaunchDone={() => {}}
               />
 
 
@@ -3315,6 +3827,38 @@ export default function App() {
 
               <VoiceLogger categories={categories} onAdd={handleVoiceAdd} dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain} inputBg={inputBg} inputBorder={inputBorder} accent={accent}/>
               <ReceiptScanner categories={categories} onAdd={handleReceiptAdd} dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain} inputBg={inputBg} inputBorder={inputBorder} accent={accent}/>
+
+              {/* ── NO-SPEND DAY BACK-FILL ── */}
+              {(() => {
+                // Show last 7 days that weren't logged (excluding today if already logged)
+                const last7 = getLastNDays(7);
+                const missedDays = last7.filter(d => d !== today && !streak.loggedDates.includes(d));
+                if (missedDays.length === 0) return null;
+                return (
+                  <div style={{ background:dark?"linear-gradient(135deg,#0a120a,#0d1f0d)":"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:dark?"1px solid rgba(52,211,153,0.2)":"1px solid #86efac",borderRadius:16,padding:"14px 16px",marginTop:4,marginBottom:12 }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10 }}>
+                      <span style={{ fontSize:16 }}>🌿</span>
+                      <div>
+                        <p style={{ margin:0,fontSize:13,fontWeight:700,color:dark?"#34d399":"#065f46" }}>No-Spend Day — Back Fill</p>
+                        <p style={{ margin:0,fontSize:11,color:dark?"rgba(52,211,153,0.6)":"#16a34a" }}>Log a day you forgot to record</p>
+                      </div>
+                    </div>
+                    <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+                      {missedDays.slice(0,5).map(d => {
+                        return (
+                          <button key={d} onClick={() => { haptic([10,30,10]); logDay(d); showToast(`No-spend day logged for ${formatDate(d)} 🌿`); }}
+                            style={{ display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"9px 12px",borderRadius:10,border:dark?"1px solid rgba(52,211,153,0.25)":"1px solid #86efac",background:dark?"rgba(52,211,153,0.07)":"rgba(255,255,255,0.7)",cursor:"pointer",transition:"all 0.15s" }}>
+                            <span style={{ fontSize:13,fontWeight:600,color:dark?"#6ee7b7":"#065f46" }}>{formatDate(d)}</span>
+                            <span style={{ fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:99,background:dark?"rgba(52,211,153,0.18)":"#d1fae5",color:dark?"#34d399":"#059669",display:"flex",alignItems:"center",gap:4 }}>
+                              <span>🌿</span> Log no-spend
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           )}
 
