@@ -20,6 +20,7 @@ const KEYS = {
   NOTIF_LOG:  "myspendr_notif_log_v1",
   GOALS:      "myspendr_goals_v1",
   BIO_CRED:   "myspendr_bio_cred_v1",
+  SHIELD:     "myspendr_shield_v1",
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -167,11 +168,741 @@ function toMonthlyAmount(amount, frequency) {
   return amount;
 }
 
-// FIX: budget now uses only current-month spending
-function computeMonthlyTotal(expenses) {
+// FIX: budget now uses only current-month spending, excluding gift/transfer categories
+function computeMonthlyTotal(expenses, excludedCategories = []) {
   return expenses
-    .filter(e => isInCurrentMonth(e.date))
+    .filter(e => isInCurrentMonth(e.date) && !excludedCategories.includes(e.category))
     .reduce((s, e) => s + e.amount, 0);
+}
+
+// ── F1 STREAK HELPERS ─────────────────────────────────────────────────────────
+function getStreakRank(count) {
+  if (count === 0) return { title: "Grounded", color: "#6b7280" };
+  if (count < 7)   return { title: "Lift-off", color: "#3b82f6" };
+  if (count < 14)  return { title: "In Orbit", color: "#06b6d4" };
+  if (count < 30)  return { title: "Deep Space", color: "#8b5cf6" };
+  if (count < 60)  return { title: "Warp Speed", color: "#f59e0b" };
+  if (count < 100) return { title: "Supernova", color: "#ef4444" };
+  return              { title: "Singularity", color: "#ec4899" };
+}
+
+// ── PLANET HOPPER GAME COMPONENT ─────────────────────────────────────────────
+function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopData, dark, onLog, onFreeze }) {
+  const canvasRef = useRef(null);
+  const rafRef = useRef(null);
+  const stateRef = useRef({ t:0, particles:[], stars:[], nebulae:[], prevIdx:-1, transitioning:false, transX:0, transDir:1 });
+
+  const PLANETS = [
+    {
+      name:"Mercury", size:18,
+      base:"#8a8a8a", highlight:"#c0c0c0", shadow:"#3a3a3a",
+      craters:[[0.25,0.1,0.19],[-0.2,-0.22,0.14],[0.05,-0.32,0.09],[-0.15,0.28,0.16],[0.3,-0.12,0.08]],
+      surfaceColor:"#b0b0b8", glow:"#d0d0e0", glowAlpha:0.3,
+    },
+    {
+      name:"Venus", size:20,
+      base:"#e8c56a", highlight:"#f5e090", shadow:"#8b6914",
+      venusSwirl:true, atmo:"#f5e09044",
+      glow:"#f5d060", glowAlpha:0.5,
+    },
+    {
+      name:"Earth", size:23,
+      base:"#1a6bbf", highlight:"#4db8ff", shadow:"#0a3060",
+      continents:[[-0.12,0,0.34],[0.27,-0.08,0.21],[0.04,0.26,0.19],[-0.3,0.15,0.13]],
+      polar:"#daf4ff", polarSize:0.26, atmo:"#4da6ff33",
+      glow:"#70c0ff", glowAlpha:0.5,
+    },
+    {
+      name:"Mars", size:21,
+      base:"#c0391a", highlight:"#e8603a", shadow:"#5a1a05",
+      craters:[[0.12,0.17,0.17],[-0.28,-0.12,0.11],[0.26,-0.24,0.09]],
+      polar:"#ffe8d8", polarSize:0.28, atmo:"#ff603022",
+      glow:"#ff7050", glowAlpha:0.45, dust:true,
+    },
+    {
+      name:"Jupiter", size:30,
+      base:"#c8956a", highlight:"#e8c090", shadow:"#7a4020",
+      bands:["#a05028","#d4905a","#7a3818","#e8b870","#b86840","#f0d090","#8a4828"],
+      spot:true, atmo:"#f0a04022",
+      glow:"#f0c060", glowAlpha:0.55,
+    },
+    {
+      name:"Saturn", size:26,
+      base:"#d8b870", highlight:"#f0d8a0", shadow:"#8a6820",
+      bands:["#c09050","#e8c890","#b07828"],
+      rings:true, ringColors:["#c8a860","#e8d090","#b89040","#f0e0a8","#907030"],
+      glow:"#f0d870", glowAlpha:0.5,
+    },
+    {
+      name:"Neptune", size:22,
+      base:"#1836a8", highlight:"#3a70e8", shadow:"#081848",
+      bands:["#1428a0","#2858d8","#1230b0","#3a78f8","#0e2080"],
+      stormSpot:true, atmo:"#2060e822",
+      glow:"#4080ff", glowAlpha:0.55,
+    },
+    {
+      name:"Void", size:18,
+      base:"#000000", highlight:"#200838", shadow:"#000000",
+      accretion:true, atmo:"#8020e044",
+      glow:"#a040e0", glowAlpha:0.65,
+    },
+  ];
+
+  const planetIdx = Math.min(Math.floor(streak.count / 14), PLANETS.length - 1);
+  const streakRank = getStreakRank(streak.count);
+
+  // Daily colour shift — changes every day based on day-of-year
+  const istNow = nowIST();
+  const dayOfYear = Math.floor((istNow - new Date(istNow.getFullYear(),0,0))/(1000*60*60*24));
+  // Hue cycles through full spectrum over the year, offset by day
+  const dailyHue = (dayOfYear * 137.508) % 360; // golden angle — never repeats same colour adjacent days
+  // Override planet base/highlight/glow with daily colour
+  const planet = { ...PLANETS[planetIdx] };
+  const hueShift = (h, shift) => `hsl(${(h+shift)%360},70%,55%)`;
+  planet.base      = `hsl(${dailyHue},65%,42%)`;
+  planet.highlight = `hsl(${dailyHue},75%,68%)`;
+  planet.shadow    = `hsl(${dailyHue},55%,22%)`;
+  planet.glow      = `hsl(${dailyHue},80%,60%)`;
+  if(planet.atmo)   planet.atmo = `hsl(${dailyHue},60%,50%,0.18)`;
+  // Keep structural properties (craters, bands, rings etc) from original
+
+  const istHour = istNow.getHours() + istNow.getMinutes()/60;
+  const isDay = istHour >= 6 && istHour < 18;
+  const sunProgress = isDay ? (istHour - 6) / 12 : 0;
+  const moonPhase = (() => {
+    const known = new Date(2000,0,6);
+    const diff = (istNow - known)/(1000*60*60*24);
+    return (diff % 29.53) / 29.53;
+  })();
+
+  function lerp(a,b,t){ return a+(b-a)*Math.max(0,Math.min(1,t)); }
+  function lighten(hex,amt){ const n=parseInt((hex||'#888').replace('#',''),16); return `rgb(${Math.min(255,(n>>16)+amt)},${Math.min(255,((n>>8)&0xff)+amt)},${Math.min(255,(n&0xff)+amt)})`; }
+  function darken(hex,amt){ if(!hex||!hex.startsWith('#'))return hex||'#888'; const n=parseInt(hex.replace('#',''),16); return `rgb(${Math.max(0,(n>>16)-amt)},${Math.max(0,((n>>8)&0xff)-amt)},${Math.max(0,(n&0xff)-amt)})`; }
+  function hexA(hex,a){ const n=parseInt((hex||'#888').replace('#',''),16); return `rgba(${n>>16},${(n>>8)&0xff},${n&0xff},${a})`; }
+
+  function drawPlanetTexture(ctx, p, cx, cy, r, t) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+
+    // Rich base gradient with highlight/shadow
+    const base = ctx.createRadialGradient(cx-r*0.32,cy-r*0.32,r*0.04,cx+r*0.1,cy+r*0.1,r*1.1);
+    base.addColorStop(0, p.highlight||lighten(p.base,50));
+    base.addColorStop(0.38, p.base);
+    base.addColorStop(0.75, darken(p.base,22));
+    base.addColorStop(1, p.shadow||darken(p.base,50));
+    ctx.fillStyle = base; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+
+    // Surface noise texture overlay for realism
+    const noiseSeeds = [0.17,0.43,0.71,0.29,0.58,0.82,0.13,0.67];
+    noiseSeeds.forEach((ns,i)=>{
+      const nx=cx+(Math.cos(ns*Math.PI*6+i)*r*0.8);
+      const ny=cy+(Math.sin(ns*Math.PI*4+i)*r*0.7);
+      const ng=ctx.createRadialGradient(nx,ny,0,nx,ny,r*0.4);
+      ng.addColorStop(0,`rgba(255,255,255,0.04)`);
+      ng.addColorStop(1,'transparent');
+      ctx.fillStyle=ng; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+    });
+
+    // Venus swirling cloud bands
+    if(p.venusSwirl){
+      for(let i=0;i<5;i++){
+        const by = cy - r*0.8 + i*(r*1.6/4);
+        const wave1 = Math.sin(t*0.1+i*0.8)*r*0.12;
+        const wave2 = Math.cos(t*0.08+i*1.3)*r*0.08;
+        const g = ctx.createLinearGradient(cx-r,by+wave1,cx+r,by+wave2);
+        const opacity = 0.15+0.12*(i%2);
+        g.addColorStop(0,`rgba(240,220,130,${opacity})`);
+        g.addColorStop(0.5,`rgba(255,240,160,${opacity+0.08})`);
+        g.addColorStop(1,`rgba(200,170,80,${opacity})`);
+        ctx.fillStyle=g;
+        ctx.beginPath(); ctx.ellipse(cx,by+wave1+(wave2*0.5),r,r*0.14+Math.abs(wave1)*0.3,0.1,0,Math.PI*2); ctx.fill();
+      }
+    }
+
+    // Atmospheric bands (Jupiter, Saturn, Neptune)
+    if(p.bands && p.bands.length){
+      p.bands.forEach((c,i)=>{
+        const frac = (i+0.5)/p.bands.length;
+        const by = cy - r + frac*r*2;
+        const bh = r*2/p.bands.length;
+        const wave = Math.sin(t*0.12+i*1.3+frac*5)*r*0.06;
+        const wave2 = Math.cos(t*0.08+i*0.9)*r*0.04;
+        ctx.fillStyle = c+'cc';
+        ctx.beginPath(); ctx.ellipse(cx,by+wave,r*1.01,bh*0.48+Math.abs(wave2),0.05,0,Math.PI*2); ctx.fill();
+        // Band edge shimmer
+        ctx.fillStyle = lighten(c,25)+'55';
+        ctx.beginPath(); ctx.ellipse(cx,by+wave-bh*0.22,r*0.98,bh*0.1,0,0,Math.PI*2); ctx.fill();
+      });
+    }
+
+    // Earth continents with detail
+    if(p.continents){
+      p.continents.forEach(([ox,oy,sz])=>{
+        // Main landmass
+        const g=ctx.createRadialGradient(cx+ox*r,cy+oy*r,0,cx+ox*r,cy+oy*r,sz*r);
+        g.addColorStop(0,'#2d8a4e'); g.addColorStop(0.5,'#1a6e38'); g.addColorStop(0.85,'#155a2e'); g.addColorStop(1,'transparent');
+        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx+ox*r,cy+oy*r,sz*r,0,Math.PI*2); ctx.fill();
+        // Desert/highland variation
+        const hx=cx+ox*r+sz*r*0.3, hy=cy+oy*r-sz*r*0.2;
+        const hg=ctx.createRadialGradient(hx,hy,0,hx,hy,sz*r*0.45);
+        hg.addColorStop(0,'rgba(180,140,60,0.35)'); hg.addColorStop(1,'transparent');
+        ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(hx,hy,sz*r*0.45,0,Math.PI*2); ctx.fill();
+      });
+    }
+
+    // Polar caps
+    if(p.polar){
+      [-1,1].forEach((side,si)=>{
+        const poleY = side < 0 ? cy-r*0.72 : cy+r*0.72;
+        const cg=ctx.createRadialGradient(cx,poleY,0,cx,poleY,r*p.polarSize*(si===0?1:0.5));
+        cg.addColorStop(0,p.polar+'ff'); cg.addColorStop(0.6,p.polar+'99'); cg.addColorStop(1,'transparent');
+        ctx.fillStyle=cg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      });
+    }
+
+    // Craters (Mercury, Mars)
+    if(p.craters){
+      p.craters.forEach(([ox,oy,sz])=>{
+        const cx2=cx+ox*r, cy2=cy+oy*r, cr=sz*r;
+        // Shadow bowl
+        const cg=ctx.createRadialGradient(cx2+cr*0.15,cy2+cr*0.15,cr*0.1,cx2,cy2,cr);
+        cg.addColorStop(0,'rgba(0,0,0,0.28)'); cg.addColorStop(0.7,'rgba(0,0,0,0.12)'); cg.addColorStop(1,'transparent');
+        ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(cx2,cy2,cr,0,Math.PI*2); ctx.fill();
+        // Rim highlight
+        ctx.beginPath(); ctx.arc(cx2-cr*0.25,cy2-cr*0.25,cr*0.65,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,255,255,0.11)'; ctx.fill();
+        // Inner floor
+        ctx.beginPath(); ctx.arc(cx2+cr*0.05,cy2+cr*0.05,cr*0.35,0,Math.PI*2);
+        ctx.fillStyle='rgba(0,0,0,0.1)'; ctx.fill();
+      });
+    }
+
+    // Mars dust storms
+    if(p.dust){
+      for(let i=0;i<3;i++){
+        const ds=Math.sin(t*0.07+i*2.1);
+        const dx=cx+Math.cos(i*2.1+t*0.05)*r*0.5;
+        const dy=cy+Math.sin(i*1.8)*r*0.35+ds*3;
+        const dg=ctx.createRadialGradient(dx,dy,0,dx,dy,r*0.28);
+        dg.addColorStop(0,'rgba(200,100,50,0.18)');
+        dg.addColorStop(1,'transparent');
+        ctx.fillStyle=dg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      }
+    }
+
+    // Jupiter Great Red Spot
+    if(p.spot){
+      const sx=cx+r*0.18, sy=cy+r*0.08+Math.sin(t*0.12)*r*0.04;
+      // Outer swirl
+      for(let ring=3;ring>=0;ring--){
+        const rw=r*(0.26-ring*0.04), rh=r*(0.16-ring*0.025);
+        const rc=ring===0?'#d04020':ring===1?'#c83818':ring===2?'#e05030':'#c03010';
+        ctx.beginPath(); ctx.ellipse(sx,sy,rw,rh,0,0,Math.PI*2);
+        ctx.fillStyle=rc+(ring===0?'ff':'cc'); ctx.fill();
+      }
+      // Highlight
+      ctx.beginPath(); ctx.ellipse(sx-r*0.06,sy-r*0.04,r*0.08,r*0.05,-0.3,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,180,120,0.4)'; ctx.fill();
+    }
+
+    // Neptune storm
+    if(p.stormSpot){
+      const sx=cx-r*0.28, sy=cy+r*0.06;
+      ctx.beginPath(); ctx.ellipse(sx,sy,r*0.22,r*0.13,0,0,Math.PI*2);
+      ctx.fillStyle='#102880cc'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(sx,sy,r*0.12,r*0.07,0,0,Math.PI*2);
+      ctx.fillStyle='#1838b0aa'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(sx-r*0.03,sy-r*0.02,r*0.05,r*0.03,0,0,Math.PI*2);
+      ctx.fillStyle='rgba(100,160,255,0.5)'; ctx.fill();
+    }
+
+    // Black hole accretion disk
+    if(p.accretion){
+      ctx.fillStyle='#000'; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      // Event horizon glow
+      const ehg=ctx.createRadialGradient(cx,cy,r*0.3,cx,cy,r*0.9);
+      ehg.addColorStop(0,'rgba(80,0,120,0.9)'); ehg.addColorStop(0.5,'rgba(160,40,200,0.4)'); ehg.addColorStop(1,'transparent');
+      ctx.fillStyle=ehg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      // Spinning disk rings
+      for(let ring=0;ring<5;ring++){
+        const rr=r*(0.45+ring*0.12), spin=t*(0.6+ring*0.18)*(ring%2===0?1:-1);
+        const rc=ring%2===0?`rgba(180,60,255,${0.65-ring*0.1})`:`rgba(255,80,180,${0.55-ring*0.1})`;
+        ctx.beginPath(); ctx.ellipse(cx+Math.cos(spin)*1.5,cy+Math.sin(spin)*0.8,rr,rr*0.2,spin*0.08,0,Math.PI*2);
+        ctx.strokeStyle=rc; ctx.lineWidth=2.5-ring*0.35; ctx.stroke();
+      }
+      // Core
+      ctx.beginPath(); ctx.arc(cx,cy,r*0.36,0,Math.PI*2); ctx.fillStyle='#000'; ctx.fill();
+      // Photon ring
+      ctx.beginPath(); ctx.arc(cx,cy,r*0.38,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,200,80,0.7)'; ctx.lineWidth=1.5; ctx.stroke();
+    }
+
+    // Specular highlight (light reflection)
+    const spec=ctx.createRadialGradient(cx-r*0.35,cy-r*0.35,0,cx-r*0.35,cy-r*0.35,r*0.75);
+    spec.addColorStop(0,'rgba(255,255,255,0.22)'); spec.addColorStop(1,'transparent');
+    ctx.fillStyle=spec; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+    ctx.restore();
+  }
+
+  function drawPlanetBody(ctx, p, cx, cy, r, t){
+    // Saturn rings behind planet
+    if(p.rings){
+      ctx.save(); ctx.translate(cx,cy); ctx.scale(1,0.26);
+      const ringWidths = [7,5,3.5,2.5,2];
+      const ringRadii = [1.85,1.62,1.42,1.28,1.15];
+      const ringCols = p.ringColors || ['#c8a860','#e8d090','#b89040','#f0e0a8','#907030'];
+      ringRadii.forEach((rf,i)=>{
+        ctx.beginPath(); ctx.arc(0,0,r*rf,0,Math.PI*2);
+        ctx.strokeStyle=ringCols[i]+'99'; ctx.lineWidth=ringWidths[i]; ctx.stroke();
+      });
+      ctx.restore();
+    }
+    drawPlanetTexture(ctx,p,cx,cy,r,t);
+    // Saturn rings in front (lower half)
+    if(p.rings){
+      ctx.save(); ctx.translate(cx,cy); ctx.scale(1,0.26);
+      ctx.beginPath(); ctx.rect(-r*2,0,r*4,r*2.1); ctx.clip();
+      const ringWidths = [7,5,3.5];
+      const ringRadii = [1.85,1.62,1.42];
+      const ringCols = p.ringColors || ['#c8a860','#e8d090','#b89040'];
+      ringRadii.forEach((rf,i)=>{
+        ctx.beginPath(); ctx.arc(0,0,r*rf,0,Math.PI*2);
+        ctx.strokeStyle=ringCols[i]+'bb'; ctx.lineWidth=ringWidths[i]; ctx.stroke();
+      });
+      ctx.restore();
+    }
+  }
+
+  function drawRocket(ctx, x, y, sc, flameOn){
+    ctx.save(); ctx.translate(x, y);
+    // sc is scale factor, rocket points upward
+
+    // === FLAME (drawn first, behind rocket body) ===
+    if(flameOn){
+      // Outer flame
+      const flameH = (8 + Math.sin(Date.now()*0.018)*3) * sc;
+      const fg1 = ctx.createRadialGradient(0, 9*sc, 0, 0, 9*sc+flameH*0.6, flameH);
+      fg1.addColorStop(0,'rgba(255,255,255,0.95)');
+      fg1.addColorStop(0.15,'rgba(255,220,50,0.9)');
+      fg1.addColorStop(0.45,'rgba(255,120,20,0.75)');
+      fg1.addColorStop(0.8,'rgba(255,60,0,0.4)');
+      fg1.addColorStop(1,'rgba(255,30,0,0)');
+      ctx.beginPath();
+      ctx.moveTo(-3.5*sc, 8*sc);
+      ctx.quadraticCurveTo(-5*sc, 9*sc+flameH*0.5, 0, 9*sc+flameH);
+      ctx.quadraticCurveTo(5*sc, 9*sc+flameH*0.5, 3.5*sc, 8*sc);
+      ctx.closePath();
+      ctx.fillStyle=fg1; ctx.fill();
+      // Inner hot core
+      const flameH2 = flameH * 0.55;
+      ctx.beginPath();
+      ctx.moveTo(-1.8*sc, 8*sc);
+      ctx.quadraticCurveTo(-2*sc, 9*sc+flameH2*0.5, 0, 9*sc+flameH2);
+      ctx.quadraticCurveTo(2*sc, 9*sc+flameH2*0.5, 1.8*sc, 8*sc);
+      ctx.closePath();
+      const fg2 = ctx.createLinearGradient(0, 8*sc, 0, 9*sc+flameH2);
+      fg2.addColorStop(0,'rgba(255,255,220,1)');
+      fg2.addColorStop(0.5,'rgba(255,200,60,0.9)');
+      fg2.addColorStop(1,'rgba(255,100,0,0)');
+      ctx.fillStyle=fg2; ctx.fill();
+    }
+
+    // === FINS (bottom left & right) ===
+    // Left fin
+    ctx.beginPath();
+    ctx.moveTo(-4*sc, 4*sc);
+    ctx.lineTo(-8*sc, 9*sc);
+    ctx.lineTo(-4*sc, 8*sc);
+    ctx.closePath();
+    ctx.fillStyle='#e0e8f0'; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.5*sc; ctx.stroke();
+    // Right fin
+    ctx.beginPath();
+    ctx.moveTo(4*sc, 4*sc);
+    ctx.lineTo(8*sc, 9*sc);
+    ctx.lineTo(4*sc, 8*sc);
+    ctx.closePath();
+    ctx.fillStyle='#e0e8f0'; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.5*sc; ctx.stroke();
+
+    // === BODY (white cylinder) ===
+    const bodyGrad = ctx.createLinearGradient(-4*sc, 0, 4*sc, 0);
+    bodyGrad.addColorStop(0,'#c8d8e8');
+    bodyGrad.addColorStop(0.25,'#ffffff');
+    bodyGrad.addColorStop(0.6,'#f0f4f8');
+    bodyGrad.addColorStop(1,'#b0c0d0');
+    ctx.beginPath();
+    ctx.roundRect(-4*sc, -5*sc, 8*sc, 14*sc, 2*sc);
+    ctx.fillStyle=bodyGrad; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=0.6*sc; ctx.stroke();
+
+    // === RED TIP (nose cone) ===
+    const tipGrad = ctx.createLinearGradient(-3.5*sc, -5*sc, 3.5*sc, -12*sc);
+    tipGrad.addColorStop(0,'#ff4444');
+    tipGrad.addColorStop(0.4,'#ff2020');
+    tipGrad.addColorStop(1,'#cc0000');
+    ctx.beginPath();
+    ctx.moveTo(-3.5*sc, -5*sc);
+    ctx.quadraticCurveTo(-3*sc, -9*sc, 0, -13*sc);
+    ctx.quadraticCurveTo(3*sc, -9*sc, 3.5*sc, -5*sc);
+    ctx.closePath();
+    ctx.fillStyle=tipGrad; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=0.5*sc; ctx.stroke();
+    // Tip shine
+    ctx.beginPath();
+    ctx.moveTo(-1.5*sc, -6*sc);
+    ctx.quadraticCurveTo(-1.2*sc, -9*sc, 0, -12*sc);
+    ctx.quadraticCurveTo(0.5*sc, -9*sc, 0, -7*sc);
+    ctx.closePath();
+    ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.fill();
+
+    // === WINDOW (porthole) ===
+    ctx.beginPath(); ctx.arc(0, -0.5*sc, 2.5*sc, 0, Math.PI*2);
+    const winGrad = ctx.createRadialGradient(-0.8*sc,-1.2*sc,0.2*sc,0,-0.5*sc,2.5*sc);
+    winGrad.addColorStop(0,'#aaddff'); winGrad.addColorStop(0.6,'#4499cc'); winGrad.addColorStop(1,'#1155aa');
+    ctx.fillStyle=winGrad; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=0.6*sc; ctx.stroke();
+    // Window shine
+    ctx.beginPath(); ctx.arc(-0.8*sc,-1.3*sc,0.9*sc,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.fill();
+
+    // === BOTTOM NOZZLE ===
+    ctx.beginPath();
+    ctx.moveTo(-3*sc, 8*sc);
+    ctx.lineTo(-2*sc, 9.5*sc);
+    ctx.lineTo(2*sc, 9.5*sc);
+    ctx.lineTo(3*sc, 8*sc);
+    ctx.closePath();
+    ctx.fillStyle='#8899aa'; ctx.fill();
+
+    ctx.restore();
+  }
+
+  useEffect(()=>{
+    const canvas = canvasRef.current;
+    if(!canvas) return;
+    const dpr = window.devicePixelRatio||1;
+    const VW = canvas.offsetWidth, VH = 160;
+    canvas.width = VW*dpr; canvas.height = VH*dpr;
+    canvas.style.height = VH+'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr,dpr);
+
+    const s = stateRef.current;
+    if(s.prevIdx !== -1 && s.prevIdx !== planetIdx){ s.transitioning=true; s.transX=0; }
+    s.prevIdx = planetIdx;
+
+    // planet is already the daily-coloured version from outer scope
+    const pX = VW*0.52, pY = VH*0.67;
+    const pR = planet.size;
+
+    if(!s.stars.length){
+      s.stars = Array.from({length:80},()=>({
+        x:Math.random()*VW, y:Math.random()*VH,
+        r:0.3+Math.random()*1.5, twinkle:Math.random()*Math.PI*2, speed:0.012+Math.random()*0.025,
+        col: Math.random()>0.8 ? (Math.random()>0.5?'rgba(200,220,255,':'rgba(255,220,200,') : 'rgba(255,255,255,'
+      }));
+    }
+    if(!s.nebulae || !s.nebulae.length){
+      s.nebulae = Array.from({length:4},()=>({
+        x:Math.random()*VW, y:Math.random()*VH*0.6,
+        r:25+Math.random()*30, hue:Math.floor(Math.random()*360),
+        a:0.05+Math.random()*0.07
+      }));
+    }
+
+    // Yellow/orange Among Us player — always this palette
+    const BODY_COLOR = '#f59e0b';
+    const VISOR_COLOR = '#93c5fd';
+
+    function draw(){
+      s.t += 0.016;
+      ctx.clearRect(0,0,VW,VH);
+
+      // Sky
+      const bg = ctx.createLinearGradient(0,0,0,VH);
+      if(isDay){
+        const noon = 1 - Math.abs(sunProgress-0.5)*2;
+        if(noon > 0.6){
+          bg.addColorStop(0,'#0c2461'); bg.addColorStop(1,'#1a6bb5');
+        } else if(sunProgress < 0.5){
+          const p2 = sunProgress*2;
+          bg.addColorStop(0,`rgb(${lerp(15,12,p2)},${lerp(10,36,p2)},${lerp(20,97,p2)})`);
+          bg.addColorStop(0.6,`rgb(${lerp(200,80,p2)},${lerp(80,120,p2)},${lerp(10,160,p2)})`);
+          bg.addColorStop(1,`rgb(${lerp(240,120,p2)},${lerp(120,160,p2)},${lerp(20,200,p2)})`);
+        } else {
+          const p2 = (sunProgress-0.5)*2;
+          bg.addColorStop(0,`rgb(${lerp(12,20,p2)},${lerp(36,10,p2)},${lerp(97,15,p2)})`);
+          bg.addColorStop(0.6,`rgb(${lerp(80,180,p2)},${lerp(120,70,p2)},${lerp(160,10,p2)})`);
+          bg.addColorStop(1,`rgb(${lerp(120,220,p2)},${lerp(160,100,p2)},${lerp(200,20,p2)})`);
+        }
+      } else {
+        bg.addColorStop(0,'#020209'); bg.addColorStop(0.4,'#060618'); bg.addColorStop(1,'#0d0d28');
+      }
+      ctx.fillStyle=bg; ctx.fillRect(0,0,VW,VH);
+
+      // Nebulae (night only)
+      if(!isDay && s.nebulae){
+        s.nebulae.forEach(nb=>{
+          const ng=ctx.createRadialGradient(nb.x,nb.y,0,nb.x,nb.y,nb.r);
+          ng.addColorStop(0,`hsla(${nb.hue},80%,60%,${nb.a})`);
+          ng.addColorStop(1,'transparent');
+          ctx.fillStyle=ng; ctx.fillRect(0,0,VW,VH);
+        });
+      }
+
+      // Stars (night + twilight)
+      if(!isDay || sunProgress < 0.08 || sunProgress > 0.92){
+        const starA = isDay ? Math.max(0,(0.08-sunProgress)/0.08) : 1;
+        s.stars.forEach(st=>{
+          st.twinkle += st.speed;
+          const a = starA*(0.25+0.7*Math.abs(Math.sin(st.twinkle)));
+          ctx.beginPath(); ctx.arc(st.x,st.y,st.r,0,Math.PI*2);
+          ctx.fillStyle=(st.col||'rgba(255,255,255,')+`${a})`; ctx.fill();
+        });
+      }
+
+      // Sun (6am–6pm IST) — rich golden sun with corona
+      if(isDay){
+        const sx = VW*(0.06+sunProgress*0.88);
+        const sy = VH*(0.5 - Math.sin(sunProgress*Math.PI)*0.55);
+        // Corona outer glow
+        const cg=ctx.createRadialGradient(sx,sy,12,sx,sy,55);
+        cg.addColorStop(0,'rgba(255,220,60,0.22)'); cg.addColorStop(0.5,'rgba(255,160,20,0.08)'); cg.addColorStop(1,'transparent');
+        ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(sx,sy,55,0,Math.PI*2); ctx.fill();
+        // Sun rays
+        for(let i=0;i<16;i++){
+          const ang=(i/16)*Math.PI*2+s.t*0.15;
+          const r1=15, r2=24+Math.sin(s.t*2.2+i*0.8)*4;
+          const raya=0.18+0.12*Math.sin(s.t*1.5+i);
+          ctx.beginPath(); ctx.moveTo(sx+Math.cos(ang)*r1,sy+Math.sin(ang)*r1);
+          ctx.lineTo(sx+Math.cos(ang)*r2,sy+Math.sin(ang)*r2);
+          ctx.strokeStyle=`rgba(255,210,40,${raya})`; ctx.lineWidth=2.2; ctx.stroke();
+        }
+        // Short rays
+        for(let i=0;i<16;i++){
+          const ang=(i/16+0.5/16)*Math.PI*2+s.t*0.15;
+          const r1=15, r2=18+Math.sin(s.t*3+i)*2;
+          ctx.beginPath(); ctx.moveTo(sx+Math.cos(ang)*r1,sy+Math.sin(ang)*r1);
+          ctx.lineTo(sx+Math.cos(ang)*r2,sy+Math.sin(ang)*r2);
+          ctx.strokeStyle=`rgba(255,200,60,0.12)`; ctx.lineWidth=1.5; ctx.stroke();
+        }
+        // Sun body gradient
+        const sb=ctx.createRadialGradient(sx-4,sy-4,1,sx,sy,15);
+        sb.addColorStop(0,'#fffde0'); sb.addColorStop(0.25,'#ffe066'); sb.addColorStop(0.65,'#fbbf24'); sb.addColorStop(1,'#f97316');
+        ctx.beginPath(); ctx.arc(sx,sy,15,0,Math.PI*2); ctx.fillStyle=sb; ctx.fill();
+        // Surface shimmer
+        ctx.beginPath(); ctx.arc(sx-4,sy-4,5,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,255,220,0.28)'; ctx.fill();
+      }
+
+      // Moon (6pm–6am IST) — with current lunar phase
+      if(!isDay){
+        const nightProg = istHour<6 ? (istHour+6)/12 : (istHour-18)/12;
+        const mx = VW*(0.06+nightProg*0.88);
+        const my = VH*(0.46 - Math.sin(nightProg*Math.PI)*0.46);
+        const MR = 13;
+        // Moon glow
+        const mg=ctx.createRadialGradient(mx,my,MR*0.5,mx,my,MR*3);
+        mg.addColorStop(0,'rgba(200,215,255,0.18)'); mg.addColorStop(0.5,'rgba(180,200,255,0.06)'); mg.addColorStop(1,'transparent');
+        ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(mx,my,MR*3,0,Math.PI*2); ctx.fill();
+        // Moon body
+        const moonGrad=ctx.createRadialGradient(mx-MR*0.3,my-MR*0.3,MR*0.1,mx,my,MR);
+        moonGrad.addColorStop(0,'#f0f4ff'); moonGrad.addColorStop(0.5,'#d8e0f0'); moonGrad.addColorStop(1,'#a0b0cc');
+        ctx.beginPath(); ctx.arc(mx,my,MR,0,Math.PI*2); ctx.fillStyle=moonGrad; ctx.fill();
+        // Moon craters
+        [[0.25,0.1,0.18],[-0.28,-0.2,0.13],[0.1,-0.28,0.1],[-0.08,0.25,0.11]].forEach(([ox,oy,sz])=>{
+          ctx.beginPath(); ctx.arc(mx+ox*MR,my+oy*MR,sz*MR,0,Math.PI*2);
+          ctx.fillStyle='rgba(0,0,0,0.11)'; ctx.fill();
+          ctx.beginPath(); ctx.arc(mx+ox*MR-sz*MR*0.2,my+oy*MR-sz*MR*0.2,sz*MR*0.5,0,Math.PI*2);
+          ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fill();
+        });
+        // Phase shadow (accurate lunar phase clipping)
+        ctx.save(); ctx.beginPath(); ctx.arc(mx,my,MR,0,Math.PI*2); ctx.clip();
+        // moonPhase 0=new,0.25=first quarter,0.5=full,0.75=last quarter
+        const phAngle = moonPhase * Math.PI * 2;
+        const shadowX = Math.cos(phAngle) * MR * 1.2;
+        const shadowGrad=ctx.createRadialGradient(mx+shadowX,my,MR*0.1,mx+shadowX,my,MR*1.4);
+        shadowGrad.addColorStop(0,'rgba(4,8,24,0.88)'); shadowGrad.addColorStop(0.5,'rgba(4,8,24,0.7)'); shadowGrad.addColorStop(1,'transparent');
+        ctx.fillStyle=shadowGrad; ctx.fillRect(mx-MR,my-MR,MR*2,MR*2);
+        ctx.restore();
+      }
+
+      // Transition — smooth slide with easing
+      const tx = s.transitioning ? s.transX : 0;
+      if(s.transitioning){
+        s.transX += Math.max(5, (VW+80-s.transX)*0.08);
+        if(s.transX > VW+75) s.transitioning = false;
+        const oldP = PLANETS[Math.max(0,planetIdx-1)];
+        const oldX = pX - tx;
+        if(oldX > -oldP.size-10){
+          // Atmosphere glow for outgoing planet
+          if(oldP.glow){
+            const ag2=ctx.createRadialGradient(oldX,pY,oldP.size*0.8,oldX,pY,oldP.size*2.2);
+            ag2.addColorStop(0,hexA(oldP.glow,0.22)); ag2.addColorStop(1,'transparent');
+            ctx.fillStyle=ag2; ctx.beginPath(); ctx.arc(oldX,pY,oldP.size*2.2,0,Math.PI*2); ctx.fill();
+          }
+          drawPlanetBody(ctx,oldP,oldX,pY,oldP.size,s.t);
+        }
+      }
+
+      const curX = s.transitioning ? pX+(VW-tx)*1.0 : pX;
+
+
+      // (no next planet preview)
+
+      // Atmosphere + glow for current planet
+      if(planet.atmo){
+        const ag=ctx.createRadialGradient(curX,pY,pR*0.85,curX,pY,pR*1.8);
+        ag.addColorStop(0,planet.atmo); ag.addColorStop(1,'transparent');
+        ctx.fillStyle=ag; ctx.beginPath(); ctx.arc(curX,pY,pR*1.8,0,Math.PI*2); ctx.fill();
+      }
+      if(planet.glow){
+        const gg=ctx.createRadialGradient(curX,pY,pR*0.7,curX,pY,pR*(1.9+(planet.glowAlpha||0.3)));
+        gg.addColorStop(0,hexA(planet.glow,(planet.glowAlpha||0.3)*0.5)); gg.addColorStop(1,'transparent');
+        ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(curX,pY,pR*2.4,0,Math.PI*2); ctx.fill();
+      }
+
+      // Planet
+      drawPlanetBody(ctx,planet,curX,pY,pR,s.t);
+
+      // Planet surface ground highlight (ambient light)
+      if(isDay){
+        const lightA=0.18*Math.sin(sunProgress*Math.PI);
+        ctx.save(); ctx.beginPath(); ctx.arc(curX,pY,pR,0,Math.PI*2); ctx.clip();
+        const lightGrad=ctx.createLinearGradient(curX-pR,pY-pR,curX+pR,pY+pR);
+        lightGrad.addColorStop(0,`rgba(255,240,180,${lightA})`); lightGrad.addColorStop(1,'transparent');
+        ctx.fillStyle=lightGrad; ctx.fillRect(curX-pR,pY-pR,pR*2,pR*2);
+        ctx.restore();
+      }
+
+      // Orbit ring dashed
+      ctx.save(); ctx.setLineDash([3,6]);
+      ctx.beginPath(); ctx.arc(curX,pY,pR+22,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1; ctx.stroke();
+      ctx.restore();
+
+      // Orbiting moon particle
+      const mA=s.t*0.7;
+      const moonX=curX+Math.cos(mA)*(pR+20), moonY=pY+Math.sin(mA)*(pR+20)*0.35;
+      const moonMini=ctx.createRadialGradient(moonX,moonY,0.5,moonX,moonY,3);
+      moonMini.addColorStop(0,'rgba(255,255,255,0.7)'); moonMini.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=moonMini; ctx.beginPath(); ctx.arc(moonX,moonY,3,0,Math.PI*2); ctx.fill();
+
+      // Streak count on planet
+      ctx.font=`bold ${pR>24?12:pR>18?10:9}px 'DM Mono',monospace`;
+      ctx.textAlign='center';
+      ctx.strokeStyle='rgba(0,0,0,0.7)'; ctx.lineWidth=3;
+      ctx.strokeText(streak.count,curX,pY+5);
+      ctx.fillStyle='rgba(255,255,255,0.92)';
+      ctx.fillText(streak.count,curX,pY+5);
+
+      // Rocket — white body, red tip, orange flame when logged
+      const groundY = pY - pR;
+      const bob = Math.sin(s.t*2.0)*2.2;
+      const sway = todayLogged ? Math.sin(s.t*1.3)*4 : Math.sin(s.t*0.4)*1.2;
+      const rocketSc = 0.9 + pR/90;
+      drawRocket(ctx, curX+sway, groundY-10+bob, rocketSc, todayLogged);
+
+      // Exhaust particles (only when logged — active thruster)
+      if(todayLogged && Math.random()<0.4){
+        s.particles.push({
+          x: curX+sway, y: groundY-10+bob + 9*rocketSc,
+          vx:(Math.random()-0.5)*1.2, vy:1.2+Math.random()*1.5,
+          life:1, type:Math.floor(Math.random()*3)
+        });
+      }
+      s.particles = s.particles.filter(p=>p.life>0);
+      s.particles.forEach(p=>{
+        p.x+=p.vx; p.y+=p.vy; p.vy+=0.045; p.life-=0.034;
+        const ps=2.8*p.life;
+        ctx.beginPath(); ctx.arc(p.x,p.y,ps,0,Math.PI*2);
+        const col = p.type===0
+          ? `rgba(251,191,36,${p.life*0.82})`   // golden
+          : p.type===1
+          ? `rgba(249,115,22,${p.life*0.78})`   // orange
+          : `rgba(239,68,68,${p.life*0.65})`;   // red
+        ctx.fillStyle=col; ctx.fill();
+      });
+
+      rafRef.current = requestAnimationFrame(draw);
+    }
+
+    rafRef.current = requestAnimationFrame(draw);
+    return ()=>cancelAnimationFrame(rafRef.current);
+  },[todayLogged,streak.count,dark,dayOfYear]);
+
+  return (
+    <div style={{ borderRadius:20, overflow:"hidden", background:"#020209", border:"1px solid #1e1b4b" }}>
+      <div style={{ position:"relative" }}>
+        <canvas ref={canvasRef} style={{ width:"100%", height:160, display:"block" }}/>
+        <div style={{ position:"absolute",top:10,left:12,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(6px)",borderRadius:8,padding:"3px 9px",border:"1px solid rgba(255,255,255,0.1)" }}>
+          <span style={{ fontSize:11,fontWeight:700,color:streakRank.color,letterSpacing:"0.04em" }}>{streakRank.title}</span>
+        </div>
+        <div style={{ position:"absolute",top:10,right:12,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(6px)",borderRadius:8,padding:"3px 9px",border:"1px solid rgba(255,255,255,0.1)" }}>
+          <span style={{ fontSize:10,color:"rgba(255,255,255,0.4)",fontFamily:"'DM Mono',monospace" }}>BEST </span>
+          <span style={{ fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Mono',monospace" }}>{streak.longestStreak||0}</span>
+        </div>
+        <div style={{ position:"absolute",bottom:8,left:12,fontSize:10,color:"rgba(255,255,255,0.3)",fontFamily:"'DM Mono',monospace" }}>
+          {isDay
+            ? `☀️ ${Math.floor(istHour)}:${String(Math.round((istHour%1)*60)).padStart(2,'0')} IST`
+            : `🌙 ${Math.floor(istHour)}:${String(Math.round((istHour%1)*60)).padStart(2,'0')} IST`}
+        </div>
+      </div>
+      <div style={{ padding:"12px 14px",borderTop:"1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9 }}>
+          <div style={{ display:"flex",alignItems:"baseline",gap:6 }}>
+            <span style={{ fontSize:36,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#fff",lineHeight:1,letterSpacing:"-1px" }}>{streak.count}</span>
+            <span style={{ fontSize:13,color:"rgba(255,255,255,0.35)",fontWeight:500 }}>day streak</span>
+          </div>
+          {streak.count>=7
+            ? <span style={{ fontSize:11,fontWeight:700,color:"#fbbf24",background:"rgba(251,191,36,0.12)",padding:"3px 8px",borderRadius:6 }}>🏆 {streak.count>=30?"Legend":streak.count>=14?"Warrior":"One week!"}</span>
+            : todayLogged
+              ? <span style={{ fontSize:11,color:"#34d399",fontWeight:600 }}>✓ Logged today</span>
+              : <span style={{ fontSize:11,color:"rgba(255,255,255,0.28)" }}>Not logged yet</span>
+          }
+        </div>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:3,marginBottom:10 }}>
+          {last14.map(d=>{
+            const lg=streak.loggedDates.includes(d);
+            const frozen=(shieldState.usedDates||[]).includes(d);
+            const isToday=d===last14[last14.length-1];
+            return <div key={d} style={{ height:6,borderRadius:2,
+              background:frozen?"#818cf8":lg?"#34d399":isToday?"rgba(255,255,255,0.12)":"rgba(255,255,255,0.07)",
+              boxShadow:lg&&!frozen?"0 0 4px rgba(52,211,153,0.4)":frozen?"0 0 4px rgba(129,140,248,0.4)":"none",
+              transition:"background 0.3s" }}/>;
+          })}
+        </div>
+        <div style={{ display:"flex",gap:8 }}>
+          {!todayLogged
+            ? <button onClick={onLog} style={{ flex:1,padding:"9px 0",borderRadius:10,fontSize:13,fontWeight:700,background:"linear-gradient(135deg,#34d399,#059669)",border:"none",color:"#fff",cursor:"pointer" }}>🚀 Log No-Spend Day</button>
+            : <div style={{ flex:1,padding:"9px 0",borderRadius:10,fontSize:13,fontWeight:600,background:"rgba(52,211,153,0.1)",border:"1px solid rgba(52,211,153,0.25)",color:"#34d399",textAlign:"center" }}>✓ Today logged</div>
+          }
+          <button onClick={onFreeze} style={{ padding:"9px 13px",borderRadius:10,fontSize:12,fontWeight:700,cursor:pitStopData.available>0?"pointer":"default",
+            background:pitStopData.available>0?"rgba(129,140,248,0.14)":"rgba(255,255,255,0.04)",
+            border:pitStopData.available>0?"1px solid rgba(129,140,248,0.35)":"1px solid rgba(255,255,255,0.07)",
+            color:pitStopData.available>0?"#a5b4fc":"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",gap:5 }}>
+            <span>🛡️</span>
+            <span style={{ fontFamily:"'DM Mono',monospace",fontSize:11 }}>{pitStopData.available}/{pitStopData.earned}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Shield = "Pit Stop token" — 1 earned per 7 days elapsed in the month
+// On month boundary reset: usedThisMonth resets to 0, re-earn starts fresh
+function getPitStopData(shieldState) {
+  const ist = nowIST();
+  const currentMonth = `${ist.getFullYear()}-${String(ist.getMonth()+1).padStart(2,"0")}`;
+  const dayOfMonth = ist.getDate(); // 1-based
+  // Tokens earned = floor of (dayOfMonth-1)/7  → 1 at day 7, 2 at day 14, 3 at day 21, 4 at day 28
+  const earned = Math.floor((dayOfMonth - 1) / 7);
+  // Reset if we're in a new month
+  const usedThisMonth = shieldState.lastResetMonth === currentMonth ? (shieldState.usedThisMonth || 0) : 0;
+  const available = Math.max(0, earned - usedThisMonth);
+  return { earned, usedThisMonth, available, currentMonth };
 }
 
 function groupByDate(expenses) {
@@ -408,6 +1139,43 @@ function Toast({ msg }) {
       {msg}
     </div>
   );
+}
+
+function ConfettiBurst({ active, onDone }) {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    if (!active) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const particles = Array.from({ length: 80 }, () => ({
+      x: canvas.width / 2, y: canvas.height * 0.4,
+      vx: (Math.random() - 0.5) * 14,
+      vy: (Math.random() - 0.7) * 14,
+      color: ["#f97316","#fbbf24","#34d399","#818cf8","#f472b6","#60a5fa"][Math.floor(Math.random()*6)],
+      size: 6 + Math.random() * 8, life: 1, decay: 0.012 + Math.random()*0.01,
+    }));
+    let rafId;
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach(p => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.35; p.life -= p.decay;
+        if (p.life <= 0) return;
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size/2, 0, Math.PI*2); ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      if (particles.some(p => p.life > 0)) rafId = requestAnimationFrame(draw);
+      else { ctx.clearRect(0, 0, canvas.width, canvas.height); onDone?.(); }
+    }
+    rafId = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(rafId);
+  }, [active]);
+  if (!active) return null;
+  return <canvas ref={canvasRef} style={{ position:"fixed",inset:0,zIndex:9999,pointerEvents:"none" }}/>;
 }
 
 function MoneyBag({ fillPercent, size = "md" }) {
@@ -1441,6 +2209,8 @@ export default function App() {
   const [userName, setUserName] = useState(() => storageGet(KEYS.USER, ""));
   const [notifLog, setNotifLog] = useState(() => storageGet(KEYS.NOTIF_LOG, []));
   const [goals, setGoals] = useState(() => storageGet(KEYS.GOALS, []));
+  // Pit Stop (streak freeze) state
+  const [shieldState, setShieldState] = useState(() => storageGet(KEYS.SHIELD, { usedThisMonth: 0, lastResetMonth: "", usedDates: [] }));
 
   // Persist all core data
   useEffect(() => { storageSetDebounced(KEYS.EXPENSES, expenses); }, [expenses]);
@@ -1454,6 +2224,7 @@ export default function App() {
   useEffect(() => { storageSet(KEYS.USER, userName); }, [userName]);
   useEffect(() => { storageSetDebounced(KEYS.NOTIF_LOG, notifLog); }, [notifLog]);
   useEffect(() => { storageSetDebounced(KEYS.GOALS, goals); }, [goals]);
+  useEffect(() => { storageSet(KEYS.SHIELD, shieldState); }, [shieldState]);
 
   // ── Form state (Add Expense) ──────────────────────────────────────────────
   const [amount, setAmount] = useState("");
@@ -1522,7 +2293,23 @@ export default function App() {
   }
   function logNoSpend() {
     if (todayLogged) { showToast("Already logged!"); return; }
-    logDay(today); showToast("No-spend day logged! 🛡️");
+    logDay(today); showToast("No-spend day logged! 🚀");
+  }
+
+  // ── Pit Stop (streak freeze) system ───────────────────────────────────────
+  const pitStopData = useMemo(() => getPitStopData(shieldState), [shieldState, today]);
+
+  function usePitStop() {
+    if (pitStopData.available <= 0) { showToast("No Pit Stop tokens — earn one every 7 days 🏎️"); return; }
+    if (todayLogged) { showToast("Already logged today — no Pit Stop needed!"); return; }
+    const { currentMonth } = pitStopData;
+    // Reset usedThisMonth if new month, then increment
+    const usedThisMonth = shieldState.lastResetMonth === currentMonth ? (shieldState.usedThisMonth || 0) : 0;
+    const usedDates = [...(shieldState.usedDates || []), today];
+    setShieldState({ usedThisMonth: usedThisMonth + 1, lastResetMonth: currentMonth, usedDates });
+    // Log today to protect streak
+    setStreak(prev => updateStreak(prev, today));
+    showToast(`🛡️ Freeze used! Streak protected. ${pitStopData.available - 1} left this month.`);
   }
 
   // ── Period selector state (Expenses tab) ─────────────────────────────────
@@ -1575,8 +2362,9 @@ export default function App() {
 
   const { grouped, dailyTotal } = useMemo(() => groupByDate(periodExpenses), [periodExpenses]);
 
-  // FIX: monthly total now uses only current-month expenses
-  const monthlyTotal = useMemo(() => computeMonthlyTotal(expenses), [expenses, today]);
+  // FIX: monthly total now uses only current-month expenses, excluding gift/transfer categories
+  const excludedCats = useMemo(() => categories.filter(c => c.excludeFromBudget).map(c => c.name), [categories]);
+  const monthlyTotal = useMemo(() => computeMonthlyTotal(expenses, excludedCats), [expenses, excludedCats, today]);
 
   // FIX: budget bar compares against monthly spend, not all-time
   const spent = monthlyTotal;
@@ -1613,6 +2401,7 @@ export default function App() {
   [allTimeCatTotals]);
 
   const streakMilestone = streak.count>=30?"30-day legend! 🏆":streak.count>=14?"2-week warrior!":streak.count>=7?"One week strong!":null;
+  const streakRank = getStreakRank(streak.count);
   const last14 = useMemo(() => getLastNDays(14), [today]);
 
   const potBase = monthlyIncome > 0 ? monthlyIncome : netWorthTotal > 0 ? netWorthTotal : 1;
@@ -1754,8 +2543,12 @@ export default function App() {
   function addCategory() {
     const name = newCatName.trim();
     if (!name || categories.find(c => c.name===name)) { showToast("Name is empty or already exists."); return; }
-    setCategories(p => [...p, { name, colorIdx: p.length % CAT_PALETTE.length }]);
+    setCategories(p => [...p, { name, colorIdx: p.length % CAT_PALETTE.length, excludeFromBudget: false }]);
     setNewCatName(""); setAddingCat(false); showToast("Category added!");
+  }
+
+  function toggleCatBudgetExclusion(catName) {
+    setCategories(p => p.map(c => c.name===catName ? { ...c, excludeFromBudget: !c.excludeFromBudget } : c));
   }
 
   // ── Pot helpers ───────────────────────────────────────────────────────────
@@ -1900,6 +2693,7 @@ export default function App() {
         <style>{`
           @keyframes tabFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
           @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+          @keyframes pulse{0%,100%{opacity:0.4}50%{opacity:1}}
           .tabContent{animation:tabFade 0.15s ease}
           input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{opacity:1}
           input[type=number]{-moz-appearance:textfield}
@@ -1939,44 +2733,19 @@ export default function App() {
           ════════════════════════════════════════════════════════════════ */}
           {tab==="home" && (
             <>
-              {/* Streak card */}
-              <div style={{ ...cardStyle, position:"relative", overflow:"hidden" }}>
-                {streak.count>0 && <div style={{ position:"absolute",right:-32,top:-32,width:128,height:128,background:"rgba(249,115,22,0.08)",borderRadius:"50%",filter:"blur(24px)",pointerEvents:"none" }}/>}
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-                  <div>
-                    <p style={{ margin:0,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.1em",color:textMute,marginBottom:4 }}>Streak</p>
-                    <div style={{ display:"flex", alignItems:"flex-end", gap:8 }}>
-                      <span style={{ fontSize:52,fontWeight:700,fontFamily:"'DM Mono',monospace",lineHeight:1 }}>{streak.count}</span>
-                      <span style={{ fontSize:18,color:textMute,marginBottom:4 }}>days</span>
-                    </div>
-                    {streakMilestone && <div style={{ display:"flex",alignItems:"center",gap:4,marginTop:4,color:"#f97316",fontSize:12,fontWeight:600 }}><TrophyIcon/>{streakMilestone}</div>}
-                    <p style={{ margin:"3px 0 0",fontSize:12,color:textMute }}>Best: <strong>{streak.longestStreak||0} days</strong></p>
-                  </div>
-                  <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:8 }}>
-                    <div style={{ display:"flex",alignItems:"center",gap:4,padding:"6px 12px",borderRadius:12,fontSize:13,fontWeight:600,background:streak.count>0?(dark?"rgba(194,65,12,0.2)":"#ffedd5"):subbg,color:streak.count>0?"#f97316":textMute }}>
-                      <FlameIcon size={16}/>{streak.count}
-                    </div>
-                    {!todayLogged
-                      ? <button onClick={() => { haptic([10,50,10]); logNoSpend(); }}
-                          style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:12,fontSize:12,fontWeight:600,background:"transparent",border:dark?"1px solid #065f46":"1px solid #6ee7b7",color:dark?"#34d399":"#059669",cursor:"pointer" }}>
-                          <ShieldIcon/>No-Spend Day
-                        </button>
-                      : <div style={{ display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:500,color:dark?"#34d399":"#059669" }}><ShieldIcon/>Today logged</div>
-                    }
-                  </div>
-                </div>
-                <div style={{ marginTop:14 }}>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(14,1fr)", gap:4 }}>
-                    {last14.map(d => {
-                      const lg = streak.loggedDates.includes(d), it = d===today;
-                      return <div key={d} title={d} style={{ height:18,borderRadius:4,background:lg?"#f97316":it?"transparent":(dark?"#1f2937":"#f3f4f6"),border:it&&!lg?(dark?"1px solid rgba(249,115,22,0.4)":"1px solid #fdba74"):"none",transition:"background 0.2s" }}/>;
-                    })}
-                  </div>
-                  <div style={{ display:"flex",justifyContent:"space-between",fontSize:10,color:textMute,marginTop:4 }}>
-                    <span>14 days ago</span><span>Today</span>
-                  </div>
-                </div>
-              </div>
+              {/* ── PLANET HOPPER STREAK GAME ── */}
+              <PlanetHopperGame
+                streak={streak}
+                todayLogged={todayLogged}
+                last14={last14}
+                shieldState={shieldState}
+                pitStopData={pitStopData}
+                dark={dark}
+                onLog={() => { haptic([10,50,10]); logNoSpend(); }}
+                onFreeze={() => { haptic([10,30,10]); usePitStop(); }}
+                haptic={haptic}
+              />
+
 
               {/* Stats grid */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
@@ -2035,7 +2804,7 @@ export default function App() {
                   </div>
                   <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:textMute,marginTop:5 }}>
                     {/* FIX: label now clearly says "this month" */}
-                    <span>₹{spent.toLocaleString()} this month</span>
+                    <span>₹{spent.toLocaleString()} this month{excludedCats.length>0?" (excl. "+excludedCats.join(", ")+")":""}</span>
                     <span style={{ color:percentUsed>=100?"#ef4444":textMute,fontWeight:percentUsed>=100?600:400 }}>{percentUsed.toFixed(0)}%</span>
                   </div>
                 </div>
@@ -2503,6 +3272,45 @@ export default function App() {
 
               <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:12 }}>
                 <div style={{ flex:1,height:1,background:border }}/><span style={{ fontSize:11,fontWeight:600,color:textMute,textTransform:"uppercase",letterSpacing:"0.08em" }}>or use</span><div style={{ flex:1,height:1,background:border }}/>
+              </div>
+
+              {/* Category budget exclusion manager */}
+              {excludedCats.length > 0 && (
+                <div style={{ background:dark?"rgba(99,102,241,0.07)":"rgba(99,102,241,0.05)",border:`1px solid ${dark?"rgba(99,102,241,0.2)":"rgba(99,102,241,0.15)"}`,borderRadius:12,padding:"8px 12px",marginBottom:12,display:"flex",alignItems:"center",gap:8 }}>
+                  <span style={{ fontSize:12 }}>🎁</span>
+                  <span style={{ fontSize:12,color:dark?"#818cf8":"#4f46e5",fontWeight:500,flex:1 }}>
+                    <strong>{excludedCats.join(", ")}</strong> excluded from budget
+                  </span>
+                </div>
+              )}
+              <div style={{ background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:14,marginBottom:12 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:10 }}>
+                  <GridIcon/>
+                  <span style={{ fontSize:13,fontWeight:700,color:textMain }}>Manage Categories</span>
+                  <span style={{ fontSize:11,color:textMute,marginLeft:4 }}>toggle budget exclusion</span>
+                </div>
+                <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+                  {categories.map(cat => {
+                    const cs = getCatStyle(cat.name);
+                    const excluded = !!cat.excludeFromBudget;
+                    return (
+                      <div key={cat.name} style={{ display:"flex",alignItems:"center",gap:10,padding:"7px 10px",borderRadius:10,background:dark?"#1f2937":"#f8fafc",border:`1px solid ${excluded?(dark?"rgba(99,102,241,0.3)":"rgba(99,102,241,0.2)"):border}` }}>
+                        <span style={{ ...cs,padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:600,flex:1,display:"flex",alignItems:"center",gap:4 }}>
+                          {cat.name} {excluded && <span style={{ fontSize:10,opacity:0.8 }}>🎁</span>}
+                        </span>
+                        <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+                          <span style={{ fontSize:11,color:excluded?(dark?"#818cf8":"#4f46e5"):textMute,fontWeight:excluded?600:400 }}>
+                            {excluded?"gift/transfer":"expense"}
+                          </span>
+                          <button onClick={() => { haptic(6); toggleCatBudgetExclusion(cat.name); showToast(excluded?`${cat.name} back in budget`:`${cat.name} excluded from budget`); }}
+                            style={{ width:36,height:20,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:excluded?(dark?"#6366f1":"#4f46e5"):(dark?"#374151":"#e5e7eb"),transition:"background 0.2s",flexShrink:0 }}>
+                            <div style={{ position:"absolute",top:2,left:excluded?18:2,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               <VoiceLogger categories={categories} onAdd={handleVoiceAdd} dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain} inputBg={inputBg} inputBorder={inputBorder} accent={accent}/>
