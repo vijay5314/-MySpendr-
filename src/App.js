@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
 // ════════════════════════════════════════════════════════════════════════════
 // STORAGE — safe localStorage wrapper (never throws)
@@ -22,6 +22,9 @@ const KEYS = {
   BIO_CRED:   "myspendr_bio_cred_v1",
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// POKÉMON STARTER SYSTEM
+// ════════════════════════════════════════════════════════════════════════════
 function storageGet(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
@@ -662,8 +665,7 @@ function PinLock({ onUnlock, dark, accent }) {
 // ════════════════════════════════════════════════════════════════════════════
 // CATEGORY BUBBLES (donut chart)
 // ════════════════════════════════════════════════════════════════════════════
-function CategoryBubbles({ categories, catTotals, getCatStyle, getCatAccent, onSelect, dark, cardBg, border, textMute }) {
-  const [open, setOpen] = useState(false);
+function CategoryBubbles({ categories, catTotals, getCatStyle, getCatAccent, onSelect, dark, cardBg, border, textMute, open, setOpen }) {
   const [hovered, setHovered] = useState(null);
   const [animated, setAnimated] = useState(false);
   const totalSpent = useMemo(() => Object.values(catTotals).reduce((s,v) => s+v, 0), [catTotals]);
@@ -715,7 +717,7 @@ function CategoryBubbles({ categories, catTotals, getCatStyle, getCatAccent, onS
                     style={{ transform:"rotate(-90deg)",transformOrigin:`${CX}px ${CY}px`,transition:"stroke-dasharray 0.6s ease,stroke-width 0.15s",cursor:"pointer" }}
                     onMouseEnter={() => setHovered(seg.name)}
                     onMouseLeave={() => setHovered(null)}
-                    onClick={() => { onSelect(seg.name); setOpen(false); }}
+                    onClick={() => { onSelect(seg.name); }}
                   />
                 ))}
                 <text x={CX} y={CY-6} textAnchor="middle" style={{ fontSize:10,fill:textMute,fontFamily:"DM Sans,sans-serif" }}>{displayLabel}</text>
@@ -724,7 +726,7 @@ function CategoryBubbles({ categories, catTotals, getCatStyle, getCatAccent, onS
               <div style={{ flex:1,display:"flex",flexDirection:"column",gap:6 }}>
                 {segments.map(seg => (
                   <button key={seg.name} onMouseEnter={() => setHovered(seg.name)} onMouseLeave={() => setHovered(null)}
-                    onClick={() => { onSelect(seg.name); setOpen(false); }}
+                    onClick={() => { onSelect(seg.name); }}
                     style={{ display:"flex",alignItems:"center",gap:6,background:hovered===seg.name?(dark?"rgba(255,255,255,0.05)":"rgba(0,0,0,0.03)"):"transparent",border:"none",borderRadius:8,padding:"3px 6px",cursor:"pointer",width:"100%",textAlign:"left" }}>
                     <div style={{ width:8,height:8,borderRadius:"50%",background:seg.accent,flexShrink:0 }}/>
                     <span style={{ flex:1,fontSize:11,color:dark?"#d1d5db":"#374151",fontWeight:hovered===seg.name?600:400,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{seg.name}</span>
@@ -740,7 +742,7 @@ function CategoryBubbles({ categories, catTotals, getCatStyle, getCatAccent, onS
             const cs = getCatStyle(cat.name);
             const acc = getCatAccent(cat.name);
             return (
-              <button key={cat.name} onClick={() => { onSelect(cat.name); setOpen(false); }}
+              <button key={cat.name} onClick={() => { onSelect(cat.name); }}
                 style={{ width:"100%",display:"flex",alignItems:"center",gap:10,padding:"8px 0",background:"none",border:"none",cursor:"pointer",borderBottom:`1px solid ${dark?"#1f2937":"#f3f4f6"}` }}>
                 <span style={{ ...cs,width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0 }}>{cat.name[0]}</span>
                 <div style={{ flex:1,textAlign:"left" }}>
@@ -1470,6 +1472,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [tab, setTab] = useState("home");
   const [drillCat, setDrillCat] = useState(null);
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -2169,7 +2172,7 @@ export default function App() {
               </div>
 
               {/* Category donut — scoped to selected period */}
-              <CategoryBubbles categories={categories} catTotals={catTotals} getCatStyle={getCatStyle} getCatAccent={getCatAccent} onSelect={name => setDrillCat(name)} dark={dark} cardBg={cardBg} border={border} textMute={textMute}/>
+              <CategoryBubbles categories={categories} catTotals={catTotals} getCatStyle={getCatStyle} getCatAccent={getCatAccent} onSelect={name => { setDrillCat(name); }} dark={dark} cardBg={cardBg} border={border} textMute={textMute} open={catDropdownOpen} setOpen={setCatDropdownOpen}/>
 
               {/* Expense list — scoped to selected period */}
               {periodExpenses.length===0
