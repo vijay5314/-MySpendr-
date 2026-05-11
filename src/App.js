@@ -21,6 +21,7 @@ const KEYS = {
   GOALS:      "myspendr_goals_v1",
   BIO_CRED:   "myspendr_bio_cred_v1",
   SHIELD:     "myspendr_shield_v1",
+  BANKS:      "myspendr_banks_v1",
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -184,6 +185,29 @@ function getStreakRank(count) {
   if (count < 60)  return { title: "Warp Speed", color: "#f59e0b" };
   if (count < 100) return { title: "Supernova", color: "#ef4444" };
   return              { title: "Singularity", color: "#ec4899" };
+}
+
+// ── LIVE CLOCK OVERLAY — ticks every second, no stale-capture bug ────────────
+function LiveClock() {
+  const [now, setNow] = useState(() => nowIST());
+  useEffect(() => {
+    // Align first tick to the next whole second to stay in sync
+    const msToNextSec = 1000 - (Date.now() % 1000);
+    let interval;
+    const timeout = setTimeout(() => {
+      setNow(nowIST());
+      interval = setInterval(() => setNow(nowIST()), 1000);
+    }, msToNextSec);
+    return () => { clearTimeout(timeout); clearInterval(interval); };
+  }, []);
+  const h = now.getHours(), m = now.getMinutes();
+  const isDay2 = h >= 6 && h < 18;
+  const label = `${isDay2 ? "☀️" : "🌙"} ${h}:${String(m).padStart(2, "0")} IST`;
+  return (
+    <div style={{ position:"absolute",bottom:8,left:12,fontSize:10,color:"rgba(255,255,255,0.3)",fontFamily:"'DM Mono',monospace" }}>
+      {label}
+    </div>
+  );
 }
 
 // ── PLANET HOPPER GAME COMPONENT ─────────────────────────────────────────────
@@ -700,110 +724,239 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     }
   }
 
-  // Draw a horizontal rocket (nose pointing RIGHT by default; ctx should be pre-rotated for angle)
-  function drawRocketH(ctx, x, y, sc, flameOn){
-    ctx.save(); ctx.translate(x, y);
-    // Rocket points RIGHT (+x). Flame shoots LEFT (−x).
+  // ══════════════════════════════════════════════════════════════════
+  // PREMIUM ROCKET — SpaceX-style, nose right (+x), engines left (−x)
+  // ══════════════════════════════════════════════════════════════════
+  function drawRocketH(ctx, x, y, sc, flameOn, t_anim){
+    ctx.save();
+    ctx.translate(x, y);
+    const s = sc;
+    const now = t_anim || 0;
+    const flicker = 0.85 + 0.15 * Math.sin(now * 18.7);
+    const flicker2 = 0.9  + 0.10 * Math.sin(now * 23.1 + 1.3);
 
-    // === FLAME (behind body, on left) ===
+    // ── PLASMA EXHAUST (drawn first — behind everything) ─────────────
     if(flameOn){
-      const flameL = (10 + Math.sin(Date.now()*0.018)*4) * sc;
-      const fg1 = ctx.createRadialGradient(-8*sc, 0, 0, -8*sc-flameL*0.5, 0, flameL);
-      fg1.addColorStop(0,'rgba(255,255,255,0.95)');
-      fg1.addColorStop(0.12,'rgba(255,230,60,0.9)');
-      fg1.addColorStop(0.4,'rgba(255,120,20,0.75)');
-      fg1.addColorStop(0.75,'rgba(255,50,0,0.4)');
-      fg1.addColorStop(1,'rgba(255,20,0,0)');
+      // Outer plasma bloom
+      const fLen = 28 * s * flicker;
+      const fLen2 = 20 * s * flicker2;
+      // Primary nozzle flame — wide
+      const fg1 = ctx.createRadialGradient(-11*s, 0, 0, -11*s - fLen*0.6, 0, fLen*1.1);
+      fg1.addColorStop(0,  'rgba(255,255,255,1)');
+      fg1.addColorStop(0.05,'rgba(200,240,255,0.98)');
+      fg1.addColorStop(0.15,'rgba(120,200,255,0.92)');
+      fg1.addColorStop(0.35,'rgba(60,140,255,0.7)');
+      fg1.addColorStop(0.6, 'rgba(100,80,255,0.4)');
+      fg1.addColorStop(0.85,'rgba(180,40,255,0.15)');
+      fg1.addColorStop(1,   'rgba(100,0,200,0)');
       ctx.beginPath();
-      ctx.moveTo(-8*sc, -3.5*sc);
-      ctx.quadraticCurveTo(-8*sc-flameL*0.5, -5*sc, -8*sc-flameL, 0);
-      ctx.quadraticCurveTo(-8*sc-flameL*0.5,  5*sc, -8*sc,  3.5*sc);
+      ctx.moveTo(-9*s, -5.5*s);
+      ctx.bezierCurveTo(-11*s,-8*s, -11*s-fLen*0.7,-6*s, -11*s-fLen, 0);
+      ctx.bezierCurveTo(-11*s-fLen*0.7, 6*s, -11*s, 8*s, -9*s, 5.5*s);
       ctx.closePath();
-      ctx.fillStyle=fg1; ctx.fill();
-      // Inner hot core
-      const fl2 = flameL * 0.52;
+      ctx.fillStyle = fg1; ctx.fill();
+
+      // Secondary smaller cone (pure white-hot core)
+      const fg2 = ctx.createLinearGradient(-9*s, 0, -9*s-fLen2, 0);
+      fg2.addColorStop(0,   'rgba(255,255,255,1)');
+      fg2.addColorStop(0.3,  'rgba(200,240,255,0.95)');
+      fg2.addColorStop(0.65, 'rgba(100,180,255,0.6)');
+      fg2.addColorStop(1,    'rgba(80,100,255,0)');
       ctx.beginPath();
-      ctx.moveTo(-8*sc, -1.8*sc);
-      ctx.quadraticCurveTo(-8*sc-fl2*0.5, -2*sc, -8*sc-fl2, 0);
-      ctx.quadraticCurveTo(-8*sc-fl2*0.5,  2*sc, -8*sc,  1.8*sc);
+      ctx.moveTo(-9*s, -2.5*s);
+      ctx.bezierCurveTo(-10*s,-3.5*s, -9*s-fLen2*0.65,-2*s, -9*s-fLen2, 0);
+      ctx.bezierCurveTo(-9*s-fLen2*0.65, 2*s, -10*s, 3.5*s, -9*s, 2.5*s);
       ctx.closePath();
-      const fg2 = ctx.createLinearGradient(-8*sc, 0, -8*sc-fl2, 0);
-      fg2.addColorStop(0,'rgba(255,255,220,1)');
-      fg2.addColorStop(0.5,'rgba(255,200,60,0.9)');
-      fg2.addColorStop(1,'rgba(255,100,0,0)');
-      ctx.fillStyle=fg2; ctx.fill();
+      ctx.fillStyle = fg2; ctx.fill();
+
+      // Outer halo glow ring around engines
+      const hg = ctx.createRadialGradient(-11*s,0,2*s,-11*s,0,16*s*flicker);
+      hg.addColorStop(0,  'rgba(100,160,255,0.25)');
+      hg.addColorStop(0.5,'rgba(80,100,255,0.08)');
+      hg.addColorStop(1,  'transparent');
+      ctx.fillStyle = hg;
+      ctx.beginPath(); ctx.arc(-11*s,0,16*s*flicker,0,Math.PI*2); ctx.fill();
     }
 
-    // === FINS (top and bottom, swept back) ===
+    // ── SWEPT DELTA FINS (large, dramatic) ──────────────────────────
+    // Bottom fin
+    const finG = ctx.createLinearGradient(-10*s, 8*s, 2*s, 14*s);
+    finG.addColorStop(0, '#1a2535'); finG.addColorStop(0.4,'#2e4060'); finG.addColorStop(1,'#0d1a28');
+    ctx.beginPath();
+    ctx.moveTo(-8*s, 5*s);
+    ctx.lineTo(-12*s, 16*s);
+    ctx.bezierCurveTo(-8*s,14*s, -2*s,9*s, 0*s, 7*s);
+    ctx.closePath();
+    ctx.fillStyle = finG; ctx.fill();
+    ctx.strokeStyle='rgba(80,140,220,0.35)'; ctx.lineWidth=0.7*s; ctx.stroke();
     // Top fin
     ctx.beginPath();
-    ctx.moveTo(-3*sc, -4*sc);
-    ctx.lineTo(-8*sc, -8*sc);
-    ctx.lineTo(-6*sc, -4*sc);
+    ctx.moveTo(-8*s, -5*s);
+    ctx.lineTo(-12*s, -16*s);
+    ctx.bezierCurveTo(-8*s,-14*s, -2*s,-9*s, 0*s, -7*s);
     ctx.closePath();
-    ctx.fillStyle='#e0e8f0'; ctx.fill();
-    ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.5*sc; ctx.stroke();
-    // Bottom fin
-    ctx.beginPath();
-    ctx.moveTo(-3*sc,  4*sc);
-    ctx.lineTo(-8*sc,  8*sc);
-    ctx.lineTo(-6*sc,  4*sc);
-    ctx.closePath();
-    ctx.fillStyle='#e0e8f0'; ctx.fill();
-    ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=0.5*sc; ctx.stroke();
+    ctx.fillStyle = finG; ctx.fill();
+    ctx.strokeStyle='rgba(80,140,220,0.35)'; ctx.lineWidth=0.7*s; ctx.stroke();
+    // Fin leading-edge glow
+    ctx.save(); ctx.globalAlpha=flameOn?0.4:0.18;
+    ctx.beginPath(); ctx.moveTo(-12*s,16*s); ctx.lineTo(-8*s,5*s);
+    ctx.strokeStyle='rgba(80,160,255,0.9)'; ctx.lineWidth=1.2*s; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-12*s,-16*s); ctx.lineTo(-8*s,-5*s);
+    ctx.strokeStyle='rgba(80,160,255,0.9)'; ctx.lineWidth=1.2*s; ctx.stroke();
+    ctx.restore();
 
-    // === BODY ===
-    const bodyGrad = ctx.createLinearGradient(0, -4*sc, 0, 4*sc);
-    bodyGrad.addColorStop(0,'#c8d8e8');
-    bodyGrad.addColorStop(0.25,'#ffffff');
-    bodyGrad.addColorStop(0.65,'#f0f4f8');
-    bodyGrad.addColorStop(1,'#b0c0d0');
-    ctx.beginPath();
-    ctx.roundRect(-8*sc, -4*sc, 16*sc, 8*sc, 2*sc);
-    ctx.fillStyle=bodyGrad; ctx.fill();
-    ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=0.6*sc; ctx.stroke();
+    // ── ENGINE CLUSTER (3 nozzle bells) ─────────────────────────────
+    const nozG = ctx.createLinearGradient(-9*s,-7*s,-9*s,7*s);
+    nozG.addColorStop(0,'#1c2d40'); nozG.addColorStop(0.5,'#2e4a64'); nozG.addColorStop(1,'#1c2d40');
+    for(let n=-1;n<=1;n++){
+      const ny = n*3.4*s;
+      // Bell shape
+      ctx.beginPath();
+      ctx.moveTo(-7*s, ny-1.6*s);
+      ctx.bezierCurveTo(-8*s,ny-2*s, -11*s,ny-3*s, -11*s,ny-2*s);
+      ctx.lineTo(-11*s, ny+2*s);
+      ctx.bezierCurveTo(-11*s,ny+3*s, -8*s,ny+2*s, -7*s,ny+1.6*s);
+      ctx.closePath();
+      ctx.fillStyle=nozG; ctx.fill();
+      ctx.strokeStyle='rgba(60,120,200,0.4)'; ctx.lineWidth=0.6*s; ctx.stroke();
+      // Bell inner — red-hot glow when firing
+      if(flameOn){
+        const heatG = ctx.createRadialGradient(-9.5*s,ny,0,-9.5*s,ny,2.5*s);
+        heatG.addColorStop(0,'rgba(200,240,255,0.9)');
+        heatG.addColorStop(0.4,'rgba(100,180,255,0.5)');
+        heatG.addColorStop(1,'transparent');
+        ctx.fillStyle=heatG; ctx.beginPath(); ctx.arc(-9.5*s,ny,2.5*s,0,Math.PI*2); ctx.fill();
+      }
+    }
 
-    // === NOSE CONE (right side) ===
-    const tipGrad = ctx.createLinearGradient(7*sc, -3.5*sc, 14*sc, 0);
-    tipGrad.addColorStop(0,'#ff4444');
-    tipGrad.addColorStop(0.4,'#ff2020');
-    tipGrad.addColorStop(1,'#cc0000');
-    ctx.beginPath();
-    ctx.moveTo(7*sc, -3.5*sc);
-    ctx.quadraticCurveTo(10*sc, -3*sc, 14*sc, 0);
-    ctx.quadraticCurveTo(10*sc,  3*sc,  7*sc,  3.5*sc);
-    ctx.closePath();
-    ctx.fillStyle=tipGrad; ctx.fill();
-    ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=0.5*sc; ctx.stroke();
-    // Nose shine
-    ctx.beginPath();
-    ctx.moveTo(7.5*sc, -2*sc);
-    ctx.quadraticCurveTo(10*sc, -2.5*sc, 13*sc, -0.5*sc);
-    ctx.quadraticCurveTo(9*sc, -1.5*sc, 7.5*sc, 0);
-    ctx.closePath();
-    ctx.fillStyle='rgba(255,255,255,0.32)'; ctx.fill();
+    // ── MAIN BODY — titanium/carbon-fibre fuselage ───────────────────
+    // Shadow underlay
+    ctx.beginPath(); ctx.roundRect(-11*s,-6*s,28*s,12*s,4*s);
+    ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fill();
+    // Main gradient — dark metallic to bright specular highlight
+    const bodyG = ctx.createLinearGradient(0,-6*s,0,6*s);
+    bodyG.addColorStop(0,   '#0d1b2e');
+    bodyG.addColorStop(0.08,'#1a3050');
+    bodyG.addColorStop(0.22,'#2a4870');
+    bodyG.addColorStop(0.38,'#e8f4ff');   // specular highlight
+    bodyG.addColorStop(0.52,'#c0daf0');
+    bodyG.addColorStop(0.72,'#1e3555');
+    bodyG.addColorStop(0.9, '#0a1828');
+    bodyG.addColorStop(1,   '#060f1a');
+    ctx.beginPath(); ctx.roundRect(-11*s,-6*s,28*s,12*s,4*s);
+    ctx.fillStyle=bodyG; ctx.fill();
 
-    // === PORTHOLE ===
-    ctx.beginPath(); ctx.arc(1*sc, 0, 2.5*sc, 0, Math.PI*2);
-    const winGrad = ctx.createRadialGradient(0.3*sc,-0.8*sc,0.2*sc,1*sc,0,2.5*sc);
-    winGrad.addColorStop(0,'#aaddff'); winGrad.addColorStop(0.6,'#4499cc'); winGrad.addColorStop(1,'#1155aa');
-    ctx.fillStyle=winGrad; ctx.fill();
-    ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=0.6*sc; ctx.stroke();
-    ctx.beginPath(); ctx.arc(0.1*sc,-0.9*sc,0.9*sc,0,Math.PI*2);
-    ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.fill();
+    // Body panel detail (clipped to body)
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(-11*s,-6*s,28*s,12*s,4*s); ctx.clip();
+    // Carbon-fibre cross-hatch texture (subtle)
+    ctx.globalAlpha=0.04;
+    for(let xi=-11;xi<17;xi+=2.5){
+      ctx.beginPath(); ctx.moveTo(xi*s,-6*s); ctx.lineTo((xi+2)*s,6*s);
+      ctx.strokeStyle='#fff'; ctx.lineWidth=1.5*s; ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+    // Iridescent accent stripe — electric blue-violet
+    const stripeG=ctx.createLinearGradient(0,-6*s,0,6*s);
+    stripeG.addColorStop(0,'rgba(80,160,255,0.0)');
+    stripeG.addColorStop(0.35,'rgba(100,200,255,0.7)');
+    stripeG.addColorStop(0.5,'rgba(140,100,255,0.9)');
+    stripeG.addColorStop(0.65,'rgba(80,200,255,0.7)');
+    stripeG.addColorStop(1,'rgba(60,120,255,0.0)');
+    ctx.fillStyle=stripeG; ctx.fillRect(-2*s,-6*s,4*s,12*s);
+    // Gold accent ring
+    ctx.fillStyle='rgba(255,200,60,0.55)'; ctx.fillRect(-3.5*s,-6*s,1.5*s,12*s);
+    // Panel seams
+    ctx.strokeStyle='rgba(0,20,60,0.45)'; ctx.lineWidth=0.5*s;
+    [-3,3].forEach(yo=>{ ctx.beginPath(); ctx.moveTo(-11*s,yo*s); ctx.lineTo(17*s,yo*s); ctx.stroke(); });
+    // Ablative heat tiles on underside
+    ctx.globalAlpha=0.08;
+    for(let tx=-10;tx<16;tx+=3){
+      ctx.fillStyle='rgba(255,160,60,1)';
+      ctx.fillRect(tx*s,2.5*s,2.5*s,3*s);
+    }
+    ctx.globalAlpha=1;
+    ctx.restore();
 
-    // === NOZZLE (left side) ===
+    // Body edge rim glow — blue-white
+    ctx.beginPath(); ctx.roundRect(-11*s,-6*s,28*s,12*s,4*s);
+    ctx.strokeStyle='rgba(80,160,255,0.22)'; ctx.lineWidth=1*s; ctx.stroke();
+
+    // ── NOSE CONE — long ogive aerodynamic taper ─────────────────────
+    const noseG = ctx.createLinearGradient(14*s,-5*s,23*s,0);
+    noseG.addColorStop(0,'#1a3555'); noseG.addColorStop(0.25,'#3a70c0');
+    noseG.addColorStop(0.5,'#e0f0ff'); noseG.addColorStop(0.75,'#2a5080'); noseG.addColorStop(1,'#0a1828');
     ctx.beginPath();
-    ctx.moveTo(-7*sc, -3*sc);
-    ctx.lineTo(-9.5*sc, -2*sc);
-    ctx.lineTo(-9.5*sc,  2*sc);
-    ctx.lineTo(-7*sc,  3*sc);
+    ctx.moveTo(14*s,-5.5*s);
+    ctx.bezierCurveTo(17*s,-5*s, 22*s,-2.5*s, 24.5*s, 0);
+    ctx.bezierCurveTo(22*s, 2.5*s, 17*s, 5*s, 14*s, 5.5*s);
     ctx.closePath();
-    ctx.fillStyle='#8899aa'; ctx.fill();
+    ctx.fillStyle=noseG; ctx.fill();
+    // Nose specular streak
+    ctx.beginPath();
+    ctx.moveTo(15*s,-4.5*s);
+    ctx.bezierCurveTo(18*s,-4.5*s, 22*s,-2*s, 23.5*s,-0.3*s);
+    ctx.bezierCurveTo(20*s,-1.5*s, 15.5*s,-2.2*s, 15*s,-3*s);
+    ctx.closePath();
+    ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.fill();
+    // Tip plasma glow (hot re-entry point)
+    const tipG2=ctx.createRadialGradient(24*s,0,0.2*s,22*s,0,5*s);
+    tipG2.addColorStop(0,'rgba(255,255,255,0.9)');
+    tipG2.addColorStop(0.3,'rgba(100,200,255,0.5)');
+    tipG2.addColorStop(1,'transparent');
+    ctx.fillStyle=tipG2; ctx.beginPath(); ctx.arc(24*s,0,5*s,0,Math.PI*2); ctx.fill();
+    // Nose edge rim
+    ctx.beginPath();
+    ctx.moveTo(14*s,-5.5*s);
+    ctx.bezierCurveTo(17*s,-5*s, 22*s,-2.5*s, 24.5*s, 0);
+    ctx.bezierCurveTo(22*s, 2.5*s, 17*s, 5*s, 14*s, 5.5*s);
+    ctx.closePath();
+    ctx.strokeStyle='rgba(100,180,255,0.3)'; ctx.lineWidth=0.8*s; ctx.stroke();
+
+    // ── VISOR / CREW WINDOW ──────────────────────────────────────────
+    ctx.beginPath(); ctx.ellipse(5*s,0,4.5*s,3*s,0,0,Math.PI*2);
+    const winG2=ctx.createRadialGradient(3.5*s,-1*s,0.4*s,5*s,0,4.5*s);
+    winG2.addColorStop(0,'#d0eeff'); winG2.addColorStop(0.2,'#6ab0f5');
+    winG2.addColorStop(0.55,'#1a60d0'); winG2.addColorStop(1,'#040e28');
+    ctx.fillStyle=winG2; ctx.fill();
+    ctx.strokeStyle='rgba(120,200,255,0.6)'; ctx.lineWidth=1*s; ctx.stroke();
+    // Window glare
+    ctx.beginPath(); ctx.ellipse(3.2*s,-1*s,2*s,1*s,-0.3,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.fill();
+    // Inner cockpit glow
+    ctx.save(); ctx.globalAlpha=0.2;
+    const wgl2=ctx.createRadialGradient(5*s,0,0,5*s,0,8*s);
+    wgl2.addColorStop(0,'rgba(100,200,255,0.9)'); wgl2.addColorStop(1,'transparent');
+    ctx.fillStyle=wgl2; ctx.fillRect(0,-9*s,16*s,18*s);
+    ctx.restore();
+
+    // ── NAVIGATION LIGHTS ────────────────────────────────────────────
+    // Blink on/off at ~2Hz
+    const blink = Math.sin(now * 12) > 0;
+    if(blink){
+      // Red port light (top)
+      ctx.beginPath(); ctx.arc(0,-5.8*s,1.2*s,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,60,60,0.95)'; ctx.fill();
+      const rl=ctx.createRadialGradient(0,-5.8*s,0,0,-5.8*s,3.5*s);
+      rl.addColorStop(0,'rgba(255,80,80,0.4)'); rl.addColorStop(1,'transparent');
+      ctx.fillStyle=rl; ctx.fill();
+    } else {
+      // Green starboard light (bottom)
+      ctx.beginPath(); ctx.arc(0,5.8*s,1.2*s,0,Math.PI*2);
+      ctx.fillStyle='rgba(60,255,120,0.9)'; ctx.fill();
+      const gl2=ctx.createRadialGradient(0,5.8*s,0,0,5.8*s,3.5*s);
+      gl2.addColorStop(0,'rgba(80,255,130,0.4)'); gl2.addColorStop(1,'transparent');
+      ctx.fillStyle=gl2; ctx.fill();
+    }
+
+    // ── RIVET/BOLT DETAIL ────────────────────────────────────────────
+    ctx.fillStyle='rgba(180,210,255,0.45)';
+    [-4,4].forEach(xo=>{ [-3.5,0,3.5].forEach(yo=>{
+      ctx.beginPath(); ctx.arc(xo*s,yo*s,0.5*s,0,Math.PI*2); ctx.fill();
+    }); });
 
     ctx.restore();
   }
-
   // Draw sonic boom shockwave rings
   function drawSonicBoom(ctx, x, y, age, maxAge){
     const progress = age / maxAge; // 0→1
@@ -1166,11 +1319,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         ctx.restore();
       }
 
-      // Orbit ring dashed
-      ctx.save(); ctx.setLineDash([3,6]);
-      ctx.beginPath(); ctx.arc(curX,pY,pR+22,0,Math.PI*2);
-      ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1; ctx.stroke();
-      ctx.restore();
+      // (orbit ring drawn in minute-hand section below)
 
       // Orbiting moon particle
       const mA=s.t*0.7;
@@ -1179,153 +1328,206 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       moonMini.addColorStop(0,'rgba(255,255,255,0.7)'); moonMini.addColorStop(1,'rgba(255,255,255,0)');
       ctx.fillStyle=moonMini; ctx.beginPath(); ctx.arc(moonX,moonY,3,0,Math.PI*2); ctx.fill();
 
-      // ── HORIZONTAL ROCKET APPROACH ──────────────────────────────────────────
-      // State fields used: rocketPhase ('approach'|'orbit'|'launch'), rocketT, sonicBooms[]
-      if(!s.rocketPhase) s.rocketPhase = 'orbit';
-      if(!s.sonicBooms) s.sonicBooms = [];
+      // ── ROCKET — always travels LEFT → RIGHT ──────────────────────────────
+      // Layout zones:  1=sun orbit (far left)  2=boost zone (mid-left)
+      //                3=planet (curX)           4=sun orbit end (far right)
+      if(!s.rocketPhase) s.rocketPhase = 'idle';
+      if(!s.sonicBooms)  s.sonicBooms  = [];
 
-      // Trigger approach when launchRocket fires (reused for the "first spend" flyby)
       if(s.rocketLaunching){
-        // Override: use horizontal approach instead of old vertical launch
-        if(s.rocketPhase !== 'approach'){
-          s.rocketPhase = 'approach';
-          s.rocketT = 0;
-          s.sonicBooms = [];
-        }
-        s.rocketLaunchT += 0.013; // approach speed
+        // ── APPROACH ANIMATION: zone 2 → zone 3 (planet), left to right ──
+        s.rocketLaunchT += 0.011;
         const lt = Math.min(s.rocketLaunchT, 1);
 
-        // Bezier path: rocket enters from far left, arcs down curving toward planet
-        // Control point creates the dramatic curved dive
-        const startX = -40, startY = VH * 0.18;
-        const ctrlX  = VW * 0.25, ctrlY = VH * 0.0;   // upward arc midpoint
-        const endX   = curX - pR - 18, endY = pY - pR * 0.2; // arrives near planet surface
+        // Quadratic bezier: enter from left at mid-height, arc gently upward,
+        // then swoop down to arrive just left of the planet
+        const startX = -30;                        // zone 2: off left edge
+        const startY = VH * 0.55;                 // slightly below center
+        const ctrlX  = VW * 0.3;                  // control: bottom of arc
+        const ctrlY  = VH * 0.12;                 // peaks above canvas midpoint
+        const endX   = curX - pR - 20;            // zone 3: just left of planet
+        const endY   = pY - pR * 0.3;             // level with planet equator
 
-        // Quadratic bezier position
         const bx = (1-lt)*(1-lt)*startX + 2*(1-lt)*lt*ctrlX + lt*lt*endX;
         const by = (1-lt)*(1-lt)*startY + 2*(1-lt)*lt*ctrlY + lt*lt*endY;
 
-        // Tangent direction for rotation
+        // Tangent for rotation (rocket nose always points along path)
         const tdx = 2*(1-lt)*(ctrlX-startX) + 2*lt*(endX-ctrlX);
         const tdy = 2*(1-lt)*(ctrlY-startY) + 2*lt*(endY-ctrlY);
-        const rAngle = Math.atan2(tdy, tdx); // rocket nose follows path
+        const rAngle = Math.atan2(tdy, tdx); // 0 = pointing right
 
-        // Draw motion blur trail
-        for(let mb=1;mb<=5;mb++){
-          const mlt = Math.max(0, lt - mb*0.022);
+        // Speed-streak motion blur (4 ghost positions behind)
+        for(let mb=1;mb<=4;mb++){
+          const mlt = Math.max(0, lt - mb*0.018);
           const mbx = (1-mlt)*(1-mlt)*startX + 2*(1-mlt)*mlt*ctrlX + mlt*mlt*endX;
           const mby = (1-mlt)*(1-mlt)*startY + 2*(1-mlt)*mlt*ctrlY + mlt*mlt*endY;
           ctx.save();
-          ctx.globalAlpha = (0.12 - mb*0.02) * (lt > 0.05 ? 1 : lt/0.05);
-          ctx.beginPath(); ctx.arc(mbx, mby, 3*(6-mb)/6, 0, Math.PI*2);
-          ctx.fillStyle='rgba(200,220,255,0.6)'; ctx.fill();
+          ctx.globalAlpha = (0.14 - mb*0.03) * Math.min(lt*8,1);
+          ctx.beginPath(); ctx.arc(mbx,mby,5*(5-mb)/5,0,Math.PI*2);
+          ctx.fillStyle='rgba(200,225,255,0.7)'; ctx.fill();
           ctx.restore();
         }
 
-        // Condensation trail (contrail behind rocket)
-        if(lt > 0.05 && Math.random() < 0.6){
+        // Contrail (white vapour, spawned behind the nozzle)
+        const nozzleX = bx - Math.cos(rAngle)*12;
+        const nozzleY = by - Math.sin(rAngle)*12;
+        if(lt > 0.04 && Math.random()<0.65){
           s.particles.push({
-            x: bx - Math.cos(rAngle)*12, y: by - Math.sin(rAngle)*12,
-            vx: -Math.cos(rAngle)*0.3 + (Math.random()-0.5)*0.5,
-            vy: -Math.sin(rAngle)*0.3 + (Math.random()-0.5)*0.4,
-            life: 1, type: 3 // type 3 = contrail (white)
+            x:nozzleX, y:nozzleY,
+            vx:-Math.cos(rAngle)*0.4+(Math.random()-0.5)*0.6,
+            vy:-Math.sin(rAngle)*0.4+(Math.random()-0.5)*0.5,
+            life:1, type:3
           });
         }
-        // Engine particles
-        if(Math.random() < 0.8){
+        // Engine hot exhaust
+        if(Math.random()<0.85){
           s.particles.push({
-            x: bx - Math.cos(rAngle)*10, y: by - Math.sin(rAngle)*10,
-            vx: -Math.cos(rAngle)*1.5 + (Math.random()-0.5)*1.2,
-            vy: -Math.sin(rAngle)*1.5 + (Math.random()-0.5)*1.2,
-            life: 1, type: Math.floor(Math.random()*3)
+            x:nozzleX, y:nozzleY,
+            vx:-Math.cos(rAngle)*2+(Math.random()-0.5)*1.5,
+            vy:-Math.sin(rAngle)*2+(Math.random()-0.5)*1.5,
+            life:0.9, type:Math.floor(Math.random()*3)
           });
         }
 
-        // Draw horizontal rocket
+        // Draw the rocket, rotated to follow the bezier tangent
         ctx.save();
-        ctx.translate(bx, by);
+        ctx.translate(bx,by);
         ctx.rotate(rAngle);
-        drawRocketH(ctx, 0, 0, 1.05, true);
+        drawRocketH(ctx,0,0,1.1,true,s.t);
         ctx.restore();
 
-        // Sonic boom at ~70% approach (near planet)
-        if(lt > 0.68 && lt < 0.72 && s.sonicBooms.length === 0){
-          s.sonicBooms.push({ x: bx, y: by, age: 0, maxAge: 35 });
+        // Sonic boom when ~72% of the way (closing in on planet fast)
+        if(lt>0.70 && lt<0.74 && s.sonicBooms.length===0){
+          s.sonicBooms.push({x:bx,y:by,age:0,maxAge:40});
         }
-
-        // Draw sonic booms
-        s.sonicBooms.forEach(boom => {
-          boom.age++;
-          drawSonicBoom(ctx, boom.x, boom.y, boom.age, boom.maxAge);
+        s.sonicBooms.forEach(b=>{
+          b.age++;
+          drawSonicBoom(ctx,b.x,b.y,b.age,b.maxAge);
         });
-        s.sonicBooms = s.sonicBooms.filter(b => b.age < b.maxAge);
+        s.sonicBooms = s.sonicBooms.filter(b=>b.age<b.maxAge);
 
-        // Done approaching — transition to orbit
-        if(lt >= 1){
+        if(lt>=1){
           s.rocketLaunching = false;
-          s.rocketLaunchT = 0;
-          s.rocketPhase = 'orbit';
+          s.rocketLaunchT   = 0;
+          s.rocketPhase     = 'orbit';
           if(window.__rocketDone) window.__rocketDone();
         }
 
       } else {
-        // ── ORBITING ROCKET ─────────────────────────────────────────────────
-        // Rocket orbits the planet horizontally, dipping closer when logged
-        const orbitR = pR + (todayLogged ? 18 : 24);
-        const orbitSpeed = todayLogged ? 0.018 : 0.008;
-        const orbitA = s.t * orbitSpeed;
-        // Tilted ellipse — looks 3D
-        const orX = curX + Math.cos(orbitA) * orbitR;
-        const orY = pY  + Math.sin(orbitA) * orbitR * 0.32 - pR * 0.15;
-        const orAngle = -orbitA + (Math.sin(orbitA) > 0 ? Math.PI : 0); // nose always forward
+        // ── CIRCULAR MINUTE-HAND ORBIT ──────────────────────────────────────
+        const ist = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+        const mins     = ist.getMinutes() + ist.getSeconds() / 60;
+        const minAngle = (mins / 60) * Math.PI * 2 - Math.PI / 2; // 0 min = top, CW
+        const orR      = pR + 42; // circular orbit radius
 
-        // Only draw when on the "near" side (in front of planet)
-        const inFront = Math.sin(orbitA) < 0.1;
+        // rocket position on the circle
+        const orX = curX + Math.cos(minAngle) * orR;
+        const orY = pY   + Math.sin(minAngle) * orR;
+        // tangent = +90° → nose points in direction of travel
+        const orAngle = minAngle + Math.PI / 2;
 
-        if(inFront){
-          // Contrail arc segment behind rocket
-          ctx.save();
-          ctx.globalAlpha = 0.18;
-          ctx.beginPath();
-          for(let ta=0;ta<20;ta++){
-            const ta2 = orbitA - ta*0.045;
-            const tx2 = curX + Math.cos(ta2)*orbitR;
-            const ty2 = pY   + Math.sin(ta2)*orbitR*0.32 - pR*0.15;
-            if(ta===0) ctx.moveTo(tx2,ty2); else ctx.lineTo(tx2,ty2);
-          }
-          ctx.strokeStyle='rgba(200,230,255,0.5)'; ctx.lineWidth=1.5; ctx.setLineDash([3,4]); ctx.stroke();
-          ctx.restore();
+        // ── ORBIT RING — glowing neon circle ───────────────────────────────
+        // Base dashed ring
+        ctx.save();
+        ctx.setLineDash([5, 8]);
+        ctx.lineDashOffset = -(s.t * 18) % 13; // animated march
+        ctx.beginPath(); ctx.arc(curX, pY, orR, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(80,160,255,0.18)';
+        ctx.lineWidth = 1.2; ctx.stroke();
+        ctx.restore();
 
-          ctx.save();
-          ctx.translate(orX, orY);
-          ctx.rotate(orAngle);
-          drawRocketH(ctx, 0, 0, 0.85, todayLogged);
-          ctx.restore();
+        // Energy pulse — bright dot that races around the ring independently
+        const pulseAngle = (s.t * 1.4) % (Math.PI * 2);
+        const pPx = curX + Math.cos(pulseAngle) * orR;
+        const pPy = pY   + Math.sin(pulseAngle) * orR;
+        const pulseG = ctx.createRadialGradient(pPx, pPy, 0, pPx, pPy, 10);
+        pulseG.addColorStop(0,  'rgba(160,220,255,0.9)');
+        pulseG.addColorStop(0.4,'rgba(80,160,255,0.4)');
+        pulseG.addColorStop(1,  'transparent');
+        ctx.fillStyle = pulseG;
+        ctx.beginPath(); ctx.arc(pPx, pPy, 10, 0, Math.PI * 2); ctx.fill();
 
-          // Exhaust particles when logged
-          if(todayLogged && Math.random() < 0.5){
-            s.particles.push({
-              x: orX - Math.cos(orAngle)*10, y: orY - Math.sin(orAngle)*10,
-              vx: -Math.cos(orAngle)*1.0 + (Math.random()-0.5)*0.8,
-              vy: -Math.sin(orAngle)*1.0 + (Math.random()-0.5)*0.8,
-              life: 1, type: Math.floor(Math.random()*3)
-            });
-          }
+        // Second subtler pulse (offset 180°)
+        const pA2 = (pulseAngle + Math.PI) % (Math.PI * 2);
+        const p2x = curX + Math.cos(pA2) * orR, p2y = pY + Math.sin(pA2) * orR;
+        const pg2 = ctx.createRadialGradient(p2x,p2y,0,p2x,p2y,6);
+        pg2.addColorStop(0,'rgba(140,100,255,0.55)'); pg2.addColorStop(1,'transparent');
+        ctx.fillStyle=pg2; ctx.beginPath(); ctx.arc(p2x,p2y,6,0,Math.PI*2); ctx.fill();
+
+        // ── ION TRAIL — glowing arc behind the rocket ──────────────────────
+        const trailArc = Math.PI * 0.55; // how far back the trail extends
+        // Draw from back of trail to rocket (fade in)
+        const trailSteps = 48;
+        for(let ti = 0; ti < trailSteps; ti++){
+          const tf  = ti / trailSteps;        // 0 = tail end, 1 = near rocket
+          const ta  = minAngle - trailArc * (1 - tf);
+          const tx2 = curX + Math.cos(ta) * orR;
+          const ty2 = pY   + Math.sin(ta) * orR;
+          const tr  = 2.8 * tf;              // radius grows toward rocket
+          // Colour cycles blue→violet→cyan along trail
+          const hue = 200 + tf * 60;
+          const alpha = tf * tf * 0.75;
+          ctx.beginPath(); ctx.arc(tx2, ty2, tr, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${hue},100%,72%,${alpha})`;
+          ctx.fill();
+        }
+        // Bright glow knot at trail head (just behind the rocket)
+        const trailHeadAngle = minAngle - 0.08;
+        const thx = curX + Math.cos(trailHeadAngle) * orR;
+        const thy = pY   + Math.sin(trailHeadAngle) * orR;
+        const thG = ctx.createRadialGradient(thx,thy,0,thx,thy,10);
+        thG.addColorStop(0,'rgba(140,220,255,0.7)');
+        thG.addColorStop(0.5,'rgba(80,140,255,0.25)');
+        thG.addColorStop(1,'transparent');
+        ctx.fillStyle=thG; ctx.beginPath(); ctx.arc(thx,thy,10,0,Math.PI*2); ctx.fill();
+
+        // ── ROCKET ─────────────────────────────────────────────────────────
+        ctx.save();
+        ctx.translate(orX, orY);
+        ctx.rotate(orAngle);
+        drawRocketH(ctx, 0, 0, 0.85, todayLogged, s.t);
+        ctx.restore();
+
+        // ── ENGINE EXHAUST PARTICLES (orbit mode) ──────────────────────────
+        const spawnRate = todayLogged ? 0.65 : 0.2;
+        if(Math.random() < spawnRate){
+          const nx2 = orX - Math.cos(orAngle)*12, ny2 = orY - Math.sin(orAngle)*12;
+          s.particles.push({
+            x: nx2, y: ny2,
+            vx: -Math.cos(orAngle)*(1.0+Math.random()*0.8) + (Math.random()-0.5)*0.8,
+            vy: -Math.sin(orAngle)*(1.0+Math.random()*0.8) + (Math.random()-0.5)*0.8,
+            life: 0.9 + Math.random()*0.3,
+            type: todayLogged ? Math.floor(Math.random()*4) : 4
+          });
+        }
+        // Occasional ion spark
+        if(todayLogged && Math.random()<0.12){
+          s.particles.push({
+            x:orX,y:orY,
+            vx:(Math.random()-0.5)*2.5, vy:(Math.random()-0.5)*2.5,
+            life:0.6, type:5
+          });
         }
       }
       s.particles = s.particles.filter(p=>p.life>0);
       s.particles.forEach(p=>{
-        p.x+=p.vx; p.y+=p.vy; p.vy+=0.03; p.life-=0.028;
-        const ps=2.8*p.life;
+        p.x+=p.vx; p.y+=p.vy; p.vy+=0.018; p.life-=0.026;
+        const ps = p.type===5 ? 1.5*p.life : 2.8*p.life;
         ctx.beginPath(); ctx.arc(p.x,p.y,ps,0,Math.PI*2);
-        const col = p.type===3
-          ? `rgba(220,235,255,${p.life*0.55})`  // white contrail
-          : p.type===0
-          ? `rgba(251,191,36,${p.life*0.82})`   // golden
-          : p.type===1
-          ? `rgba(249,115,22,${p.life*0.78})`   // orange
-          : `rgba(239,68,68,${p.life*0.65})`;   // red
+        const col =
+          p.type===5 ? `rgba(160,220,255,${p.life*0.9})`  // ion spark — cyan
+          : p.type===4 ? `rgba(140,180,255,${p.life*0.55})` // cold thruster — blue
+          : p.type===3 ? `rgba(220,235,255,${p.life*0.55})` // white contrail
+          : p.type===0 ? `rgba(251,191,36,${p.life*0.82})`  // golden
+          : p.type===1 ? `rgba(249,115,22,${p.life*0.78})`  // orange
+          :               `rgba(239,68,68,${p.life*0.65})`; // red
         ctx.fillStyle=col; ctx.fill();
+        // Small glow halo on ion sparks
+        if(p.type===5 && p.life>0.3){
+          const ig=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,4*p.life);
+          ig.addColorStop(0,'rgba(100,200,255,0.4)'); ig.addColorStop(1,'transparent');
+          ctx.fillStyle=ig; ctx.fill();
+        }
       });
 
       rafRef.current = requestAnimationFrame(draw);
@@ -1346,11 +1548,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
           <span style={{ fontSize:10,color:"rgba(255,255,255,0.4)",fontFamily:"'DM Mono',monospace" }}>BEST </span>
           <span style={{ fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Mono',monospace" }}>{streak.longestStreak||0}</span>
         </div>
-        <div style={{ position:"absolute",bottom:8,left:12,fontSize:10,color:"rgba(255,255,255,0.3)",fontFamily:"'DM Mono',monospace" }}>
-          {isDay
-            ? `☀️ ${Math.floor(istHour)}:${String(Math.round((istHour%1)*60)).padStart(2,'0')} IST`
-            : `🌙 ${Math.floor(istHour)}:${String(Math.round((istHour%1)*60)).padStart(2,'0')} IST`}
-        </div>
+        <LiveClock dark={dark}/>
       </div>
       <div style={{ padding:"12px 14px",borderTop:"1px solid rgba(255,255,255,0.06)" }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9 }}>
@@ -1420,12 +1618,40 @@ function groupByDate(expenses) {
   return { grouped, dailyTotal };
 }
 function deductPot(pot, source, amount) {
-  const f = source === "cash" ? "usableCash" : "usableBank";
-  return { ...pot, [f]: Math.max(0, (Number(pot[f]) || 0) - amount) };
+  if (source === "cash") return { ...pot, usableCash: Math.max(0, (Number(pot.usableCash)||0) - amount) };
+  // source is either "bank" (legacy) or "bank:ID"
+  return { ...pot, usableBank: Math.max(0, (Number(pot.usableBank)||0) - amount) };
 }
 function refundPot(pot, source, amount) {
-  const f = source === "cash" ? "usableCash" : "usableBank";
-  return { ...pot, [f]: (Number(pot[f]) || 0) + amount };
+  if (source === "cash") return { ...pot, usableCash: (Number(pot.usableCash)||0) + amount };
+  return { ...pot, usableBank: (Number(pot.usableBank)||0) + amount };
+}
+// Resolve which bank object is active given paySource and banks list
+function resolveBank(paySource, banks) {
+  if (!paySource || paySource === "cash") return null;
+  const id = paySource.startsWith("bank:") ? paySource.slice(5) : null;
+  if (!id) return banks[0] || null;
+  return banks.find(b => String(b.id) === id) || banks[0] || null;
+}
+function deductBank(banks, paySource, amount) {
+  if (!paySource || paySource === "cash") return banks;
+  const id = paySource.startsWith("bank:") ? paySource.slice(5) : null;
+  return banks.map(b => {
+    if (id ? String(b.id) === id : b.isDefault) {
+      return { ...b, balance: Math.max(0, (Number(b.balance)||0) - amount) };
+    }
+    return b;
+  });
+}
+function refundBank(banks, paySource, amount) {
+  if (!paySource || paySource === "cash") return banks;
+  const id = paySource.startsWith("bank:") ? paySource.slice(5) : null;
+  return banks.map(b => {
+    if (id ? String(b.id) === id : b.isDefault) {
+      return { ...b, balance: (Number(b.balance)||0) + amount };
+    }
+    return b;
+  });
 }
 function buildTrendData(expenses) {
   const now = nowIST();
@@ -1697,13 +1923,22 @@ function MoneyBag({ fillPercent, size = "md" }) {
   );
 }
 
-function SourcePill({ value, onChange, dark, subbg, border, textMute }) {
+function SourcePill({ value, onChange, dark, subbg, border, textMute, banks }) {
+  const bankList = (banks||[]).length > 0 ? banks : [{ id:"bank", name:"Bank", isDefault:true }];
+  const options = [
+    ...bankList.map(b => ({ v:`bank:${b.id}`, label:b.name, color:"#2563eb", icon:<BankIcon/> })),
+    { v:"cash", label:"Cash", color:"#16a34a", icon:<CashIcon/> },
+  ];
+  const normalised = value === "bank"
+    ? `bank:${(bankList.find(b=>b.isDefault)||bankList[0]).id}`
+    : value;
   return (
-    <div style={{ display:"flex",gap:3,background:subbg,borderRadius:10,padding:3,border:`1px solid ${border}` }}>
-      {[["bank","Bank","#2563eb"],["cash","Cash","#16a34a"]].map(([v,label,color]) => (
+    <div style={{ display:"flex",gap:3,background:subbg,borderRadius:10,padding:3,border:`1px solid ${border}`,flexWrap:"wrap" }}>
+      {options.map(({ v, label, color, icon }) => (
         <button key={v} onClick={() => onChange(v)}
-          style={{ flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"5px 8px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:value===v?color:"transparent",color:value===v?"#fff":textMute,transition:"all 0.15s" }}>
-          {v==="bank" ? <BankIcon/> : <CashIcon/>}{label}
+          style={{ flex:"1 1 auto",display:"flex",alignItems:"center",justifyContent:"center",gap:4,padding:"5px 8px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,
+            background:normalised===v?color:"transparent",color:normalised===v?"#fff":textMute,transition:"all 0.15s",minWidth:64 }}>
+          {icon}{label}
         </button>
       ))}
     </div>
@@ -2707,6 +2942,9 @@ export default function App() {
   const [streak, setStreak] = useState(() => storageGet(KEYS.STREAK, EMPTY_STREAK));
   const [recurring, setRecurring] = useState(() => storageGet(KEYS.RECURRING, []));
   const [pot, setPot] = useState(() => storageGet(KEYS.POT, DEFAULT_POT));
+  const [banks, setBanks] = useState(() => storageGet(KEYS.BANKS, [
+    { id: 1, name: "Primary Bank", balance: 0, isDefault: true }
+  ]));
   const [dismissedMap, setDismissedMap] = useState(() => storageGet(KEYS.DISMISS, {}));
   const [notifEnabled, setNotifEnabled] = useState(() => storageGet(KEYS.NOTIF, false));
   const [userName, setUserName] = useState(() => storageGet(KEYS.USER, ""));
@@ -2722,6 +2960,7 @@ export default function App() {
   useEffect(() => { storageSetDebounced(KEYS.STREAK, streak); }, [streak]);
   useEffect(() => { storageSetDebounced(KEYS.RECURRING, recurring); }, [recurring]);
   useEffect(() => { storageSetDebounced(KEYS.POT, pot); }, [pot]);
+  useEffect(() => { storageSetDebounced(KEYS.BANKS, banks); }, [banks]);
   useEffect(() => { storageSetDebounced(KEYS.DISMISS, dismissedMap); }, [dismissedMap]);
   useEffect(() => { storageSet(KEYS.NOTIF, notifEnabled); }, [notifEnabled]);
   useEffect(() => { storageSet(KEYS.USER, userName); }, [userName]);
@@ -2736,7 +2975,15 @@ export default function App() {
   const [note, setNote] = useState("");
   const [date, setDate] = useState(() => getTodayIST());
   const [editingId, setEditingId] = useState(null);
-  const [paySource, setPaySource] = useState("bank");
+  const [paySource, setPaySource] = useState(() => {
+    const saved = storageGet(KEYS.BANKS, [{ id:1, name:"Primary Bank", balance:0, isDefault:true }]);
+    const def = (saved||[]).find(b=>b.isDefault) || (saved||[])[0];
+    return def ? `bank:${def.id}` : "bank:1";
+  });
+  const [showBankManager, setShowBankManager] = useState(false);
+  const [bankFormName, setBankFormName] = useState("");
+  const [bankFormBalance, setBankFormBalance] = useState("");
+  const [bankEditId, setBankEditId] = useState(null);
   const [budgetInput, setBudgetInput] = useState("");
   const [editingBudget, setEditingBudget] = useState(false);
   const [newCatName, setNewCatName] = useState("");
@@ -2884,7 +3131,8 @@ export default function App() {
   [pot.incomes]);
 
   const goldValue = useMemo(() => (Number(pot.goldGrams)||0)*(Number(pot.goldRate)||0), [pot.goldGrams, pot.goldRate]);
-  const usableTotal = (Number(pot.usableCash)||0) + (Number(pot.usableBank)||0);
+  const totalBankBalance2 = banks.reduce((s,b) => s+(Number(b.balance)||0), 0);
+  const usableTotal = (Number(pot.usableCash)||0) + totalBankBalance2;
   const netWorthTotal = usableTotal + (Number(pot.savings)||0) + (Number(pot.investments)||0) + goldValue;
 
   const extrasThisMonth = useMemo(() =>
@@ -2967,7 +3215,52 @@ export default function App() {
   }
 
   // ── Expense CRUD ──────────────────────────────────────────────────────────
-  function resetExpenseForm() { setAmount(""); setNote(""); setDate(today); setEditingId(null); setPaySource("bank"); }
+  function resetExpenseForm() {
+    setAmount(""); setNote(""); setDate(today); setEditingId(null);
+    const def = banks.find(b=>b.isDefault) || banks[0];
+    setPaySource(def ? `bank:${def.id}` : "bank:1");
+  }
+
+  // ── Bank CRUD ─────────────────────────────────────────────────────────────
+  function saveBank() {
+    if (!bankFormName.trim()) return;
+    if (bankEditId) {
+      setBanks(b => b.map(bk => bk.id===bankEditId ? { ...bk, name:bankFormName.trim(), balance:Number(bankFormBalance)||bk.balance } : bk));
+      showToast("Bank updated!");
+    } else {
+      const newId = Date.now();
+      const isFirst = banks.length === 0;
+      setBanks(b => [...b, { id:newId, name:bankFormName.trim(), balance:Number(bankFormBalance)||0, isDefault:isFirst }]);
+      // Sync pot.usableBank as sum of all banks
+      showToast("Bank added!");
+    }
+    setBankFormName(""); setBankFormBalance(""); setBankEditId(null);
+  }
+  function deleteBank(id) {
+    if (banks.length <= 1) { showToast("At least one bank required"); return; }
+    setBanks(b => {
+      const filtered = b.filter(bk => bk.id!==id);
+      // If deleted was default, make first one default
+      if (!filtered.some(bk => bk.isDefault)) filtered[0].isDefault = true;
+      return filtered;
+    });
+    showToast("Bank removed.");
+  }
+  function setDefaultBank(id) {
+    setBanks(b => b.map(bk => ({ ...bk, isDefault: bk.id===id })));
+    showToast("Default bank updated!");
+  }
+  function adjustBankBalance(id, delta) {
+    setBanks(b => b.map(bk => bk.id===id ? { ...bk, balance:Math.max(0,(Number(bk.balance)||0)+delta) } : bk));
+  }
+  function adjustBankBalanceDirect(id, dir, val) {
+    const num = Number(val)||0;
+    if (num <= 0) return;
+    setBanks(b => b.map(bk => bk.id===id ? { ...bk, balance: dir==="add" ? (Number(bk.balance)||0)+num : Math.max(0,(Number(bk.balance)||0)-num) } : bk));
+    showToast(`${dir==="add"?"+":"-"}₹${num.toLocaleString()} · ${banks.find(b=>b.id===id)?.name||"bank"}`);
+  }
+  // Total bank balance = sum of all bank accounts
+  const totalBankBalance = banks.reduce((s,b) => s+(Number(b.balance)||0), 0);
 
   function saveExpense() {
     if (!isValidAmount(amount) || Number(amount) <= 0) {
@@ -2977,18 +3270,32 @@ export default function App() {
     const isFirstSpendToday = !editingId && !expenses.some(e => e.date === date && e.id !== editingId) && date === today;
     if (editingId) {
       const old = expenses.find(e => e.id===editingId);
-      setPot(p => { let u = refundPot(p, old.paySource||"bank", old.amount); return deductPot(u, paySource, num); });
+      if (old.paySource === "cash") {
+        setPot(p => refundPot(p, "cash", old.amount));
+        setPot(p => paySource==="cash" ? deductPot(p,"cash",num) : p);
+      } else {
+        setBanks(b => refundBank(b, old.paySource||"bank", old.amount));
+      }
+      if (paySource !== "cash") setBanks(b => deductBank(b, paySource, num));
+      if (paySource === "cash") setPot(p => deductPot(p,"cash",num));
       setExpenses(p => p.map(e => e.id===editingId ? { ...e, amount:num, category:selCat, note, date, paySource } : e));
       showToast("Updated!");
     } else {
-      const currentBal = paySource==="cash" ? Number(pot.usableCash)||0 : Number(pot.usableBank)||0;
-      if (num > currentBal) showToast(`⚠️ Low balance — only ₹${currentBal.toLocaleString()} in ${paySource}`);
+      if (paySource === "cash") {
+        const currentBal = Number(pot.usableCash)||0;
+        if (num > currentBal) showToast(`⚠️ Low balance — only ₹${currentBal.toLocaleString()} in cash`);
+        setPot(p => deductPot(p,"cash",num));
+      } else {
+        const bank = resolveBank(paySource, banks);
+        const currentBal = bank ? Number(bank.balance)||0 : 0;
+        if (num > currentBal) showToast(`⚠️ Low balance — only ₹${currentBal.toLocaleString()} in ${bank?.name||"bank"}`);
+        setBanks(b => deductBank(b, paySource, num));
+      }
       setExpenses(p => [...p, { id:Date.now(), amount:num, category:selCat, note, date, paySource }]);
-      setPot(p => deductPot(p, paySource, num));
-      showToast(`Added · deducted from ${paySource}`);
+      const bankName = paySource==="cash" ? "cash" : (resolveBank(paySource,banks)?.name||"bank");
+      showToast(`Added · deducted from ${bankName}`);
     }
     logDay(date);
-    // First spend of today → rocket launch animation then go home
     if (isFirstSpendToday) {
       setTab("home");
       setTimeout(() => setRocketLaunchKey(k => k + 1), 120);
@@ -3593,25 +3900,73 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  {/* Bank row */}
-                  <div style={cardStyle}>
-                    <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:bankMode?10:0 }}>
-                      <div style={{ width:10,height:10,borderRadius:"50%",background:"#2563eb" }}/>
-                      <span style={{ flex:1,fontSize:14,fontWeight:600 }}>Bank Balance</span>
-                      <span style={{ fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#2563eb" }}>₹{(Number(pot.usableBank)||0).toLocaleString()}</span>
-                      <div style={{ display:"flex",gap:4 }}>
-                        <button onClick={() => setBankMode(bankMode==="add"?null:"add")} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:bankMode==="add"?"#16a34a":(dark?"#1f2937":"#f0fdf4"),color:bankMode==="add"?"#fff":(dark?"#34d399":"#16a34a"),lineHeight:1 }}>+</button>
-                        <button onClick={() => setBankMode(bankMode==="minus"?null:"minus")} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:bankMode==="minus"?"#dc2626":(dark?"#1f2937":"#fff1f2"),color:bankMode==="minus"?"#fff":(dark?"#f87171":"#dc2626"),lineHeight:1 }}>−</button>
+                  {/* Per-bank balance cards + Bank Manager */}
+                  {banks.map(bk => {
+                    const bkMode = bankMode && bankMode.id===bk.id ? bankMode.dir : null;
+                    return (
+                      <div key={bk.id} style={{ ...cardStyle,border:bk.isDefault?`1px solid ${dark?"#1e3a8a":"#bfdbfe"}`:cardStyle.border }}>
+                        <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:bkMode?10:0 }}>
+                          <div style={{ width:10,height:10,borderRadius:"50%",background:"#2563eb",flexShrink:0 }}/>
+                          <div style={{ flex:1,minWidth:0 }}>
+                            <span style={{ fontSize:14,fontWeight:700,color:dark?"#f9fafb":"#111827" }}>{bk.name}</span>
+                            {bk.isDefault && <span style={{ marginLeft:6,fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background:dark?"#172554":"#dbeafe",color:dark?"#93c5fd":"#1d4ed8" }}>DEFAULT</span>}
+                          </div>
+                          <span style={{ fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#2563eb" }}>₹{(Number(bk.balance)||0).toLocaleString()}</span>
+                          <div style={{ display:"flex",gap:4 }}>
+                            <button onClick={() => setBankMode(bkMode==="add"?null:{id:bk.id,dir:"add"})} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:bkMode==="add"?"#16a34a":(dark?"#1f2937":"#f0fdf4"),color:bkMode==="add"?"#fff":(dark?"#34d399":"#16a34a"),lineHeight:1 }}>+</button>
+                            <button onClick={() => setBankMode(bkMode==="minus"?null:{id:bk.id,dir:"minus"})} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:bkMode==="minus"?"#dc2626":(dark?"#1f2937":"#fff1f2"),color:bkMode==="minus"?"#fff":(dark?"#f87171":"#dc2626"),lineHeight:1 }}>−</button>
+                          </div>
+                        </div>
+                        {bkMode && (
+                          <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                            <input type="number" inputMode="decimal" value={bankAdj} onChange={e => setBankAdj(e.target.value)} placeholder={`₹ to ${bkMode}`} style={{ ...inputStyle,flex:1 }} autoFocus
+                              onKeyDown={e => { if(e.key==="Enter"){ adjustBankBalanceDirect(bk.id,bkMode,bankAdj);setBankAdj("");setBankMode(null); } }}/>
+                            <button onClick={() => { adjustBankBalanceDirect(bk.id,bkMode,bankAdj);setBankAdj("");setBankMode(null); }} style={{ ...btnPrimary,padding:"8px 14px",background:bkMode==="add"?"#16a34a":"#dc2626" }}>{bkMode==="add"?"+":"−"}</button>
+                            <button onClick={() => { setBankMode(null);setBankAdj(""); }} style={{ ...btnSecondary,padding:"8px 10px" }}>✕</button>
+                          </div>
+                        )}
                       </div>
+                    );
+                  })}
+                  {/* Bank Manager */}
+                  <div style={{ ...cardStyle,marginBottom:12 }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:12 }}>
+                      <BankIcon/>
+                      <span style={{ fontSize:13,fontWeight:700,color:textMain }}>Manage Banks</span>
+                      <button onClick={() => { setBankEditId(null);setBankFormName("");setBankFormBalance(""); setShowBankManager(s=>!s); }}
+                        style={{ marginLeft:"auto",...btnSecondary,padding:"5px 12px",fontSize:12,display:"flex",alignItems:"center",gap:4 }}>
+                        {showBankManager?"Done":<><PlusIcon/>Add Bank</>}
+                      </button>
                     </div>
-                    {bankMode && (
-                      <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-                        <input type="number" inputMode="decimal" value={bankAdj} onChange={e => setBankAdj(e.target.value)} placeholder={`₹ to ${bankMode}`} style={{ ...inputStyle,flex:1 }} autoFocus
-                          onKeyDown={e => { if(e.key==="Enter"){quickAdjust("usableBank",bankMode,bankAdj);setBankAdj("");setBankMode(null);} }}/>
-                        <button onClick={() => { quickAdjust("usableBank",bankMode,bankAdj);setBankAdj("");setBankMode(null); }} style={{ ...btnPrimary,padding:"8px 14px",background:bankMode==="add"?"#16a34a":"#dc2626" }}>{bankMode==="add"?"+":"−"}</button>
-                        <button onClick={() => { setBankMode(null);setBankAdj(""); }} style={{ ...btnSecondary,padding:"8px 10px" }}>✕</button>
+                    {showBankManager && (
+                      <div style={{ marginBottom:12,paddingBottom:12,borderBottom:`1px solid ${border}` }}>
+                        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
+                          <input value={bankFormName} onChange={e => setBankFormName(e.target.value)} placeholder="Bank name" style={inputStyle}/>
+                          <input type="number" inputMode="decimal" value={bankFormBalance} onChange={e => setBankFormBalance(e.target.value)} placeholder="Balance ₹" style={inputStyle}/>
+                        </div>
+                        <div style={{ display:"flex",gap:8 }}>
+                          <button onClick={saveBank} style={{ ...btnPrimary,flex:1 }}>{bankEditId?"Update":"Add Bank"}</button>
+                          {bankEditId && <button onClick={() => { setBankEditId(null);setBankFormName("");setBankFormBalance(""); }} style={btnSecondary}>Cancel</button>}
+                        </div>
                       </div>
                     )}
+                    {banks.map((bk,i) => (
+                      <div key={bk.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<banks.length-1?`1px solid ${border}`:"none" }}>
+                        <div style={{ flex:1,minWidth:0 }}>
+                          <span style={{ fontSize:13,fontWeight:600,color:textMain }}>{bk.name}</span>
+                          {bk.isDefault && <span style={{ marginLeft:6,fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background:dark?"#172554":"#dbeafe",color:dark?"#93c5fd":"#1d4ed8" }}>DEFAULT</span>}
+                          <p style={{ margin:"2px 0 0",fontSize:12,fontFamily:"'DM Mono',monospace",color:"#2563eb" }}>₹{(Number(bk.balance)||0).toLocaleString()}</p>
+                        </div>
+                        <div style={{ display:"flex",gap:5,flexShrink:0 }}>
+                          {!bk.isDefault && (
+                            <button onClick={() => { setDefaultBank(bk.id); }} title="Set as default"
+                              style={{ padding:"4px 8px",borderRadius:8,border:`1px solid ${dark?"#374151":"#e5e7eb"}`,background:"none",cursor:"pointer",fontSize:11,color:textMute,fontWeight:600 }}>★ Default</button>
+                          )}
+                          <button onClick={() => { setBankEditId(bk.id);setBankFormName(bk.name);setBankFormBalance(bk.balance||"");setShowBankManager(true); }} style={{ ...btnDanger,padding:4 }}><EditIcon/></button>
+                          <button onClick={() => deleteBank(bk.id)} style={{ ...btnDanger,padding:4 }}><TrashIcon/></button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                   <div style={{ ...cardStyle,display:"flex",justifyContent:"space-between",alignItems:"center" }}><span style={{ fontSize:13,color:textMute }}>Total Usable</span><span style={{ fontSize:20,fontWeight:800,color:"#f59e0b",fontFamily:"'DM Mono',monospace" }}>₹{usableTotal.toLocaleString()}</span></div>
                   <div style={{ ...cardStyle,background:dark?"#0a1628":"#f0fdf4",border:dark?"1px solid #1e3a5f":"1px solid #bbf7d0" }}>
@@ -3766,7 +4121,7 @@ export default function App() {
                 </div>
                 <div style={{ marginBottom:10 }}>
                   <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:6 }}>Pay from</label>
-                  <SourcePill value={paySource} onChange={setPaySource} dark={dark} subbg={subbg} border={border} textMute={textMute}/>
+                  <SourcePill value={paySource} onChange={setPaySource} dark={dark} subbg={subbg} border={border} textMute={textMute} banks={banks}/>
                 </div>
                 <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                   <button onClick={() => { haptic([10,20,10]); saveExpense(); }} style={{ ...btnPrimary,flex:1 }}>{editingId?"Update":"Add Expense"}</button>
