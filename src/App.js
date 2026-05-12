@@ -211,83 +211,94 @@ function LiveClock() {
 }
 
 // ── PLANET HOPPER GAME COMPONENT ─────────────────────────────────────────────
-function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopData, dark, onLog, onFreeze, launchRocket, onLaunchDone }) {
+function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopData, dark, onLog, onFreeze, launchRocket, onLaunchDone, accentPlanetIdx }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const stateRef = useRef({ t:0, particles:[], stars:[], nebulae:[], prevIdx:-1, transitioning:false, transX:0, transDir:1, rocketLaunchT:-1, rocketLaunching:false });
 
   const PLANETS = [
     {
-      name:"Mercury", size:18,
-      base:"#8a8a8a", highlight:"#c0c0c0", shadow:"#3a3a3a",
-      craters:[[0.25,0.1,0.19],[-0.2,-0.22,0.14],[0.05,-0.32,0.09],[-0.15,0.28,0.16],[0.3,-0.12,0.08]],
-      surfaceColor:"#b0b0b8", glow:"#d0d0e0", glowAlpha:0.3,
+      name:"Mercury", size:26,
+      base:"#8a8070", highlight:"#c8c0b0", shadow:"#2a2820",
+      craters:[
+        [0.25,0.10,0.20],[-0.20,-0.22,0.16],[0.05,-0.32,0.11],
+        [-0.15,0.28,0.18],[0.32,-0.12,0.09],[-0.38,0.05,0.13],
+        [0.10,0.38,0.10],[0.42,0.20,0.08],[-0.08,-0.40,0.14],
+        [0.28,-0.30,0.07],[-0.30,-0.35,0.09],[0.18,0.15,0.06],
+      ],
+      glow:"#d0ccc0", glowAlpha:0.25,
     },
     {
-      name:"Venus", size:20,
-      base:"#e8c56a", highlight:"#f5e090", shadow:"#8b6914",
-      venusSwirl:true, atmo:"#f5e09044",
-      glow:"#f5d060", glowAlpha:0.5,
+      name:"Venus", size:30,
+      base:"#d4a830", highlight:"#f0d878", shadow:"#7a5c10",
+      venusSwirl:true, atmo:"#f0d06044",
+      glow:"#f0c840", glowAlpha:0.55,
     },
     {
-      name:"Earth", size:23,
-      base:"#1a6bbf", highlight:"#4db8ff", shadow:"#0a3060",
-      continents:[[-0.12,0,0.34],[0.27,-0.08,0.21],[0.04,0.26,0.19],[-0.3,0.15,0.13]],
-      polar:"#daf4ff", polarSize:0.26, atmo:"#4da6ff33",
-      glow:"#70c0ff", glowAlpha:0.5,
+      name:"Earth", size:34,
+      base:"#1050a0", highlight:"#3a9cef", shadow:"#051840",
+      continents:"realistic",
+      polar:"#e8f8ff", polarSize:0.28, atmo:"#3a9cff33",
+      glow:"#50b0ff", glowAlpha:0.55,
     },
     {
-      name:"Mars", size:21,
-      base:"#c0391a", highlight:"#e8603a", shadow:"#5a1a05",
-      craters:[[0.12,0.17,0.17],[-0.28,-0.12,0.11],[0.26,-0.24,0.09]],
-      polar:"#ffe8d8", polarSize:0.28, atmo:"#ff603022",
-      glow:"#ff7050", glowAlpha:0.45, dust:true,
+      name:"Mars", size:30,
+      base:"#b03010", highlight:"#e05030", shadow:"#4a1005",
+      craters:[
+        [0.12,0.18,0.18],[-0.28,-0.12,0.12],[0.26,-0.24,0.10],
+        [-0.40,0.22,0.09],[0.38,0.05,0.07],[0.00,0.35,0.08],
+      ],
+      polar:"#fff0e8", polarSize:0.30, atmo:"#e0501822",
+      glow:"#f06040", glowAlpha:0.50, dust:true, marsDetail:true,
     },
     {
-      name:"Jupiter", size:30,
-      base:"#c8956a", highlight:"#e8c090", shadow:"#7a4020",
-      bands:["#a05028","#d4905a","#7a3818","#e8b870","#b86840","#f0d090","#8a4828"],
-      spot:true, atmo:"#f0a04022",
-      glow:"#f0c060", glowAlpha:0.55,
+      name:"Jupiter", size:44,
+      base:"#c88850", highlight:"#f0c888", shadow:"#6a3010",
+      bands:["#8a3c18","#c87840","#6a2c0c","#e0a858","#a84e28","#f0c870","#7a3c18","#d09050","#904020"],
+      spot:true, atmo:"#e0983022",
+      glow:"#e8b050", glowAlpha:0.60,
     },
     {
-      name:"Saturn", size:26,
-      base:"#d8b870", highlight:"#f0d8a0", shadow:"#8a6820",
-      bands:["#c09050","#e8c890","#b07828"],
-      rings:true, ringColors:["#c8a860","#e8d090","#b89040","#f0e0a8","#907030"],
-      glow:"#f0d870", glowAlpha:0.5,
+      name:"Saturn", size:38,
+      base:"#c8a858", highlight:"#f0d890", shadow:"#786018",
+      bands:["#a87838","#dcc078","#986028","#e8d090","#b08838","#d4b060"],
+      rings:true, ringColors:["#c0983888","#e8d07888","#a8782888","#f0e09888","#886828aa","#d0b06088"],
+      glow:"#e8c860", glowAlpha:0.55,
     },
     {
-      name:"Neptune", size:22,
-      base:"#1836a8", highlight:"#3a70e8", shadow:"#081848",
-      bands:["#1428a0","#2858d8","#1230b0","#3a78f8","#0e2080"],
-      stormSpot:true, atmo:"#2060e822",
-      glow:"#4080ff", glowAlpha:0.55,
+      name:"Neptune", size:32,
+      base:"#0c2890", highlight:"#2858d8", shadow:"#040e40",
+      bands:["#0a2090","#2050c8","#0e2898","#3060d8","#081878","#2848b8"],
+      stormSpot:true, atmo:"#1848d822",
+      glow:"#3070f0", glowAlpha:0.60,
     },
     {
-      name:"Void", size:18,
-      base:"#000000", highlight:"#200838", shadow:"#000000",
-      accretion:true, atmo:"#8020e044",
-      glow:"#a040e0", glowAlpha:0.65,
+      name:"Void", size:28,
+      base:"#000000", highlight:"#180628", shadow:"#000000",
+      accretion:true, atmo:"#7018c044",
+      glow:"#9030d8", glowAlpha:0.70,
     },
   ];
 
-  const planetIdx = Math.min(Math.floor(streak.count / 14), PLANETS.length - 1);
+  // Accent drives planet identity; streak still drives unlocking higher planets
+  // accentPlanetIdx pins the exact planet; streak gates how far you can go
+  const streakMaxIdx = Math.min(Math.floor(streak.count / 14), PLANETS.length - 1);
+  const planetIdx = accentPlanetIdx !== undefined
+    ? Math.min(accentPlanetIdx, streakMaxIdx)   // can't skip ahead of streak progress
+    : streakMaxIdx;
   const streakRank = getStreakRank(streak.count);
 
-  // Daily colour shift — changes every day based on day-of-year
+  // Subtle daily shimmer — only shifts glow hue slightly, never overrides planet identity
   const istNow = nowIST();
   const dayOfYear = Math.floor((istNow - new Date(istNow.getFullYear(),0,0))/(1000*60*60*24));
-  // Hue cycles through full spectrum over the year, offset by day
-  const dailyHue = (dayOfYear * 137.508) % 360; // golden angle — never repeats same colour adjacent days
-  // Override planet base/highlight/glow with daily colour
+  const dailyGlowShift = (dayOfYear * 7) % 40 - 20; // ±20° hue wobble on glow only
   const planet = { ...PLANETS[planetIdx] };
-  const hueShift = (h, shift) => `hsl(${(h+shift)%360},70%,55%)`;
-  planet.base      = `hsl(${dailyHue},65%,42%)`;
-  planet.highlight = `hsl(${dailyHue},75%,68%)`;
-  planet.shadow    = `hsl(${dailyHue},55%,22%)`;
-  planet.glow      = `hsl(${dailyHue},80%,60%)`;
-  if(planet.atmo)   planet.atmo = `hsl(${dailyHue},60%,50%,0.18)`;
+  // Preserve planet's true colours — only nudge the glow subtly
+  const baseGlowMatch = planet.glow.match(/^#([0-9a-f]{6})$/i);
+  if (!baseGlowMatch) {
+    // hsl glow — shift the hue slightly
+    planet.glow = planet.glow.replace(/hsl\((\d+)/, (_, h) => `hsl(${(+h + dailyGlowShift + 360) % 360}`);
+  }
   // Keep structural properties (craters, bands, rings etc) from original
 
   const istHour = istNow.getHours() + istNow.getMinutes()/60;
@@ -459,38 +470,110 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       });
     }
 
-    // ── EARTH CONTINENTS with rivers, mountain snow, cloud wisps ─────────────
+    // ── EARTH — realistic continents, ocean depth, clouds ───────────────────────
     if(p.continents){
-      p.continents.forEach(([ox,oy,sz],ci)=>{
-        // Main landmass
-        const g=ctx.createRadialGradient(cx+ox*r,cy+oy*r,0,cx+ox*r,cy+oy*r,sz*r);
-        g.addColorStop(0,'#3a9a5a'); g.addColorStop(0.35,'#2a7a44'); g.addColorStop(0.7,'#1e6232'); g.addColorStop(0.88,'#185028'); g.addColorStop(1,'transparent');
-        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx+ox*r,cy+oy*r,sz*r,0,Math.PI*2); ctx.fill();
-        // Highland/desert blotch
-        const hx=cx+ox*r+sz*r*0.28, hy=cy+oy*r-sz*r*0.22;
-        const hg=ctx.createRadialGradient(hx,hy,0,hx,hy,sz*r*0.42);
-        hg.addColorStop(0,'rgba(190,155,65,0.45)'); hg.addColorStop(0.6,'rgba(150,110,40,0.2)'); hg.addColorStop(1,'transparent');
-        ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(hx,hy,sz*r*0.42,0,Math.PI*2); ctx.fill();
-        // Mountain snow cap
-        const mx2=cx+ox*r-sz*r*0.15, my2=cy+oy*r+sz*r*0.1;
-        const mg=ctx.createRadialGradient(mx2,my2,0,mx2,my2,sz*r*0.22);
-        mg.addColorStop(0,'rgba(240,248,255,0.55)'); mg.addColorStop(1,'transparent');
-        ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(mx2,my2,sz*r*0.22,0,Math.PI*2); ctx.fill();
-        // Tiny river lines
-        ctx.save(); ctx.globalAlpha=0.2;
+      // Ocean depth variation
+      const oceanG=ctx.createRadialGradient(cx-r*0.1,cy-r*0.1,r*0.1,cx,cy,r);
+      oceanG.addColorStop(0,'rgba(20,90,180,0.35)');
+      oceanG.addColorStop(0.5,'rgba(10,55,130,0.20)');
+      oceanG.addColorStop(1,'rgba(5,25,70,0.30)');
+      ctx.fillStyle=oceanG; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+
+      // Landmass painter — draws a filled multi-point polygon
+      function landPoly(pts, fill, alpha=1){
+        if(pts.length<2) return;
+        ctx.save(); ctx.globalAlpha=alpha;
         ctx.beginPath();
-        ctx.moveTo(cx+ox*r,cy+oy*r-sz*r*0.4);
-        ctx.quadraticCurveTo(cx+ox*r+sz*r*0.3,cy+oy*r,cx+ox*r+sz*r*0.5,cy+oy*r+sz*r*0.5);
-        ctx.strokeStyle='rgba(80,160,220,0.7)'; ctx.lineWidth=0.7; ctx.stroke();
-        ctx.restore();
+        ctx.moveTo(cx+pts[0][0]*r, cy+pts[0][1]*r);
+        for(let i=1;i<pts.length;i++) ctx.lineTo(cx+pts[i][0]*r, cy+pts[i][1]*r);
+        ctx.closePath(); ctx.fillStyle=fill; ctx.fill(); ctx.restore();
+      }
+      // Desert/highland overlay
+      function desert(ox,oy,sz,a=0.35){
+        const dg=ctx.createRadialGradient(cx+ox*r,cy+oy*r,0,cx+ox*r,cy+oy*r,sz*r);
+        dg.addColorStop(0,`rgba(195,158,68,${a})`); dg.addColorStop(0.5,`rgba(165,125,45,${a*0.55})`); dg.addColorStop(1,'transparent');
+        ctx.fillStyle=dg; ctx.beginPath(); ctx.arc(cx+ox*r,cy+oy*r,sz*r,0,Math.PI*2); ctx.fill();
+      }
+      // Snow / mountains
+      function snowCap(ox,oy,sz,a=0.5){
+        const mg=ctx.createRadialGradient(cx+ox*r,cy+oy*r,0,cx+ox*r,cy+oy*r,sz*r);
+        mg.addColorStop(0,`rgba(240,248,255,${a})`); mg.addColorStop(0.6,`rgba(220,238,255,${a*0.4})`); mg.addColorStop(1,'transparent');
+        ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(cx+ox*r,cy+oy*r,sz*r,0,Math.PI*2); ctx.fill();
+      }
+
+      // ── EURASIA (upper right half) ────────────────────────────
+      landPoly([
+        [0.02,-0.42],[0.18,-0.48],[0.40,-0.38],[0.55,-0.20],[0.60,-0.02],
+        [0.50, 0.10],[0.38, 0.12],[0.28, 0.08],[0.14, 0.16],[0.04, 0.10],
+        [-0.08, 0.14],[-0.14, 0.04],[-0.06,-0.18],[0.04,-0.30]
+      ],'#2d7a40');
+      desert(0.36,-0.08,0.18,0.4);   // Central Asia / Gobi
+      desert(0.20, 0.02,0.14,0.3);   // Middle East
+      snowCap(0.28,-0.38,0.09);       // Himalayas
+      snowCap(-0.04,-0.42,0.07);      // Alps / N Europe snow
+
+      // ── AFRICA ────────────────────────────────────────────────
+      landPoly([
+        [-0.02, 0.10],[0.14, 0.08],[0.20, 0.22],[0.18, 0.42],
+        [0.08, 0.58],[-0.04, 0.62],[-0.14, 0.50],[-0.16, 0.32],[-0.10, 0.14]
+      ],'#2f8040');
+      desert(0.08, 0.20,0.18,0.45);  // Sahara
+      desert(0.04, 0.46,0.10,0.25);  // Kalahari
+
+      // ── NORTH AMERICA ─────────────────────────────────────────
+      landPoly([
+        [-0.55,-0.42],[-0.36,-0.50],[-0.20,-0.42],[-0.14,-0.28],
+        [-0.22,-0.12],[-0.36,-0.04],[-0.50,-0.10],[-0.60,-0.24]
+      ],'#2d7840');
+      desert(-0.28,-0.18,0.12,0.38); // Great Plains / SW desert
+      snowCap(-0.44,-0.44,0.10);      // Rockies snow
+
+      // ── SOUTH AMERICA ─────────────────────────────────────────
+      landPoly([
+        [-0.30, 0.08],[-0.16, 0.04],[-0.10, 0.20],[-0.14, 0.42],
+        [-0.24, 0.55],[-0.34, 0.48],[-0.38, 0.28],[-0.36, 0.14]
+      ],'#267838');
+      desert(-0.18, 0.14,0.10,0.30); // Amazon basin (lighter green handled by base)
+      snowCap(-0.30, 0.50,0.07);      // Andes tip
+
+      // ── AUSTRALIA ─────────────────────────────────────────────
+      landPoly([
+        [0.28, 0.28],[0.44, 0.24],[0.52, 0.34],[0.48, 0.46],
+        [0.34, 0.50],[0.22, 0.44],[0.20, 0.34]
+      ],'#2e7a38');
+      desert(0.36, 0.36,0.14,0.45);  // Australian outback
+
+      // ── GREENLAND ─────────────────────────────────────────────
+      landPoly([
+        [-0.32,-0.55],[-0.20,-0.58],[-0.10,-0.52],[-0.14,-0.44],[-0.28,-0.44]
+      ],'rgba(220,240,255,0.75)');    // mostly ice
+
+      // ── CLOUD SYSTEM — multi-layer animated ───────────────────
+      // Broad cloud bands (latitude-aligned)
+      const cloudBands = [
+        { y:-0.55, spread:0.12, speed:0.025, alpha:0.18 },
+        { y:-0.20, spread:0.09, speed:0.032, alpha:0.14 },
+        { y: 0.15, spread:0.10, speed:0.028, alpha:0.16 },
+        { y: 0.55, spread:0.11, speed:0.022, alpha:0.15 },
+      ];
+      cloudBands.forEach(cb=>{
+        const bx=cx+Math.cos(t*cb.speed)*r*0.3;
+        const by=cy+cb.y*r;
+        const cg=ctx.createRadialGradient(bx,by,0,bx,by,r*cb.spread*2.5);
+        cg.addColorStop(0,`rgba(255,255,255,${cb.alpha})`);
+        cg.addColorStop(0.5,`rgba(255,255,255,${cb.alpha*0.4})`);
+        cg.addColorStop(1,'transparent');
+        ctx.fillStyle=cg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
       });
-      // Moving cloud wisps over oceans
-      for(let w=0;w<4;w++){
-        const wx=cx+Math.cos(t*0.04+w*1.6)*r*0.55;
-        const wy=cy+Math.sin(t*0.03+w*1.2)*r*0.4;
-        const wg=ctx.createRadialGradient(wx,wy,0,wx,wy,r*0.18);
-        wg.addColorStop(0,'rgba(255,255,255,0.14)');
-        wg.addColorStop(0.5,'rgba(255,255,255,0.06)');
+      // Discrete cloud puffs orbiting the sphere
+      for(let w=0;w<6;w++){
+        const wa=t*0.03+w*(Math.PI*2/6);
+        const wr=r*(0.45+Math.sin(w*1.3)*0.20);
+        const wx=cx+Math.cos(wa)*wr, wy=cy+Math.sin(wa)*wr*0.75;
+        const ws=r*(0.09+Math.sin(w*2.1)*0.03);
+        const wg=ctx.createRadialGradient(wx,wy,0,wx,wy,ws);
+        wg.addColorStop(0,'rgba(255,255,255,0.22)');
+        wg.addColorStop(0.5,'rgba(255,255,255,0.08)');
         wg.addColorStop(1,'transparent');
         ctx.fillStyle=wg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
       }
@@ -553,6 +636,64 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
           ctx.fillStyle='rgba(200,190,170,0.3)'; ctx.fill();
         }
       });
+    }
+
+    // ── MARS SURFACE DETAIL — Valles Marineris + Olympus Mons ──────────────────
+    if(p.marsDetail){
+      // Valles Marineris — great canyon system (horizontal scar)
+      ctx.save(); ctx.globalAlpha=0.55;
+      for(let layer=0;layer<3;layer++){
+        const lw = (3-layer)*0.9;
+        const yo = layer*0.8;
+        ctx.beginPath();
+        ctx.moveTo(cx-r*0.55, cy+r*0.06+yo);
+        ctx.bezierCurveTo(cx-r*0.20,cy+r*0.12+yo, cx+r*0.20,cy+r*0.02+yo, cx+r*0.55,cy+r*0.08+yo);
+        const cg=ctx.createLinearGradient(cx-r*0.55,cy,cx+r*0.55,cy);
+        cg.addColorStop(0,'rgba(60,15,5,0)');
+        cg.addColorStop(0.15,'rgba(60,15,5,0.8)');
+        cg.addColorStop(0.85,'rgba(60,15,5,0.8)');
+        cg.addColorStop(1,'rgba(60,15,5,0)');
+        ctx.strokeStyle=cg; ctx.lineWidth=lw; ctx.stroke();
+      }
+      ctx.restore();
+      // Canyon shadow highlight (bright rim on top edge)
+      ctx.save(); ctx.globalAlpha=0.20;
+      ctx.beginPath();
+      ctx.moveTo(cx-r*0.55, cy+r*0.04);
+      ctx.bezierCurveTo(cx-r*0.20,cy+r*0.09, cx+r*0.20,cy-r*0.01, cx+r*0.55,cy+r*0.05);
+      ctx.strokeStyle='rgba(220,160,110,0.7)'; ctx.lineWidth=0.7; ctx.stroke();
+      ctx.restore();
+
+      // Tharsis Bulge — highland plateau (left side)
+      const thg=ctx.createRadialGradient(cx-r*0.30,cy-r*0.15,0,cx-r*0.30,cy-r*0.15,r*0.38);
+      thg.addColorStop(0,'rgba(200,110,60,0.28)');
+      thg.addColorStop(0.6,'rgba(180,80,40,0.12)');
+      thg.addColorStop(1,'transparent');
+      ctx.fillStyle=thg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+
+      // Olympus Mons — giant shield volcano (left, slightly above center)
+      const omx=cx-r*0.32, omy=cy-r*0.22;
+      const omg=ctx.createRadialGradient(omx,omy,r*0.02, omx,omy,r*0.18);
+      omg.addColorStop(0,'rgba(230,140,80,0.75)');
+      omg.addColorStop(0.35,'rgba(190,100,50,0.45)');
+      omg.addColorStop(0.7,'rgba(160,70,30,0.20)');
+      omg.addColorStop(1,'transparent');
+      ctx.fillStyle=omg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      // Caldera (crater at summit)
+      ctx.beginPath(); ctx.arc(omx,omy,r*0.04,0,Math.PI*2);
+      ctx.fillStyle='rgba(40,10,5,0.55)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(omx,omy,r*0.04,0,Math.PI*2);
+      ctx.strokeStyle='rgba(200,130,70,0.4)'; ctx.lineWidth=0.8; ctx.stroke();
+
+      // Hellas Basin — large impact crater in south (bright from ice)
+      const hbx=cx+r*0.28, hby=cy+r*0.42;
+      const hbg=ctx.createRadialGradient(hbx,hby,0,hbx,hby,r*0.22);
+      hbg.addColorStop(0,'rgba(220,200,180,0.30)');
+      hbg.addColorStop(0.5,'rgba(180,140,100,0.12)');
+      hbg.addColorStop(1,'transparent');
+      ctx.fillStyle=hbg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
+      ctx.beginPath(); ctx.arc(hbx,hby,r*0.22,0,Math.PI*2);
+      ctx.strokeStyle='rgba(180,130,90,0.20)'; ctx.lineWidth=0.8; ctx.stroke();
     }
 
     // ── MARS DUST STORMS (enhanced with swirling streaks) ─────────────────────
@@ -695,31 +836,37 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     ctx.restore();
   }
 
+  function drawSaturnRings(ctx, r, alpha){
+    ctx.save(); ctx.globalAlpha = alpha;
+    // Ring system from inner to outer: C ring, B ring, Cassini gap, A ring, F ring
+    const rings = [
+      { rf:1.12, w:4,  col:'rgba(160,130,60,0.35)' },   // C ring (faint inner)
+      { rf:1.24, w:7,  col:'rgba(210,175,85,0.75)' },   // B ring inner (bright)
+      { rf:1.34, w:9,  col:'rgba(235,200,100,0.85)' },  // B ring outer (brightest)
+      { rf:1.46, w:2,  col:'rgba(20,15,8,0.70)' },      // Cassini division (dark gap)
+      { rf:1.56, w:6,  col:'rgba(200,165,75,0.65)' },   // A ring
+      { rf:1.65, w:3,  col:'rgba(220,185,90,0.50)' },   // A ring outer
+      { rf:1.72, w:1.5,col:'rgba(185,155,65,0.30)' },   // F ring (thin outer)
+    ];
+    rings.forEach(({rf,w,col})=>{
+      ctx.beginPath(); ctx.arc(0,0,r*rf,0,Math.PI*2);
+      ctx.strokeStyle=col; ctx.lineWidth=w; ctx.stroke();
+    });
+    ctx.restore();
+  }
   function drawPlanetBody(ctx, p, cx, cy, r, t){
     // Saturn rings behind planet
     if(p.rings){
-      ctx.save(); ctx.translate(cx,cy); ctx.scale(1,0.26);
-      const ringWidths = [7,5,3.5,2.5,2];
-      const ringRadii = [1.85,1.62,1.42,1.28,1.15];
-      const ringCols = p.ringColors || ['#c8a860','#e8d090','#b89040','#f0e0a8','#907030'];
-      ringRadii.forEach((rf,i)=>{
-        ctx.beginPath(); ctx.arc(0,0,r*rf,0,Math.PI*2);
-        ctx.strokeStyle=ringCols[i]+'99'; ctx.lineWidth=ringWidths[i]; ctx.stroke();
-      });
+      ctx.save(); ctx.translate(cx,cy); ctx.scale(1,0.28);
+      drawSaturnRings(ctx, r, 0.92);
       ctx.restore();
     }
     drawPlanetTexture(ctx,p,cx,cy,r,t);
-    // Saturn rings in front (lower half)
+    // Saturn rings in front (lower half only)
     if(p.rings){
-      ctx.save(); ctx.translate(cx,cy); ctx.scale(1,0.26);
-      ctx.beginPath(); ctx.rect(-r*2,0,r*4,r*2.1); ctx.clip();
-      const ringWidths = [7,5,3.5];
-      const ringRadii = [1.85,1.62,1.42];
-      const ringCols = p.ringColors || ['#c8a860','#e8d090','#b89040'];
-      ringRadii.forEach((rf,i)=>{
-        ctx.beginPath(); ctx.arc(0,0,r*rf,0,Math.PI*2);
-        ctx.strokeStyle=ringCols[i]+'bb'; ctx.lineWidth=ringWidths[i]; ctx.stroke();
-      });
+      ctx.save(); ctx.translate(cx,cy); ctx.scale(1,0.28);
+      ctx.beginPath(); ctx.rect(-r*2, 0, r*4, r*2.2); ctx.clip();
+      drawSaturnRings(ctx, r, 0.98);
       ctx.restore();
     }
   }
@@ -1125,7 +1272,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     const canvas = canvasRef.current;
     if(!canvas) return;
     const dpr = window.devicePixelRatio||1;
-    const VW = canvas.offsetWidth, VH = 160;
+    const VW = canvas.offsetWidth, VH = 290;
     canvas.width = VW*dpr; canvas.height = VH*dpr;
     canvas.style.height = VH+'px';
     const ctx = canvas.getContext('2d');
@@ -1136,8 +1283,10 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     s.prevIdx = planetIdx;
 
     // planet is already the daily-coloured version from outer scope
-    const pX = VW*0.52, pY = VH*0.67;
-    const pR = planet.size;
+    // pR scales with viewport so the orbit + rocket always fits on small screens
+    const scaleFactor = Math.min(1, VW / 360);
+    const pX = VW*0.52, pY = VH*0.42;
+    const pR = Math.round(planet.size * scaleFactor);
 
     if(!s.stars.length){
       s.stars = Array.from({length:80},()=>({
@@ -1407,10 +1556,72 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         s.sonicBooms = s.sonicBooms.filter(b=>b.age<b.maxAge);
 
         if(lt>=1){
-          s.rocketLaunching = false;
-          s.rocketLaunchT   = 0;
-          s.rocketPhase     = 'orbit';
+          s.rocketLaunching  = false;
+          s.rocketLaunchT    = 0;
+          s.rocketPhase      = 'celebration';
+          s.celebrationT     = 0;          // frames elapsed
+          s.celebrationTotal = 300;        // ~5 s at 60 fps
           if(window.__rocketDone) window.__rocketDone();
+        }
+
+      } else if(s.rocketPhase === 'celebration') {
+        // ── 5-SECOND CELEBRATION — fast tight loops around planet ────────────
+        s.celebrationT = (s.celebrationT || 0) + 1;
+        const done = s.celebrationT >= (s.celebrationTotal || 300);
+
+        // Spin faster and closer than normal orbit
+        const celebAngle = (s.celebrationT / 30) * Math.PI * 2;  // ~2 full laps/sec
+        const celebR     = pR + 28;
+        const crx = curX + Math.cos(celebAngle) * celebR;
+        const cry = pY   + Math.sin(celebAngle) * celebR * 0.6;  // slightly elliptical
+        const crAngle = celebAngle + Math.PI / 2;
+
+        // Bright celebration trail
+        const trailSteps = 30;
+        for(let ti = 0; ti < trailSteps; ti++){
+          const tf  = ti / trailSteps;
+          const ta  = celebAngle - (Math.PI * 0.8) * (1 - tf);
+          const tx2 = curX + Math.cos(ta) * celebR;
+          const ty2 = pY   + Math.sin(ta) * celebR * 0.6;
+          const hue = 40 + tf * 280;   // gold → violet sparkle
+          ctx.beginPath(); ctx.arc(tx2, ty2, 3.5 * tf, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${hue},100%,72%,${tf * tf * 0.85})`;
+          ctx.fill();
+        }
+
+        // Sparks burst outward every few frames
+        if(s.celebrationT % 5 === 0){
+          for(let sp = 0; sp < 6; sp++){
+            const sa = (sp / 6) * Math.PI * 2 + s.celebrationT * 0.2;
+            s.particles.push({
+              x: crx, y: cry,
+              vx: Math.cos(sa) * (1.5 + Math.random() * 2),
+              vy: Math.sin(sa) * (1.5 + Math.random() * 2),
+              life: 0.8 + Math.random() * 0.4,
+              type: Math.floor(Math.random() * 3)
+            });
+          }
+        }
+
+        ctx.save(); ctx.translate(crx, cry); ctx.rotate(crAngle);
+        drawRocketH(ctx, 0, 0, 1.0, true, s.t);
+        ctx.restore();
+
+        // Countdown ring around planet (shrinks as celebration ends)
+        const ringPct = 1 - s.celebrationT / (s.celebrationTotal || 300);
+        if(ringPct > 0){
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(curX, pY, pR + 14, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * ringPct));
+          ctx.strokeStyle = `rgba(255,220,80,${0.5 * ringPct + 0.2})`;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if(done){
+          s.rocketPhase = 'orbit';
+          s.celebrationT = 0;
         }
 
       } else {
@@ -1418,7 +1629,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         const ist = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
         const mins     = ist.getMinutes() + ist.getSeconds() / 60;
         const minAngle = (mins / 60) * Math.PI * 2 - Math.PI / 2; // 0 min = top, CW
-        const orR      = pR + 42; // circular orbit radius
+        const orR      = pR + Math.round(50 * scaleFactor); // circular orbit radius — generous gap
 
         // rocket position on the circle
         const orX = curX + Math.cos(minAngle) * orR;
@@ -1535,12 +1746,12 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
 
     rafRef.current = requestAnimationFrame(draw);
     return ()=>cancelAnimationFrame(rafRef.current);
-  },[todayLogged,streak.count,dark,dayOfYear]);
+  },[todayLogged,streak.count,dark,dayOfYear,accentPlanetIdx]);
 
   return (
     <div style={{ borderRadius:20, overflow:"hidden", background:"#020209", border:"1px solid #1e1b4b" }}>
       <div style={{ position:"relative" }}>
-        <canvas ref={canvasRef} style={{ width:"100%", height:160, display:"block" }}/>
+        <canvas ref={canvasRef} style={{ width:"100%", height:290, display:"block" }}/>
         <div style={{ position:"absolute",top:10,left:12,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(6px)",borderRadius:8,padding:"3px 9px",border:"1px solid rgba(255,255,255,0.1)" }}>
           <span style={{ fontSize:11,fontWeight:700,color:streakRank.color,letterSpacing:"0.04em" }}>{streakRank.title}</span>
         </div>
@@ -1606,6 +1817,49 @@ function getPitStopData(shieldState) {
   return { earned, usedThisMonth, available, currentMonth };
 }
 
+// ── EMI DUE DATE REMINDERS ────────────────────────────────────────────────
+// Returns reminder objects (same shape as recurring reminders) for loans
+// whose next due date is within 3 days (or overdue).
+function getEmiNextDueDate(loan, today) {
+  // Compute the next unpaid due date based on dueDay of month
+  const ist = nowIST(); ist.setHours(0,0,0,0);
+  const dd = Math.max(1, Math.min(28, Number(loan.dueDay) || 5));
+  // Try current month's due date; if already past, advance to next month
+  const d = new Date(ist.getFullYear(), ist.getMonth(), dd);
+  const monthKey = d.toISOString().slice(0, 7);
+  const paid = (loan.paidMonths || []).includes(monthKey);
+  if (paid) {
+    // This month is paid — next due is next month
+    d.setMonth(d.getMonth() + 1);
+  } else if (d < ist) {
+    // Due day already passed this month and not paid — it's overdue (keep as is)
+  }
+  return d.toISOString().split("T")[0];
+}
+function getEmiReminders(emis, today, dismissedMap) {
+  return emis
+    .map(loan => {
+      const remaining = loan.tenure - (loan.paidMonths || []).length;
+      if (remaining <= 0) return null;                         // fully paid off
+      const dueDateStr_raw = getEmiNextDueDate(loan, today);
+      const days = daysFromToday(dueDateStr_raw);
+      if (days > 3) return null;                               // not due soon
+      if (dismissedMap && dismissedMap[`emi-${loan.id}`] === today) return null;
+      return {
+        id: `emi-${loan.id}`,
+        name: `${loan.name} EMI`,
+        amount: loan.emi,
+        daysUntil: days,
+        dueDateStr: formatDate(dueDateStr_raw),
+        category: "Bills",
+        isEmi: true,
+        loanId: loan.id,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.daysUntil - b.daysUntil);
+}
+
 function groupByDate(expenses) {
   const grouped = {}, dailyTotal = {};
   [...expenses]
@@ -1668,14 +1922,17 @@ function buildTrendData(expenses) {
 // ════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ════════════════════════════════════════════════════════════════════════════
+// Solar-system accents — ordered from Sun outward.
+// planetIdx maps to PLANETS array inside PlanetHopperGame.
 const ACCENTS = [
-  { id: "indigo",  label: "Indigo",  light: "#4f46e5", dark: "#818cf8" },
-  { id: "violet",  label: "Violet",  light: "#7c3aed", dark: "#a78bfa" },
-  { id: "rose",    label: "Rose",    light: "#e11d48", dark: "#fb7185" },
-  { id: "emerald", label: "Emerald", light: "#059669", dark: "#34d399" },
-  { id: "amber",   label: "Amber",   light: "#d97706", dark: "#fbbf24" },
-  { id: "sky",     label: "Sky",     light: "#0284c7", dark: "#38bdf8" },
-  { id: "slate",   label: "Slate",   light: "#475569", dark: "#94a3b8" },
+  { id:"mercury", label:"Mercury", light:"#9ca3af", dark:"#d1d5db",  planetIdx:0, dot:"#b8b8c8" },
+  { id:"venus",   label:"Venus",   light:"#d97706", dark:"#fbbf24",  planetIdx:1, dot:"#f0c84a" },
+  { id:"earth",   label:"Earth",   light:"#0369a1", dark:"#38bdf8",  planetIdx:2, dot:"#2a8fd4" },
+  { id:"mars",    label:"Mars",    light:"#b91c1c", dark:"#f87171",  planetIdx:3, dot:"#d94f30" },
+  { id:"jupiter", label:"Jupiter", light:"#b45309", dark:"#fcd34d",  planetIdx:4, dot:"#d4905a" },
+  { id:"saturn",  label:"Saturn",  light:"#a16207", dark:"#fde68a",  planetIdx:5, dot:"#d8b870" },
+  { id:"neptune", label:"Neptune", light:"#1d4ed8", dark:"#818cf8",  planetIdx:6, dot:"#3a6ae8" },
+  { id:"void",    label:"Void",    light:"#7c3aed", dark:"#c084fc",  planetIdx:7, dot:"#9a40e0" },
 ];
 const CAT_PALETTE = [
   { bg:"#fee2e2",text:"#dc2626",darkBg:"#450a0a",darkText:"#fca5a5" },
@@ -2642,9 +2899,12 @@ function ReceiptScanner({ categories, onAdd, dark, cardBg, border, textMute, tex
 // ════════════════════════════════════════════════════════════════════════════
 // EMI TAB
 // ════════════════════════════════════════════════════════════════════════════
-function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inputBorder, setExpenses, setPot, showToast, today, logDay, accent }) {
+function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inputBorder, setExpenses, setPot, showToast, today, logDay, accent, emis: emisProp, setEmis: setEmisProp }) {
   const safeAccent = accent || "#4f46e5";
-  const [emis, setEmis] = useState(() => storageGet(KEYS.EMI, []));
+  const [emisLocal, setEmisLocal] = useState(() => storageGet(KEYS.EMI, []));
+  // Use externally-provided state if available, otherwise fall back to local
+  const emis    = emisProp    !== undefined ? emisProp    : emisLocal;
+  const setEmis = setEmisProp !== undefined ? setEmisProp : setEmisLocal;
   const [showForm, setShowForm] = useState(false);
   const [loanName, setLoanName] = useState("");
   const [principal, setPrincipal] = useState("");
@@ -2653,6 +2913,7 @@ function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inpu
   const [startDate, setStartDate] = useState(today);
   const [editId, setEditId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const [dueDay, setDueDay] = useState("5"); // day-of-month EMI is due
 
   useEffect(() => { storageSetDebounced(KEYS.EMI, emis); }, [emis]);
 
@@ -2661,13 +2922,14 @@ function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inpu
   const btnSecondary = { background:dark?"#374151":"#f3f4f6",color:dark?"#d1d5db":"#374151",border:"none",borderRadius:12,padding:"8px 12px",fontSize:13,fontWeight:500,cursor:"pointer" };
   const btnDanger = { background:"none",border:"none",cursor:"pointer",color:textMute,padding:4 };
 
-  function resetForm() { setLoanName(""); setPrincipal(""); setRate(""); setTenure(""); setStartDate(today); setEditId(null); setShowForm(false); }
+  function resetForm() { setLoanName(""); setPrincipal(""); setRate(""); setTenure(""); setStartDate(today); setDueDay("5"); setEditId(null); setShowForm(false); }
 
   function saveEmi() {
     const p = Number(principal), r = Number(rate), t = Math.min(Number(tenure), MAX_TENURE);
     if (!loanName.trim() || p <= 0 || r < 0 || t <= 0) return;
     const emi = Math.round(calcEMI(p, r, t));
-    const entry = { id:editId||Date.now(), name:loanName.trim(), principal:p, rate:r, tenure:t, emi, startDate, paidMonths:editId?(emis.find(e=>e.id===editId)?.paidMonths||[]):[] };
+    const dd = Math.max(1,Math.min(28,Number(dueDay)||5));
+    const entry = { id:editId||Date.now(), name:loanName.trim(), principal:p, rate:r, tenure:t, emi, startDate, dueDay:dd, paidMonths:editId?(emis.find(e=>e.id===editId)?.paidMonths||[]):[] };
     if (editId) { setEmis(prev => prev.map(e => e.id===editId?entry:e)); showToast("EMI updated!"); }
     else { setEmis(prev => [...prev, entry]); showToast("EMI loan added!"); }
     resetForm();
@@ -2682,7 +2944,7 @@ function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inpu
     logDay(today);
     showToast(`₹${loan.emi.toLocaleString()} EMI logged!`);
   }
-  function editEmi(loan) { setEditId(loan.id); setLoanName(loan.name); setPrincipal(loan.principal); setRate(loan.rate); setTenure(loan.tenure); setStartDate(loan.startDate); setShowForm(true); }
+  function editEmi(loan) { setEditId(loan.id); setLoanName(loan.name); setPrincipal(loan.principal); setRate(loan.rate); setTenure(loan.tenure); setStartDate(loan.startDate); setDueDay(String(loan.dueDay||5)); setShowForm(true); }
 
   const totalEmi = emis.reduce((s,e) => s+e.emi, 0);
 
@@ -2709,6 +2971,13 @@ function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inpu
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
               <div><p style={{ margin:"0 0 4px",fontSize:11,color:textMute }}>Tenure (months, max 600)</p><input type="number" inputMode="numeric" value={tenure} onChange={e => setTenure(e.target.value)} placeholder="60" max="600" style={inputStyle}/></div>
               <div><p style={{ margin:"0 0 4px",fontSize:11,color:textMute }}>Start date</p><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inputStyle}/></div>
+            </div>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
+              <div>
+                <p style={{ margin:"0 0 4px",fontSize:11,color:textMute }}>Due day of month</p>
+                <input type="number" inputMode="numeric" value={dueDay} onChange={e => setDueDay(e.target.value)} placeholder="5" min="1" max="28" style={inputStyle}/>
+                <p style={{ margin:"3px 0 0",fontSize:10,color:textMute }}>Reminder 3 days before</p>
+              </div>
             </div>
             {principal>0 && rate>=0 && tenure>0 && (
               <div style={{ background:dark?"#1f2937":"#f8fafc",borderRadius:10,padding:"10px 12px",marginBottom:8 }}>
@@ -2919,7 +3188,7 @@ export default function App() {
 
   // ── Theme / accent ────────────────────────────────────────────────────────
   const [dark, setDark] = useState(() => storageGet(KEYS.THEME, "light") === "dark");
-  const [accentId, setAccentId] = useState(() => storageGet(KEYS.ACCENT, "indigo"));
+  const [accentId, setAccentId] = useState(() => storageGet(KEYS.ACCENT, "earth"));
   const accentObj = ACCENTS.find(a => a.id===accentId) || ACCENTS[0];
   const accent = dark ? accentObj.dark : accentObj.light;
 
@@ -2992,6 +3261,7 @@ export default function App() {
   // ── UI state ──────────────────────────────────────────────────────────────
   const [toast, setToast] = useState(null);
   const [tab, setTab] = useState("home");
+  const [billsSubTab, setBillsSubTab] = useState("recurring"); // "recurring" | "loans"
   const [drillCat, setDrillCat] = useState(null);
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -2999,6 +3269,9 @@ export default function App() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [rocketLaunchKey, setRocketLaunchKey] = useState(0); // increment to trigger launch
+  // EMI state (also owned by EmiTab — we mirror here for notifications)
+  const [emis, setEmis] = useState(() => storageGet(KEYS.EMI, []));
+  useEffect(() => { storageSetDebounced(KEYS.EMI, emis); }, [emis]);
 
   // ── Recurring form ────────────────────────────────────────────────────────
   const [rName, setRName] = useState("");
@@ -3162,8 +3435,8 @@ export default function App() {
 
   // ── Reminders ─────────────────────────────────────────────────────────────
   const istNow = useMemo(() => nowIST(), [today]);
-  const reminders = useMemo(() =>
-    recurring
+  const reminders = useMemo(() => {
+    const recurringReminders = recurring
       .filter(r => {
         const days = daysFromToday(r.nextDue);
         if (days > 3) return false;
@@ -3174,9 +3447,11 @@ export default function App() {
         });
         return !paidTM;
       })
-      .map(r => ({ id:r.id, name:r.name, amount:r.amount, daysUntil:daysFromToday(r.nextDue), dueDateStr:formatDate(r.nextDue), category:r.category }))
-      .sort((a,b) => a.daysUntil-b.daysUntil),
-  [recurring, dismissedMap, today, istNow]);
+      .map(r => ({ id:r.id, name:r.name, amount:r.amount, daysUntil:daysFromToday(r.nextDue), dueDateStr:formatDate(r.nextDue), category:r.category }));
+    const emiReminders = getEmiReminders(emis, today, dismissedMap);
+    return [...recurringReminders, ...emiReminders].sort((a, b) => a.daysUntil - b.daysUntil);
+  },
+  [recurring, emis, dismissedMap, today, istNow]);
 
   function dismissReminder(id) { setDismissedMap(p => ({ ...p, [id]: today })); }
 
@@ -3203,8 +3478,24 @@ export default function App() {
   useEffect(() => { recurringRef.current = recurring; }, [recurring]);
   useEffect(() => { dismissedMapRef.current = dismissedMap; }, [dismissedMap]);
   useEffect(() => {
-    if (notifEnabled) scheduleReminderNotifs(recurringRef.current, dismissedMapRef.current);
-  }, [notifEnabled]);
+    if (notifEnabled) {
+      scheduleReminderNotifs(recurringRef.current, dismissedMapRef.current);
+      // Also fire notifications for upcoming EMIs
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      const today2 = getTodayIST();
+      getEmiReminders(emis, today2, dismissedMapRef.current).forEach(r => {
+        const days = r.daysUntil;
+        if (days > 3 || days < 0) return;
+        try {
+          new Notification(`mySpendr: ${r.name}`, {
+            body: `₹${r.amount.toLocaleString()} ${days === 0 ? "due today" : `due in ${days} day${days===1?"":"s"}`}`,
+            icon: "/favicon.ico",
+            tag: `myspendr-emi-${r.id}`,
+          });
+        } catch {}
+      });
+    }
+  }, [notifEnabled, emis]);
 
   async function toggleNotif() {
     if (!notifEnabled) {
@@ -3296,10 +3587,9 @@ export default function App() {
       showToast(`Added · deducted from ${bankName}`);
     }
     logDay(date);
-    if (isFirstSpendToday) {
-      setTab("home");
-      setTimeout(() => setRocketLaunchKey(k => k + 1), 120);
-    }
+    // Rocket fires on every expense save — navigate home so the animation is visible
+    setTab("home");
+    setTimeout(() => setRocketLaunchKey(k => k + 1), 120);
     resetExpenseForm();
   }
 
@@ -3348,7 +3638,22 @@ export default function App() {
     setDismissedMap(prev => { const n={...prev}; delete n[r.id]; return n; });
     logDay(pd); showToast(`${r.name} paid from ${source}!`);
   }
-  function payFromReminder(item, source) { const r = recurring.find(x => x.id===item.id); if (r) markPaid(r, source); }
+  function payFromReminder(item, source) {
+    if (item.isEmi) {
+      // Pay the EMI loan directly
+      const loan = emis.find(e => e.id === item.loanId);
+      if (!loan) return;
+      const monthKey = today.slice(0,7);
+      if ((loan.paidMonths||[]).includes(monthKey)) { showToast("Already paid this month!"); return; }
+      setEmis(prev => prev.map(e => e.id!==loan.id?e:{ ...e, paidMonths:[...(e.paidMonths||[]),monthKey] }));
+      setExpenses(prev => [...prev, { id:Date.now(), amount:loan.emi, category:"Bills", note:`${loan.name} EMI`, date:today, paySource:source||"bank" }]);
+      setPot(p => deductPot(p, source||"bank", loan.emi));
+      if (source !== "cash") setBanks(b => deductBank(b, source||"bank", loan.emi));
+      logDay(today); showToast(`₹${loan.emi.toLocaleString()} EMI paid!`);
+      return;
+    }
+    const r = recurring.find(x => x.id===item.id); if (r) markPaid(r, source);
+  }
 
   // ── Budget ────────────────────────────────────────────────────────────────
   function saveBudget() {
@@ -3563,6 +3868,7 @@ export default function App() {
                 haptic={haptic}
                 launchRocket={rocketLaunchKey}
                 onLaunchDone={() => {}}
+                accentPlanetIdx={accentObj.planetIdx ?? 2}
               />
 
 
@@ -3776,83 +4082,6 @@ export default function App() {
                 : <ExpenseDateList grouped={grouped} dailyTotal={dailyTotal} today={today} dark={dark} cardBg={cardBg} border={border} subbg={subbg} textMute={textMute} getCatStyle={getCatStyle}
                     editExpense={item => { editExpense(item); setTab("scanvoice"); }}
                     deleteExpense={deleteExpense} setDrillCat={setDrillCat}/>
-              }
-            </>
-          )}
-
-          {/* ════════════════════════════════════════════════════════════════
-              RECURRING TAB
-          ════════════════════════════════════════════════════════════════ */}
-          {tab==="recurring" && (
-            <>
-              {recurring.length>0 && !showRForm && (
-                <div style={{ background:dark?"linear-gradient(135deg,#172554,#1e1b4b)":"linear-gradient(135deg,#eff6ff,#eef2ff)",border:dark?"1px solid #1e3a8a":"1px solid #bfdbfe",borderRadius:16,padding:"14px 16px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                  <div>
-                    <p style={{ margin:0,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",color:dark?"#93c5fd":"#2563eb" }}>Monthly commitment</p>
-                    <p style={{ margin:"3px 0 0",fontSize:24,fontWeight:800,fontFamily:"'DM Mono',monospace",color:dark?"#93c5fd":"#1d4ed8",letterSpacing:"-1px" }}>₹{recurringMonthly.toLocaleString()}</p>
-                  </div>
-                  <div style={{ textAlign:"right" }}>
-                    <p style={{ margin:0,fontSize:11,color:dark?"#93c5fd":"#3b82f6" }}>{recurring.length} active</p>
-                    {reminders.length>0 && <p style={{ margin:"3px 0 0",fontSize:11,fontWeight:700,color:"#f97316" }}>{reminders.length} due soon</p>}
-                  </div>
-                </div>
-              )}
-              {showRForm
-                ? <div style={cardStyle}>
-                    <h2 style={{ margin:"0 0 12px",fontSize:14,fontWeight:600 }}>{rEditId?"Edit":"New Recurring Payment"}</h2>
-                    <input value={rName} onChange={e => setRName(e.target.value)} placeholder="Name (e.g. Rent, Netflix)" style={{ ...inputStyle,marginBottom:8 }}/>
-                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
-                      <input type="number" inputMode="decimal" value={rAmount} onChange={e => setRAmount(e.target.value)} placeholder="Amount ₹" style={inputStyle}/>
-                      <select value={rCat} onChange={e => setRCat(e.target.value)} style={inputStyle}>{categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}</select>
-                    </div>
-                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
-                      <select value={rFreq} onChange={e => setRFreq(e.target.value)} style={inputStyle}>{RECUR_FREQ.map(f => <option key={f}>{f}</option>)}</select>
-                      <div>
-                        <p style={{ margin:"0 0 4px",fontSize:11,color:textMute,fontWeight:500 }}>Due date</p>
-                        <input type="date" value={rDueDate} onChange={e => setRDueDate(e.target.value)} style={inputStyle}/>
-                      </div>
-                    </div>
-                    <p style={{ margin:"0 0 10px",fontSize:11,color:textMute }}>Reminders appear 3 days before due and repeat daily until paid.</p>
-                    <div style={{ display:"flex",gap:8 }}><button onClick={saveRecurring} style={{ ...btnPrimary,flex:1 }}>{rEditId?"Update":"Add"}</button><button onClick={resetRForm} style={btnSecondary}>Cancel</button></div>
-                  </div>
-                : <button onClick={() => setShowRForm(true)} style={{ ...btnPrimary,width:"100%",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}><PlusIcon/>Add Recurring Payment</button>
-              }
-              {recurring.length===0
-                ? <div style={{ ...cardStyle,textAlign:"center",padding:40 }}><p style={{ color:textMute,margin:0 }}>No recurring payments yet.</p><p style={{ color:textMute,fontSize:12,margin:"4px 0 0" }}>Add rent, subscriptions, bills here.</p></div>
-                : <div style={{ background:cardBg,border:`1px solid ${border}`,borderRadius:16,overflow:"hidden" }}>
-                    {recurring.map((r,i) => {
-                      const days = daysFromToday(r.nextDue);
-                      const isOverdue=days<0, isDueToday=days===0, dueSoon=days<=3&&days>=0;
-                      const paidTM = (r.paid||[]).some(d => { const pd=new Date(d+"T00:00:00"); return pd.getMonth()===istNow.getMonth()&&pd.getFullYear()===istNow.getFullYear(); });
-                      return (
-                        <div key={r.id} style={{ padding:"14px 16px",borderBottom:i<recurring.length-1?`1px solid ${border}`:"none" }}>
-                          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
-                            <div style={{ flex:1 }}>
-                              <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap" }}>
-                                <span style={{ fontSize:15,fontWeight:700 }}>{r.name}</span>
-                                <span style={{ ...getCatStyle(r.category),padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:600 }}>{r.category}</span>
-                                {isOverdue&&!paidTM&&<span style={{ background:"#fef2f2",color:"#dc2626",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:700,border:"1px solid #fca5a5" }}>{Math.abs(days)}d overdue</span>}
-                                {isDueToday&&!paidTM&&<span style={{ background:"#fff7ed",color:"#ea580c",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:700 }}>Due today</span>}
-                                {dueSoon&&!isDueToday&&!paidTM&&<span style={{ background:"#fffbeb",color:"#ca8a04",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600 }}>Due in {days}d</span>}
-                                {paidTM&&<span style={{ background:dark?"#052e16":"#d1fae5",color:dark?"#34d399":"#065f46",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3 }}><CheckIcon/>Paid</span>}
-                              </div>
-                              <div style={{ display:"flex",gap:16,fontSize:12,color:textMute }}><span>₹{r.amount.toLocaleString()} / {r.frequency}</span><span>Next: {formatDate(r.nextDue)}</span></div>
-                            </div>
-                            <div style={{ display:"flex",gap:6,alignItems:"center",marginLeft:8,flexWrap:"wrap",justifyContent:"flex-end" }}>
-                              {!paidTM && (
-                                <div style={{ display:"flex",gap:3,background:subbg,borderRadius:10,padding:3,border:`1px solid ${border}` }}>
-                                  <button onClick={() => { haptic([10,30,10]); markPaid(r,"bank"); }} style={{ display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#2563eb",color:"#fff" }}><BankIcon/>Bank</button>
-                                  <button onClick={() => { haptic([10,30,10]); markPaid(r,"cash"); }} style={{ display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#16a34a",color:"#fff" }}><CashIcon/>Cash</button>
-                                </div>
-                              )}
-                              <button onClick={() => editRecurring(r)} style={btnDanger}><EditIcon/></button>
-                              <button onClick={() => deleteRecurring(r.id)} style={btnDanger}><TrashIcon/></button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
               }
             </>
           )}
@@ -4218,13 +4447,109 @@ export default function App() {
           )}
 
           {/* ════════════════════════════════════════════════════════════════
-              EMI TAB
+              BILLS & LOANS TAB
           ════════════════════════════════════════════════════════════════ */}
-          {tab==="emi" && (
+          {tab==="bills" && (
             <>
-              <p style={{ margin:"0 0 14px",fontSize:18,fontWeight:700,color:textMain }}>Loans</p>
-              <EmiTab dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain} subbg={subbg} inputBg={inputBg} inputBorder={inputBorder}
-                setExpenses={setExpenses} setPot={setPot} showToast={showToast} today={today} logDay={logDay} accent={accent}/>
+              {/* Sub-tab switcher */}
+              <div style={{ display:"flex",background:subbg,borderRadius:14,padding:4,marginBottom:16,border:`1px solid ${border}` }}>
+                {[["recurring","🔁 Bills & Recurring"],["loans","🏦 Loans & EMIs"]].map(([id,label]) => (
+                  <button key={id} onClick={() => setBillsSubTab(id)}
+                    style={{ flex:1,padding:"8px 6px",borderRadius:10,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
+                      background:billsSubTab===id ? (dark?"#1e293b":"#fff") : "transparent",
+                      color:billsSubTab===id ? (id==="recurring"?accent:"#0ea5e9") : textMute,
+                      boxShadow:billsSubTab===id?"0 1px 6px rgba(0,0,0,0.10)":"none",
+                      transition:"all 0.15s",whiteSpace:"nowrap" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── BILLS & RECURRING sub-tab ── */}
+              {billsSubTab==="recurring" && tab==="bills" && (
+                <>
+                  {recurring.length>0 && !showRForm && (
+                    <div style={{ background:dark?"linear-gradient(135deg,#172554,#1e1b4b)":"linear-gradient(135deg,#eff6ff,#eef2ff)",border:dark?"1px solid #1e3a8a":"1px solid #bfdbfe",borderRadius:16,padding:"14px 16px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                      <div>
+                        <p style={{ margin:0,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",color:dark?"#93c5fd":"#2563eb" }}>Monthly commitment</p>
+                        <p style={{ margin:"3px 0 0",fontSize:24,fontWeight:800,fontFamily:"'DM Mono',monospace",color:dark?"#93c5fd":"#1d4ed8",letterSpacing:"-1px" }}>₹{recurringMonthly.toLocaleString()}</p>
+                      </div>
+                      <div style={{ textAlign:"right" }}>
+                        <p style={{ margin:0,fontSize:11,color:dark?"#93c5fd":"#3b82f6" }}>{recurring.length} active</p>
+                        {reminders.length>0 && <p style={{ margin:"3px 0 0",fontSize:11,fontWeight:700,color:"#f97316" }}>{reminders.length} due soon</p>}
+                      </div>
+                    </div>
+                  )}
+                  {showRForm
+                    ? <div style={cardStyle}>
+                        <h2 style={{ margin:"0 0 12px",fontSize:14,fontWeight:600 }}>{rEditId?"Edit":"New Bill / Recurring Payment"}</h2>
+                        <input value={rName} onChange={e => setRName(e.target.value)} placeholder="Name (e.g. Rent, Netflix, EMI)" style={{ ...inputStyle,marginBottom:8 }}/>
+                        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
+                          <input type="number" inputMode="decimal" value={rAmount} onChange={e => setRAmount(e.target.value)} placeholder="Amount ₹" style={inputStyle}/>
+                          <select value={rCat} onChange={e => setRCat(e.target.value)} style={inputStyle}>{categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}</select>
+                        </div>
+                        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
+                          <select value={rFreq} onChange={e => setRFreq(e.target.value)} style={inputStyle}>{RECUR_FREQ.map(f => <option key={f}>{f}</option>)}</select>
+                          <div>
+                            <p style={{ margin:"0 0 4px",fontSize:11,color:textMute,fontWeight:500 }}>Due date</p>
+                            <input type="date" value={rDueDate} onChange={e => setRDueDate(e.target.value)} style={inputStyle}/>
+                          </div>
+                        </div>
+                        <p style={{ margin:"0 0 10px",fontSize:11,color:textMute }}>Reminders appear 3 days before due and repeat daily until paid.</p>
+                        <div style={{ display:"flex",gap:8 }}><button onClick={saveRecurring} style={{ ...btnPrimary,flex:1 }}>{rEditId?"Update":"Add"}</button><button onClick={resetRForm} style={btnSecondary}>Cancel</button></div>
+                      </div>
+                    : <button onClick={() => setShowRForm(true)} style={{ ...btnPrimary,width:"100%",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}><PlusIcon/>Add Bill / Recurring</button>
+                  }
+                  {recurring.length===0
+                    ? <div style={{ ...cardStyle,textAlign:"center",padding:40 }}>
+                        <p style={{ fontSize:28,marginBottom:8 }}>📋</p>
+                        <p style={{ color:textMute,margin:0,fontWeight:600 }}>No bills yet</p>
+                        <p style={{ color:textMute,fontSize:12,margin:"4px 0 0" }}>Add rent, subscriptions, utility bills here.</p>
+                      </div>
+                    : <div style={{ background:cardBg,border:`1px solid ${border}`,borderRadius:16,overflow:"hidden" }}>
+                        {recurring.map((r,i) => {
+                          const days = daysFromToday(r.nextDue);
+                          const isOverdue=days<0, isDueToday=days===0, dueSoon=days<=3&&days>=0;
+                          const paidTM = (r.paid||[]).some(d => { const pd=new Date(d+"T00:00:00"); return pd.getMonth()===istNow.getMonth()&&pd.getFullYear()===istNow.getFullYear(); });
+                          return (
+                            <div key={r.id} style={{ padding:"14px 16px",borderBottom:i<recurring.length-1?`1px solid ${border}`:"none" }}>
+                              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
+                                <div style={{ flex:1 }}>
+                                  <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap" }}>
+                                    <span style={{ fontSize:15,fontWeight:700 }}>{r.name}</span>
+                                    <span style={{ ...getCatStyle(r.category),padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:600 }}>{r.category}</span>
+                                    {isOverdue&&!paidTM&&<span style={{ background:"#fef2f2",color:"#dc2626",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:700,border:"1px solid #fca5a5" }}>{Math.abs(days)}d overdue</span>}
+                                    {isDueToday&&!paidTM&&<span style={{ background:"#fff7ed",color:"#ea580c",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:700 }}>Due today</span>}
+                                    {dueSoon&&!isDueToday&&!paidTM&&<span style={{ background:"#fffbeb",color:"#ca8a04",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600 }}>Due in {days}d</span>}
+                                    {paidTM&&<span style={{ background:dark?"#052e16":"#d1fae5",color:dark?"#34d399":"#065f46",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3 }}><CheckIcon/>Paid</span>}
+                                  </div>
+                                  <div style={{ display:"flex",gap:16,fontSize:12,color:textMute }}><span>₹{r.amount.toLocaleString()} / {r.frequency}</span><span>Next: {formatDate(r.nextDue)}</span></div>
+                                </div>
+                                <div style={{ display:"flex",gap:6,alignItems:"center",marginLeft:8,flexWrap:"wrap",justifyContent:"flex-end" }}>
+                                  {!paidTM && (
+                                    <div style={{ display:"flex",gap:3,background:subbg,borderRadius:10,padding:3,border:`1px solid ${border}` }}>
+                                      <button onClick={() => { haptic([10,30,10]); markPaid(r,"bank"); }} style={{ display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#2563eb",color:"#fff" }}><BankIcon/>Bank</button>
+                                      <button onClick={() => { haptic([10,30,10]); markPaid(r,"cash"); }} style={{ display:"flex",alignItems:"center",gap:3,padding:"5px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#16a34a",color:"#fff" }}><CashIcon/>Cash</button>
+                                    </div>
+                                  )}
+                                  <button onClick={() => editRecurring(r)} style={btnDanger}><EditIcon/></button>
+                                  <button onClick={() => deleteRecurring(r.id)} style={btnDanger}><TrashIcon/></button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                  }
+                </>
+              )}
+
+              {/* ── LOANS & EMIs sub-tab ── */}
+              {billsSubTab==="loans" && tab==="bills" && (
+                <EmiTab dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain} subbg={subbg} inputBg={inputBg} inputBorder={inputBorder}
+                  setExpenses={setExpenses} setPot={setPot} showToast={showToast} today={today} logDay={logDay} accent={accent}
+                  emis={emis} setEmis={setEmis}/>
+              )}
             </>
           )}
 
@@ -4325,18 +4650,42 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Accent colours */}
+                {/* Planet accent theme */}
                 <div style={{ padding:"12px 0",borderBottom:`1px solid ${border}` }}>
-                  <p style={{ margin:"0 0 10px",fontSize:14,color:textMain }}>Accent colour</p>
-                  <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-                    {ACCENTS.map(a => (
-                      <button key={a.id} onClick={() => { haptic(6); setAccentId(a.id); }}
-                        style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",padding:4 }}>
-                        <div style={{ width:28,height:28,borderRadius:"50%",background:dark?a.dark:a.light,border:accentId===a.id?`3px solid ${textMain}`:"3px solid transparent",boxSizing:"border-box",transition:"border 0.15s" }}/>
-                        <span style={{ fontSize:9,color:accentId===a.id?textMain:textMute,fontWeight:accentId===a.id?700:400 }}>{a.label}</span>
-                      </button>
-                    ))}
+                  <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:12 }}>
+                    <span style={{ fontSize:14,fontWeight:600,color:textMain }}>Theme Planet</span>
+                    <span style={{ fontSize:10,color:textMute,marginLeft:"auto" }}>Solar order ☀️ → 🌌</span>
                   </div>
+                  <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8 }}>
+                    {ACCENTS.map((a,i) => {
+                      const isActive = accentId===a.id;
+                      const PLANET_EMOJIS = ["🪨","🌕","🌍","🔴","🟠","🪐","🔵","🌑"];
+                      return (
+                        <button key={a.id} onClick={() => { haptic(6); setAccentId(a.id); }}
+                          style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"10px 6px",borderRadius:12,border:isActive?`2px solid ${dark?a.dark:a.light}`:`1px solid ${border}`,
+                            background:isActive?(dark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.03)"):"none",cursor:"pointer",transition:"all 0.15s",position:"relative" }}>
+                          {/* Planet swatch — circular with planet colour */}
+                          <div style={{ width:32,height:32,borderRadius:"50%",background:a.dot,
+                            boxShadow:isActive?`0 0 12px ${a.dot}99, 0 0 4px ${a.dot}`:"none",
+                            transition:"box-shadow 0.2s",
+                            border:isActive?`2px solid ${dark?a.dark:a.light}`:"2px solid transparent" }}/>
+                          <span style={{ fontSize:11,fontWeight:isActive?700:500,color:isActive?(dark?a.dark:a.light):textMute,lineHeight:1 }}>{a.label}</span>
+                          {isActive && <div style={{ position:"absolute",top:5,right:5,width:6,height:6,borderRadius:"50%",background:dark?a.dark:a.light }}/>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Locked hint */}
+                  {(() => {
+                    const streakMaxIdx = Math.min(Math.floor(streak.count/14), ACCENTS.length-1);
+                    const selectedIdx = ACCENTS.findIndex(a=>a.id===accentId);
+                    if(selectedIdx > streakMaxIdx) return (
+                      <p style={{ margin:"8px 0 0",fontSize:11,color:"#f59e0b",textAlign:"center" }}>
+                        🔒 Streak to day {selectedIdx*14} to unlock {ACCENTS[selectedIdx].label}
+                      </p>
+                    );
+                    return null;
+                  })()}
                 </div>
 
                 {/* Notifications */}
@@ -4380,7 +4729,7 @@ export default function App() {
             { id:"home",      label:"Home",    icon:<HomeIcon size={22}/> },
             { id:"expenses",  label:"Expenses",icon:<ListIcon size={22}/> },
             { id:"scanvoice", label:"Add",     icon:<div style={{ width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${accentObj.light},${accentObj.dark})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(79,70,229,0.4)",marginTop:-20,border:`3px solid ${dark?"#030712":"#fff"}` }}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div> },
-            { id:"emi",       label:"Loans",   icon:<EmiIcon size={22}/> },
+            { id:"bills",       label:"Bills & Loans",   icon:<EmiIcon size={22}/> },
             { id:"pot",       label:"My Pot",  icon:<WalletIcon size={22}/> },
           ].map(({ id, label, icon }) => {
             const active = tab===id;
