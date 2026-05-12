@@ -1272,7 +1272,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     const canvas = canvasRef.current;
     if(!canvas) return;
     const dpr = window.devicePixelRatio||1;
-    const VW = canvas.offsetWidth, VH = 290;
+    const VW = canvas.offsetWidth, VH = 400;
     canvas.width = VW*dpr; canvas.height = VH*dpr;
     canvas.style.height = VH+'px';
     const ctx = canvas.getContext('2d');
@@ -1282,22 +1282,22 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     if(s.prevIdx !== -1 && s.prevIdx !== planetIdx){ s.transitioning=true; s.transX=0; }
     s.prevIdx = planetIdx;
 
-    // planet is already the daily-coloured version from outer scope
-    // pR scales with viewport so the orbit + rocket always fits on small screens
+    // Planet centred; sun/moon arc: rises bottom-right (east), peaks top-centre, sets bottom-left (west).
     const scaleFactor = Math.min(1, VW / 360);
-    const pX = VW*0.52, pY = VH*0.42;
-    const pR = Math.round(planet.size * scaleFactor);
+    const pX = VW*0.50, pY = VH*0.50;
+    const pR = Math.round(planet.size * 1.5 * scaleFactor);
 
     if(!s.stars.length){
       s.stars = Array.from({length:80},()=>({
-        x:Math.random()*VW, y:Math.random()*VH,
+        x:Math.random()*VW,
+        y:Math.random()*VH,
         r:0.3+Math.random()*1.5, twinkle:Math.random()*Math.PI*2, speed:0.012+Math.random()*0.025,
         col: Math.random()>0.8 ? (Math.random()>0.5?'rgba(200,220,255,':'rgba(255,220,200,') : 'rgba(255,255,255,'
       }));
     }
     if(!s.nebulae || !s.nebulae.length){
       s.nebulae = Array.from({length:4},()=>({
-        x:Math.random()*VW, y:Math.random()*VH*0.6,
+        x:Math.random()*VW, y:Math.random()*VH,
         r:25+Math.random()*30, hue:Math.floor(Math.random()*360),
         a:0.05+Math.random()*0.07
       }));
@@ -1333,6 +1333,17 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       }
       ctx.fillStyle=bg; ctx.fillRect(0,0,VW,VH);
 
+      // ── HORIZON DIVIDER — subtle separator below planet ──
+      const horizonY = VH * 0.78;
+      const horizonGrad = ctx.createLinearGradient(0, horizonY, VW, horizonY);
+      horizonGrad.addColorStop(0, 'transparent');
+      horizonGrad.addColorStop(0.2, isDay ? 'rgba(180,220,255,0.12)' : 'rgba(100,120,200,0.10)');
+      horizonGrad.addColorStop(0.5, isDay ? 'rgba(180,220,255,0.18)' : 'rgba(100,120,200,0.15)');
+      horizonGrad.addColorStop(0.8, isDay ? 'rgba(180,220,255,0.12)' : 'rgba(100,120,200,0.10)');
+      horizonGrad.addColorStop(1, 'transparent');
+      ctx.strokeStyle = horizonGrad; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, horizonY); ctx.lineTo(VW, horizonY); ctx.stroke();
+
       // Nebulae (night only)
       if(!isDay && s.nebulae){
         s.nebulae.forEach(nb=>{
@@ -1354,10 +1365,17 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         });
       }
 
-      // Sun (6am–6pm IST) — rich golden sun with corona
+      // Sun — rises bottom-right (east), arcs through top-centre, sets bottom-left (west)
       if(isDay){
-        const sx = VW*(0.06+sunProgress*0.88);
-        const sy = VH*(0.5 - Math.sin(sunProgress*Math.PI)*0.55);
+        // Semicircular arc: progress 0=right, 0.5=top-centre, 1=left
+        // arcAngle goes from 0 (right) → π (left) as sunProgress 0→1
+        const arcAngle = sunProgress * Math.PI; // 0→π
+        const arcCX = VW * 0.5;
+        const arcCY = VH * 0.92; // arc centre below bottom so it looks like a horizon arc
+        const arcRX = VW * 0.52;
+        const arcRY = VH * 0.88;
+        const sx = arcCX + Math.cos(Math.PI - arcAngle) * arcRX; // right→left
+        const sy = arcCY - Math.sin(arcAngle) * arcRY;           // rises then falls
         // Corona outer glow
         const cg=ctx.createRadialGradient(sx,sy,12,sx,sy,55);
         cg.addColorStop(0,'rgba(255,220,60,0.22)'); cg.addColorStop(0.5,'rgba(255,160,20,0.08)'); cg.addColorStop(1,'transparent');
@@ -1379,20 +1397,33 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
           ctx.lineTo(sx+Math.cos(ang)*r2,sy+Math.sin(ang)*r2);
           ctx.strokeStyle=`rgba(255,200,60,0.12)`; ctx.lineWidth=1.5; ctx.stroke();
         }
-        // Sun body gradient
+        // Sun body
         const sb=ctx.createRadialGradient(sx-4,sy-4,1,sx,sy,15);
         sb.addColorStop(0,'#fffde0'); sb.addColorStop(0.25,'#ffe066'); sb.addColorStop(0.65,'#fbbf24'); sb.addColorStop(1,'#f97316');
         ctx.beginPath(); ctx.arc(sx,sy,15,0,Math.PI*2); ctx.fillStyle=sb; ctx.fill();
-        // Surface shimmer
         ctx.beginPath(); ctx.arc(sx-4,sy-4,5,0,Math.PI*2);
         ctx.fillStyle='rgba(255,255,220,0.28)'; ctx.fill();
+
+        // Soft horizon glow beneath sun (sunrise/sunset warmth)
+        const horizonA = Math.max(0, 1 - Math.abs(sunProgress - 0.5) * 4);
+        if(horizonA > 0){
+          const hg = ctx.createRadialGradient(sx, VH, 0, sx, VH, VW * 0.5);
+          hg.addColorStop(0, `rgba(255,120,30,${horizonA * 0.18})`);
+          hg.addColorStop(1, 'transparent');
+          ctx.fillStyle = hg; ctx.fillRect(0, VH * 0.6, VW, VH * 0.4);
+        }
       }
 
-      // Moon (6pm–6am IST) — with current lunar phase
+      // Moon — rises bottom-right (east), arcs through top-centre, sets bottom-left (west)
       if(!isDay){
-        const nightProg = istHour<6 ? (istHour+6)/12 : (istHour-18)/12;
-        const mx = VW*(0.06+nightProg*0.88);
-        const my = VH*(0.46 - Math.sin(nightProg*Math.PI)*0.46);
+        const nightProg = istHour < 6 ? (istHour + 6) / 12 : (istHour - 18) / 12;
+        const arcAngle = nightProg * Math.PI;
+        const arcCX = VW * 0.5;
+        const arcCY = VH * 0.92;
+        const arcRX = VW * 0.52;
+        const arcRY = VH * 0.88;
+        const mx = arcCX + Math.cos(Math.PI - arcAngle) * arcRX;
+        const my = arcCY - Math.sin(arcAngle) * arcRY;
         const MR = 13;
         // Moon glow
         const mg=ctx.createRadialGradient(mx,my,MR*0.5,mx,my,MR*3);
@@ -1409,9 +1440,8 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
           ctx.beginPath(); ctx.arc(mx+ox*MR-sz*MR*0.2,my+oy*MR-sz*MR*0.2,sz*MR*0.5,0,Math.PI*2);
           ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fill();
         });
-        // Phase shadow (accurate lunar phase clipping)
+        // Phase shadow
         ctx.save(); ctx.beginPath(); ctx.arc(mx,my,MR,0,Math.PI*2); ctx.clip();
-        // moonPhase 0=new,0.25=first quarter,0.5=full,0.75=last quarter
         const phAngle = moonPhase * Math.PI * 2;
         const shadowX = Math.cos(phAngle) * MR * 1.2;
         const shadowGrad=ctx.createRadialGradient(mx+shadowX,my,MR*0.1,mx+shadowX,my,MR*1.4);
@@ -1484,18 +1514,16 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       if(!s.sonicBooms)  s.sonicBooms  = [];
 
       if(s.rocketLaunching){
-        // ── APPROACH ANIMATION: zone 2 → zone 3 (planet), left to right ──
+        // ── APPROACH ANIMATION: sweeps in from off-left, arrives at upper-left planet ──
         s.rocketLaunchT += 0.011;
         const lt = Math.min(s.rocketLaunchT, 1);
 
-        // Quadratic bezier: enter from left at mid-height, arc gently upward,
-        // then swoop down to arrive just left of the planet
-        const startX = -30;                        // zone 2: off left edge
-        const startY = VH * 0.55;                 // slightly below center
-        const ctrlX  = VW * 0.3;                  // control: bottom of arc
-        const ctrlY  = VH * 0.12;                 // peaks above canvas midpoint
-        const endX   = curX - pR - 20;            // zone 3: just left of planet
-        const endY   = pY - pR * 0.3;             // level with planet equator
+        const startX = -30;                        // off left edge
+        const startY = VH * 0.30;                 // upper zone
+        const ctrlX  = VW * 0.15;                 // control: left-center
+        const ctrlY  = VH * 0.06;                 // dip toward top
+        const endX   = curX - pR - 20;            // just left of planet
+        const endY   = pY - pR * 0.2;             // level with planet equator
 
         const bx = (1-lt)*(1-lt)*startX + 2*(1-lt)*lt*ctrlX + lt*lt*endX;
         const by = (1-lt)*(1-lt)*startY + 2*(1-lt)*lt*ctrlY + lt*lt*endY;
@@ -1629,7 +1657,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         const ist = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
         const mins     = ist.getMinutes() + ist.getSeconds() / 60;
         const minAngle = (mins / 60) * Math.PI * 2 - Math.PI / 2; // 0 min = top, CW
-        const orR      = pR + Math.round(50 * scaleFactor); // circular orbit radius — generous gap
+        const orR      = pR + Math.round(38 * scaleFactor); // orbit radius — fits in upper zone
 
         // rocket position on the circle
         const orX = curX + Math.cos(minAngle) * orR;
@@ -1751,7 +1779,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
   return (
     <div style={{ borderRadius:20, overflow:"hidden", background:"#020209", border:"1px solid #1e1b4b" }}>
       <div style={{ position:"relative" }}>
-        <canvas ref={canvasRef} style={{ width:"100%", height:290, display:"block" }}/>
+        <canvas ref={canvasRef} style={{ width:"100%", height:400, display:"block" }}/>
         <div style={{ position:"absolute",top:10,left:12,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(6px)",borderRadius:8,padding:"3px 9px",border:"1px solid rgba(255,255,255,0.1)" }}>
           <span style={{ fontSize:11,fontWeight:700,color:streakRank.color,letterSpacing:"0.04em" }}>{streakRank.title}</span>
         </div>
@@ -1759,45 +1787,38 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
           <span style={{ fontSize:10,color:"rgba(255,255,255,0.4)",fontFamily:"'DM Mono',monospace" }}>BEST </span>
           <span style={{ fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Mono',monospace" }}>{streak.longestStreak||0}</span>
         </div>
-        <LiveClock dark={dark}/>
-      </div>
-      <div style={{ padding:"12px 14px",borderTop:"1px solid rgba(255,255,255,0.06)" }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9 }}>
-          <div style={{ display:"flex",alignItems:"baseline",gap:6 }}>
-            <span style={{ fontSize:36,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#fff",lineHeight:1,letterSpacing:"-1px" }}>{streak.count}</span>
-            <span style={{ fontSize:13,color:"rgba(255,255,255,0.35)",fontWeight:500 }}>day streak</span>
-          </div>
-          {streak.count>=7
-            ? <span style={{ fontSize:11,fontWeight:700,color:"#fbbf24",background:"rgba(251,191,36,0.12)",padding:"3px 8px",borderRadius:6 }}>🏆 {streak.count>=30?"Legend":streak.count>=14?"Warrior":"One week!"}</span>
-            : todayLogged
-              ? <span style={{ fontSize:11,color:"#34d399",fontWeight:600 }}>✓ Logged today</span>
-              : <span style={{ fontSize:11,color:"rgba(255,255,255,0.28)" }}>Not logged yet</span>
-          }
+        {/* Streak count overlay bottom-left */}
+        <div style={{ position:"absolute",bottom:10,left:14,display:"flex",alignItems:"baseline",gap:5 }}>
+          <span style={{ fontSize:32,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#fff",lineHeight:1,letterSpacing:"-1px",textShadow:"0 2px 12px rgba(0,0,0,0.7)" }}>{streak.count}</span>
+          <span style={{ fontSize:12,color:"rgba(255,255,255,0.4)",fontWeight:500 }}>day streak</span>
         </div>
-        <div style={{ display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:3,marginBottom:10 }}>
+        {/* Log / freeze buttons overlay bottom-right */}
+        <div style={{ position:"absolute",bottom:10,right:12,display:"flex",gap:6 }}>
+          {!todayLogged
+            ? <button onClick={onLog} style={{ padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:700,background:"linear-gradient(135deg,#34d399,#059669)",border:"none",color:"#fff",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.4)" }}>🚀 Log</button>
+            : <div style={{ padding:"7px 12px",borderRadius:10,fontSize:12,fontWeight:600,background:"rgba(52,211,153,0.15)",border:"1px solid rgba(52,211,153,0.3)",color:"#34d399" }}>✓ Logged</div>
+          }
+          <button onClick={onFreeze} style={{ padding:"7px 11px",borderRadius:10,fontSize:12,fontWeight:700,cursor:pitStopData.available>0?"pointer":"default",
+            background:pitStopData.available>0?"rgba(129,140,248,0.2)":"rgba(255,255,255,0.05)",
+            border:pitStopData.available>0?"1px solid rgba(129,140,248,0.4)":"1px solid rgba(255,255,255,0.08)",
+            color:pitStopData.available>0?"#a5b4fc":"rgba(255,255,255,0.2)",
+            display:"flex",alignItems:"center",gap:4,boxShadow:"0 2px 10px rgba(0,0,0,0.4)" }}>
+            <span>🛡️</span>
+            <span style={{ fontFamily:"'DM Mono',monospace",fontSize:10 }}>{pitStopData.available}/{pitStopData.earned}</span>
+          </button>
+        </div>
+        {/* 14-day bar overlay bottom-centre */}
+        <div style={{ position:"absolute",bottom:52,left:14,right:12,display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:2 }}>
           {last14.map(d=>{
             const lg=streak.loggedDates.includes(d);
             const frozen=(shieldState.usedDates||[]).includes(d);
             const isToday=d===last14[last14.length-1];
-            return <div key={d} style={{ height:6,borderRadius:2,
-              background:frozen?"#818cf8":lg?"#34d399":isToday?"rgba(255,255,255,0.12)":"rgba(255,255,255,0.07)",
-              boxShadow:lg&&!frozen?"0 0 4px rgba(52,211,153,0.4)":frozen?"0 0 4px rgba(129,140,248,0.4)":"none",
-              transition:"background 0.3s" }}/>;
+            return <div key={d} style={{ height:4,borderRadius:2,
+              background:frozen?"#818cf8":lg?"#34d399":isToday?"rgba(255,255,255,0.18)":"rgba(255,255,255,0.08)",
+              boxShadow:lg&&!frozen?"0 0 4px rgba(52,211,153,0.5)":frozen?"0 0 4px rgba(129,140,248,0.5)":"none" }}/>;
           })}
         </div>
-        <div style={{ display:"flex",gap:8 }}>
-          {!todayLogged
-            ? <button onClick={onLog} style={{ flex:1,padding:"9px 0",borderRadius:10,fontSize:13,fontWeight:700,background:"linear-gradient(135deg,#34d399,#059669)",border:"none",color:"#fff",cursor:"pointer" }}>🚀 Log No-Spend Day</button>
-            : <div style={{ flex:1,padding:"9px 0",borderRadius:10,fontSize:13,fontWeight:600,background:"rgba(52,211,153,0.1)",border:"1px solid rgba(52,211,153,0.25)",color:"#34d399",textAlign:"center" }}>✓ Today logged</div>
-          }
-          <button onClick={onFreeze} style={{ padding:"9px 13px",borderRadius:10,fontSize:12,fontWeight:700,cursor:pitStopData.available>0?"pointer":"default",
-            background:pitStopData.available>0?"rgba(129,140,248,0.14)":"rgba(255,255,255,0.04)",
-            border:pitStopData.available>0?"1px solid rgba(129,140,248,0.35)":"1px solid rgba(255,255,255,0.07)",
-            color:pitStopData.available>0?"#a5b4fc":"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",gap:5 }}>
-            <span>🛡️</span>
-            <span style={{ fontFamily:"'DM Mono',monospace",fontSize:11 }}>{pitStopData.available}/{pitStopData.earned}</span>
-          </button>
-        </div>
+        <LiveClock dark={dark}/>
       </div>
     </div>
   );
