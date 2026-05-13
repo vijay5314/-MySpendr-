@@ -204,7 +204,7 @@ function LiveClock() {
   const isDay2 = h >= 6 && h < 18;
   const label = `${isDay2 ? "☀️" : "🌙"} ${h}:${String(m).padStart(2, "0")} IST`;
   return (
-    <div style={{ position:"absolute",bottom:8,left:12,fontSize:10,color:"rgba(255,255,255,0.3)",fontFamily:"'DM Mono',monospace" }}>
+    <div style={{ fontSize:9,color:"rgba(255,255,255,0.3)",fontFamily:"'DM Mono',monospace",textAlign:"center",pointerEvents:"none" }}>
       {label}
     </div>
   );
@@ -1257,22 +1257,24 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     ctx.restore();
   }
 
-  // Trigger rocket launch from parent
+  // Trigger rocket loop (one full orbit) on expense log
   useEffect(()=>{
     if(!launchRocket) return;
-    stateRef.current.rocketLaunching = true;
-    stateRef.current.rocketLaunchT = 0;
-    stateRef.current.rocketPhase = 'approach';
-    stateRef.current.sonicBooms = [];
-    window.__rocketDone = () => { onLaunchDone?.(); };
-    return () => { window.__rocketDone = null; };
+    const s = stateRef.current;
+    // Capture current minute-hand angle as loop start
+    const ist = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+    const mins = ist.getMinutes() + ist.getSeconds()/60;
+    s.loopStartAngle = (mins/60)*Math.PI*2 - Math.PI/2;
+    s.loopT = 0;          // 0→1 over the animation
+    s.rocketPhase = 'loop';
+    s.rocketLaunching = false;
   },[launchRocket]);
 
   useEffect(()=>{
     const canvas = canvasRef.current;
     if(!canvas) return;
     const dpr = window.devicePixelRatio||1;
-    const VW = canvas.offsetWidth, VH = 400;
+    const VW = canvas.offsetWidth, VH = 320;
     canvas.width = VW*dpr; canvas.height = VH*dpr;
     canvas.style.height = VH+'px';
     const ctx = canvas.getContext('2d');
@@ -1507,150 +1509,54 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       moonMini.addColorStop(0,'rgba(255,255,255,0.7)'); moonMini.addColorStop(1,'rgba(255,255,255,0)');
       ctx.fillStyle=moonMini; ctx.beginPath(); ctx.arc(moonX,moonY,3,0,Math.PI*2); ctx.fill();
 
-      // ── ROCKET — always travels LEFT → RIGHT ──────────────────────────────
-      // Layout zones:  1=sun orbit (far left)  2=boost zone (mid-left)
-      //                3=planet (curX)           4=sun orbit end (far right)
-      if(!s.rocketPhase) s.rocketPhase = 'idle';
-      if(!s.sonicBooms)  s.sonicBooms  = [];
+      // ── ROCKET ────────────────────────────────────────────────────────────
+      if(!s.rocketPhase) s.rocketPhase = 'orbit';
 
-      if(s.rocketLaunching){
-        // ── APPROACH ANIMATION: sweeps in from off-left, arrives at upper-left planet ──
-        s.rocketLaunchT += 0.011;
-        const lt = Math.min(s.rocketLaunchT, 1);
+      if(s.rocketPhase === 'loop'){
+        // ── ONE FULL ORBIT from current minute-hand position ─────────────────
+        const loopDuration = 120; // frames (~2 s at 60fps)
+        s.loopT = (s.loopT || 0) + 1;
+        const progress = Math.min(s.loopT / loopDuration, 1);
 
-        const startX = -30;                        // off left edge
-        const startY = VH * 0.30;                 // upper zone
-        const ctrlX  = VW * 0.15;                 // control: left-center
-        const ctrlY  = VH * 0.06;                 // dip toward top
-        const endX   = curX - pR - 20;            // just left of planet
-        const endY   = pY - pR * 0.2;             // level with planet equator
+        // eased progress: ease-in-out so it feels like a purposeful loop
+        const eased = progress < 0.5
+          ? 2 * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 2) / 2;
 
-        const bx = (1-lt)*(1-lt)*startX + 2*(1-lt)*lt*ctrlX + lt*lt*endX;
-        const by = (1-lt)*(1-lt)*startY + 2*(1-lt)*lt*ctrlY + lt*lt*endY;
+        const ist2 = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+        const mins2 = ist2.getMinutes() + ist2.getSeconds()/60;
+        const currentAngle = (mins2/60)*Math.PI*2 - Math.PI/2;
 
-        // Tangent for rotation (rocket nose always points along path)
-        const tdx = 2*(1-lt)*(ctrlX-startX) + 2*lt*(endX-ctrlX);
-        const tdy = 2*(1-lt)*(ctrlY-startY) + 2*lt*(endY-ctrlY);
-        const rAngle = Math.atan2(tdy, tdx); // 0 = pointing right
+        const loopAngle = s.loopStartAngle + eased * Math.PI * 2;
+        const orR = pR + Math.round(38 * scaleFactor);
+        const orX = curX + Math.cos(loopAngle) * orR;
+        const orY = pY   + Math.sin(loopAngle) * orR;
+        const orAngle = loopAngle + Math.PI/2;
 
-        // Speed-streak motion blur (4 ghost positions behind)
-        for(let mb=1;mb<=4;mb++){
-          const mlt = Math.max(0, lt - mb*0.018);
-          const mbx = (1-mlt)*(1-mlt)*startX + 2*(1-mlt)*mlt*ctrlX + mlt*mlt*endX;
-          const mby = (1-mlt)*(1-mlt)*startY + 2*(1-mlt)*mlt*ctrlY + mlt*mlt*endY;
-          ctx.save();
-          ctx.globalAlpha = (0.14 - mb*0.03) * Math.min(lt*8,1);
-          ctx.beginPath(); ctx.arc(mbx,mby,5*(5-mb)/5,0,Math.PI*2);
-          ctx.fillStyle='rgba(200,225,255,0.7)'; ctx.fill();
-          ctx.restore();
+        // Ion trail behind the rocket during loop
+        const trailArc = Math.PI * 0.55;
+        for(let ti=0;ti<36;ti++){
+          const tf=ti/36;
+          const ta=loopAngle - trailArc*(1-tf);
+          const tx2=curX+Math.cos(ta)*orR, ty2=pY+Math.sin(ta)*orR;
+          const hue=40+tf*300;
+          ctx.beginPath(); ctx.arc(tx2,ty2,2.5*tf,0,Math.PI*2);
+          ctx.fillStyle=`hsla(${hue},100%,72%,${tf*tf*0.85})`; ctx.fill();
         }
 
-        // Contrail (white vapour, spawned behind the nozzle)
-        const nozzleX = bx - Math.cos(rAngle)*12;
-        const nozzleY = by - Math.sin(rAngle)*12;
-        if(lt > 0.04 && Math.random()<0.65){
-          s.particles.push({
-            x:nozzleX, y:nozzleY,
-            vx:-Math.cos(rAngle)*0.4+(Math.random()-0.5)*0.6,
-            vy:-Math.sin(rAngle)*0.4+(Math.random()-0.5)*0.5,
-            life:1, type:3
-          });
-        }
-        // Engine hot exhaust
-        if(Math.random()<0.85){
-          s.particles.push({
-            x:nozzleX, y:nozzleY,
-            vx:-Math.cos(rAngle)*2+(Math.random()-0.5)*1.5,
-            vy:-Math.sin(rAngle)*2+(Math.random()-0.5)*1.5,
-            life:0.9, type:Math.floor(Math.random()*3)
-          });
-        }
-
-        // Draw the rocket, rotated to follow the bezier tangent
-        ctx.save();
-        ctx.translate(bx,by);
-        ctx.rotate(rAngle);
-        drawRocketH(ctx,0,0,1.1,true,s.t);
+        ctx.save(); ctx.translate(orX,orY); ctx.rotate(orAngle);
+        drawRocketH(ctx,0,0,0.85,true,s.t);
         ctx.restore();
 
-        // Sonic boom when ~72% of the way (closing in on planet fast)
-        if(lt>0.70 && lt<0.74 && s.sonicBooms.length===0){
-          s.sonicBooms.push({x:bx,y:by,age:0,maxAge:40});
-        }
-        s.sonicBooms.forEach(b=>{
-          b.age++;
-          drawSonicBoom(ctx,b.x,b.y,b.age,b.maxAge);
-        });
-        s.sonicBooms = s.sonicBooms.filter(b=>b.age<b.maxAge);
-
-        if(lt>=1){
-          s.rocketLaunching  = false;
-          s.rocketLaunchT    = 0;
-          s.rocketPhase      = 'celebration';
-          s.celebrationT     = 0;          // frames elapsed
-          s.celebrationTotal = 300;        // ~5 s at 60 fps
-          if(window.__rocketDone) window.__rocketDone();
+        // Engine exhaust
+        if(Math.random()<0.7){
+          s.particles.push({x:orX-Math.cos(orAngle)*12,y:orY-Math.sin(orAngle)*12,
+            vx:-Math.cos(orAngle)*(1+Math.random()*0.8)+(Math.random()-0.5)*0.8,
+            vy:-Math.sin(orAngle)*(1+Math.random()*0.8)+(Math.random()-0.5)*0.8,
+            life:0.9+Math.random()*0.3, type:Math.floor(Math.random()*3)});
         }
 
-      } else if(s.rocketPhase === 'celebration') {
-        // ── 5-SECOND CELEBRATION — fast tight loops around planet ────────────
-        s.celebrationT = (s.celebrationT || 0) + 1;
-        const done = s.celebrationT >= (s.celebrationTotal || 300);
-
-        // Spin faster and closer than normal orbit
-        const celebAngle = (s.celebrationT / 30) * Math.PI * 2;  // ~2 full laps/sec
-        const celebR     = pR + 28;
-        const crx = curX + Math.cos(celebAngle) * celebR;
-        const cry = pY   + Math.sin(celebAngle) * celebR * 0.6;  // slightly elliptical
-        const crAngle = celebAngle + Math.PI / 2;
-
-        // Bright celebration trail
-        const trailSteps = 30;
-        for(let ti = 0; ti < trailSteps; ti++){
-          const tf  = ti / trailSteps;
-          const ta  = celebAngle - (Math.PI * 0.8) * (1 - tf);
-          const tx2 = curX + Math.cos(ta) * celebR;
-          const ty2 = pY   + Math.sin(ta) * celebR * 0.6;
-          const hue = 40 + tf * 280;   // gold → violet sparkle
-          ctx.beginPath(); ctx.arc(tx2, ty2, 3.5 * tf, 0, Math.PI * 2);
-          ctx.fillStyle = `hsla(${hue},100%,72%,${tf * tf * 0.85})`;
-          ctx.fill();
-        }
-
-        // Sparks burst outward every few frames
-        if(s.celebrationT % 5 === 0){
-          for(let sp = 0; sp < 6; sp++){
-            const sa = (sp / 6) * Math.PI * 2 + s.celebrationT * 0.2;
-            s.particles.push({
-              x: crx, y: cry,
-              vx: Math.cos(sa) * (1.5 + Math.random() * 2),
-              vy: Math.sin(sa) * (1.5 + Math.random() * 2),
-              life: 0.8 + Math.random() * 0.4,
-              type: Math.floor(Math.random() * 3)
-            });
-          }
-        }
-
-        ctx.save(); ctx.translate(crx, cry); ctx.rotate(crAngle);
-        drawRocketH(ctx, 0, 0, 1.0, true, s.t);
-        ctx.restore();
-
-        // Countdown ring around planet (shrinks as celebration ends)
-        const ringPct = 1 - s.celebrationT / (s.celebrationTotal || 300);
-        if(ringPct > 0){
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(curX, pY, pR + 14, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * ringPct));
-          ctx.strokeStyle = `rgba(255,220,80,${0.5 * ringPct + 0.2})`;
-          ctx.lineWidth = 3;
-          ctx.stroke();
-          ctx.restore();
-        }
-
-        if(done){
-          s.rocketPhase = 'orbit';
-          s.celebrationT = 0;
-        }
+        if(progress >= 1) s.rocketPhase = 'orbit';
 
       } else {
         // ── CIRCULAR MINUTE-HAND ORBIT ──────────────────────────────────────
@@ -1779,7 +1685,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
   return (
     <div style={{ borderRadius:20, overflow:"hidden", background:"#020209", border:"1px solid #1e1b4b" }}>
       <div style={{ position:"relative" }}>
-        <canvas ref={canvasRef} style={{ width:"100%", height:400, display:"block" }}/>
+        <canvas ref={canvasRef} style={{ width:"100%", height:320, display:"block" }}/>
         <div style={{ position:"absolute",top:10,left:12,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(6px)",borderRadius:8,padding:"3px 9px",border:"1px solid rgba(255,255,255,0.1)" }}>
           <span style={{ fontSize:11,fontWeight:700,color:streakRank.color,letterSpacing:"0.04em" }}>{streakRank.title}</span>
         </div>
@@ -1787,28 +1693,30 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
           <span style={{ fontSize:10,color:"rgba(255,255,255,0.4)",fontFamily:"'DM Mono',monospace" }}>BEST </span>
           <span style={{ fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Mono',monospace" }}>{streak.longestStreak||0}</span>
         </div>
-        {/* Streak count overlay bottom-left */}
-        <div style={{ position:"absolute",bottom:10,left:14,display:"flex",alignItems:"baseline",gap:5 }}>
-          <span style={{ fontSize:32,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#fff",lineHeight:1,letterSpacing:"-1px",textShadow:"0 2px 12px rgba(0,0,0,0.7)" }}>{streak.count}</span>
-          <span style={{ fontSize:12,color:"rgba(255,255,255,0.4)",fontWeight:500 }}>day streak</span>
+        {/* Bottom row: streak count | clock (centre) | buttons */}
+        <div style={{ position:"absolute",bottom:8,left:14,right:12,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+          <div style={{ display:"flex",alignItems:"baseline",gap:5 }}>
+            <span style={{ fontSize:28,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#fff",lineHeight:1,letterSpacing:"-1px",textShadow:"0 2px 12px rgba(0,0,0,0.7)" }}>{streak.count}</span>
+            <span style={{ fontSize:11,color:"rgba(255,255,255,0.4)",fontWeight:500 }}>day streak</span>
+          </div>
+          <LiveClock dark={dark}/>
+          <div style={{ display:"flex",gap:6 }}>
+            {!todayLogged
+              ? <button onClick={onLog} style={{ padding:"6px 12px",borderRadius:10,fontSize:12,fontWeight:700,background:"linear-gradient(135deg,#34d399,#059669)",border:"none",color:"#fff",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.4)" }}>🚀 Log</button>
+              : <div style={{ padding:"6px 11px",borderRadius:10,fontSize:12,fontWeight:600,background:"rgba(52,211,153,0.15)",border:"1px solid rgba(52,211,153,0.3)",color:"#34d399" }}>✓ Logged</div>
+            }
+            <button onClick={onFreeze} style={{ padding:"6px 10px",borderRadius:10,fontSize:11,fontWeight:700,cursor:pitStopData.available>0?"pointer":"default",
+              background:pitStopData.available>0?"rgba(129,140,248,0.2)":"rgba(255,255,255,0.05)",
+              border:pitStopData.available>0?"1px solid rgba(129,140,248,0.4)":"1px solid rgba(255,255,255,0.08)",
+              color:pitStopData.available>0?"#a5b4fc":"rgba(255,255,255,0.2)",
+              display:"flex",alignItems:"center",gap:4,boxShadow:"0 2px 10px rgba(0,0,0,0.4)" }}>
+              <span>🛡️</span>
+              <span style={{ fontFamily:"'DM Mono',monospace",fontSize:10 }}>{pitStopData.available}/{pitStopData.earned}</span>
+            </button>
+          </div>
         </div>
-        {/* Log / freeze buttons overlay bottom-right */}
-        <div style={{ position:"absolute",bottom:10,right:12,display:"flex",gap:6 }}>
-          {!todayLogged
-            ? <button onClick={onLog} style={{ padding:"7px 14px",borderRadius:10,fontSize:12,fontWeight:700,background:"linear-gradient(135deg,#34d399,#059669)",border:"none",color:"#fff",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.4)" }}>🚀 Log</button>
-            : <div style={{ padding:"7px 12px",borderRadius:10,fontSize:12,fontWeight:600,background:"rgba(52,211,153,0.15)",border:"1px solid rgba(52,211,153,0.3)",color:"#34d399" }}>✓ Logged</div>
-          }
-          <button onClick={onFreeze} style={{ padding:"7px 11px",borderRadius:10,fontSize:12,fontWeight:700,cursor:pitStopData.available>0?"pointer":"default",
-            background:pitStopData.available>0?"rgba(129,140,248,0.2)":"rgba(255,255,255,0.05)",
-            border:pitStopData.available>0?"1px solid rgba(129,140,248,0.4)":"1px solid rgba(255,255,255,0.08)",
-            color:pitStopData.available>0?"#a5b4fc":"rgba(255,255,255,0.2)",
-            display:"flex",alignItems:"center",gap:4,boxShadow:"0 2px 10px rgba(0,0,0,0.4)" }}>
-            <span>🛡️</span>
-            <span style={{ fontFamily:"'DM Mono',monospace",fontSize:10 }}>{pitStopData.available}/{pitStopData.earned}</span>
-          </button>
-        </div>
-        {/* 14-day bar overlay bottom-centre */}
-        <div style={{ position:"absolute",bottom:52,left:14,right:12,display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:2 }}>
+        {/* 14-day bar just above the bottom row */}
+        <div style={{ position:"absolute",bottom:44,left:14,right:12,display:"grid",gridTemplateColumns:"repeat(14,1fr)",gap:2 }}>
           {last14.map(d=>{
             const lg=streak.loggedDates.includes(d);
             const frozen=(shieldState.usedDates||[]).includes(d);
@@ -1818,7 +1726,6 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
               boxShadow:lg&&!frozen?"0 0 4px rgba(52,211,153,0.5)":frozen?"0 0 4px rgba(129,140,248,0.5)":"none" }}/>;
           })}
         </div>
-        <LiveClock dark={dark}/>
       </div>
     </div>
   );
