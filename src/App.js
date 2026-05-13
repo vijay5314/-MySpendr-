@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
 // ════════════════════════════════════════════════════════════════════════════
-// STORAGE — safe localStorage wrapper (never throws)
+// STORAGE - safe localStorage wrapper (never throws)
 // ════════════════════════════════════════════════════════════════════════════
 const KEYS = {
   EXPENSES:   "myspendr_expenses_v3",
@@ -22,6 +22,7 @@ const KEYS = {
   BIO_CRED:   "myspendr_bio_cred_v1",
   SHIELD:     "myspendr_shield_v1",
   BANKS:      "myspendr_banks_v1",
+  SCENE:      "myspendr_scene_v1",
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -43,13 +44,28 @@ function storageSet(key, value) {
 function storageRemove(key) { try { localStorage.removeItem(key); } catch {} }
 
 const _saveTimers = {};
+
+// Polyfill for ctx.roundRect (not available in all environments)
+function rrect(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
 function storageSetDebounced(key, value, delay = 300) {
   clearTimeout(_saveTimers[key]);
   _saveTimers[key] = setTimeout(() => storageSet(key, value), delay);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// DATE UTILS — all IST-aware
+// DATE UTILS - all IST-aware
 // ════════════════════════════════════════════════════════════════════════════
 const TZ = "Asia/Kolkata";
 const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -72,11 +88,11 @@ function formatDate(d) {
 }
 // Positive = b is after a
 function daysBetween(a, b) {
-  return Math.round((new Date(b) - new Date(a)) / 86_400_000);
+  return Math.round((new Date(b) - new Date(a)) / 86400000);
 }
 function daysFromToday(dateStr) {
   const ist = nowIST(); ist.setHours(0,0,0,0);
-  return Math.round((new Date(dateStr + "T00:00:00") - ist) / 86_400_000);
+  return Math.round((new Date(dateStr + "T00:00:00") - ist) / 86400000);
 }
 function getLastNDays(n) {
   const ist = nowIST();
@@ -106,7 +122,7 @@ function isInCurrentMonth(dateStr) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// STREAK — fixed: past-date logging no longer resets streak
+// STREAK - fixed: past-date logging no longer resets streak
 // ════════════════════════════════════════════════════════════════════════════
 const EMPTY_STREAK = { count: 0, lastDate: null, loggedDates: [], longestStreak: 0 };
 
@@ -121,10 +137,10 @@ function updateStreak(prev, dateStr) {
   const diff = daysBetween(prev.lastDate, dateStr);
 
   if (diff < 0) {
-    // Past date — record it but DON'T touch count or lastDate
+    // Past date - record it but DON'T touch count or lastDate
     return { ...prev, loggedDates };
   }
-  if (diff === 0) return prev;  // Same day — idempotent (already handled above)
+  if (diff === 0) return prev;  // Same day - idempotent (already handled above)
 
   const count = diff === 1 ? prev.count + 1 : 1;
   const longestStreak = Math.max(prev.longestStreak || 0, count);
@@ -134,7 +150,7 @@ function updateStreak(prev, dateStr) {
 // ════════════════════════════════════════════════════════════════════════════
 // FINANCE UTILS
 // ════════════════════════════════════════════════════════════════════════════
-const MAX_AMOUNT = 10_000_000;
+const MAX_AMOUNT = 10000000;
 const MAX_TENURE = 600;
 
 function isValidAmount(val) {
@@ -177,17 +193,55 @@ function computeMonthlyTotal(expenses, excludedCategories = []) {
 }
 
 // ── F1 STREAK HELPERS ─────────────────────────────────────────────────────────
-function getStreakRank(count) {
-  if (count === 0) return { title: "Grounded", color: "#6b7280" };
-  if (count < 7)   return { title: "Lift-off", color: "#3b82f6" };
-  if (count < 14)  return { title: "In Orbit", color: "#06b6d4" };
-  if (count < 30)  return { title: "Deep Space", color: "#8b5cf6" };
-  if (count < 60)  return { title: "Warp Speed", color: "#f59e0b" };
-  if (count < 100) return { title: "Supernova", color: "#ef4444" };
-  return              { title: "Singularity", color: "#ec4899" };
+function getStreakRank(count, scene) {
+  const isSpace = !scene || scene === "space";
+  if (isSpace) {
+    if (count === 0) return { title: "Grounded",   color: "#6b7280" };
+    if (count < 7)   return { title: "Lift-off",   color: "#3b82f6" };
+    if (count < 14)  return { title: "In Orbit",   color: "#06b6d4" };
+    if (count < 30)  return { title: "Deep Space", color: "#8b5cf6" };
+    if (count < 60)  return { title: "Warp Speed", color: "#f59e0b" };
+    if (count < 100) return { title: "Supernova",  color: "#ef4444" };
+    return              { title: "Singularity",    color: "#ec4899" };
+  }
+  if (scene === "marina") {
+    if (count === 0) return { title: "Docked",       color: "#6b7280" };
+    if (count < 7)   return { title: "Casting Off",  color: "#3b82f6" };
+    if (count < 14)  return { title: "Open Water",   color: "#0ea5e9" };
+    if (count < 30)  return { title: "Full Sail",    color: "#06b6d4" };
+    if (count < 60)  return { title: "High Seas",    color: "#0891b2" };
+    if (count < 100) return { title: "Sea Legend",   color: "#7c3aed" };
+    return              { title: "Ocean Master",     color: "#ec4899" };
+  }
+  if (scene === "island") {
+    if (count === 0) return { title: "Landlocked",   color: "#6b7280" };
+    if (count < 7)   return { title: "Beachcomber",  color: "#d97706" };
+    if (count < 14)  return { title: "Islanded",     color: "#f59e0b" };
+    if (count < 30)  return { title: "Reef Rider",   color: "#10b981" };
+    if (count < 60)  return { title: "Palm King",    color: "#059669" };
+    if (count < 100) return { title: "Castaway",     color: "#0d9488" };
+    return              { title: "Island God",       color: "#ec4899" };
+  }
+  if (scene === "volcano") {
+    if (count === 0) return { title: "Dormant",      color: "#6b7280" };
+    if (count < 7)   return { title: "Smouldering",  color: "#f97316" };
+    if (count < 14)  return { title: "Erupting",     color: "#ef4444" };
+    if (count < 30)  return { title: "Lava Flow",    color: "#dc2626" };
+    if (count < 60)  return { title: "Pyroclast",    color: "#b91c1c" };
+    if (count < 100) return { title: "Magma Core",   color: "#7c3aed" };
+    return              { title: "Inferno God",      color: "#ec4899" };
+  }
+  // fallback
+  if (count === 0) return { title: "Beginner",  color: "#6b7280" };
+  if (count < 7)   return { title: "Starter",   color: "#3b82f6" };
+  if (count < 14)  return { title: "Going",     color: "#06b6d4" };
+  if (count < 30)  return { title: "Streaking", color: "#8b5cf6" };
+  if (count < 60)  return { title: "On Fire",   color: "#f59e0b" };
+  if (count < 100) return { title: "Legend",    color: "#ef4444" };
+  return              { title: "Master",         color: "#ec4899" };
 }
 
-// ── LIVE CLOCK OVERLAY — ticks every second, no stale-capture bug ────────────
+// ── LIVE CLOCK OVERLAY - ticks every second, no stale-capture bug ────────────
 function LiveClock() {
   const [now, setNow] = useState(() => nowIST());
   useEffect(() => {
@@ -211,7 +265,7 @@ function LiveClock() {
 }
 
 // ── PLANET HOPPER GAME COMPONENT ─────────────────────────────────────────────
-function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopData, dark, onLog, onFreeze, launchRocket, onLaunchDone, accentPlanetIdx }) {
+function PlanetHopperGame({ streak, todayLogged, last14, shieldState, freezeData, dark, onLog, onFreeze, launchRocket, onLaunchDone, accentPlanetIdx, sceneTheme, onSceneChange }) {
   const canvasRef = useRef(null);
   const rafRef = useRef(null);
   const stateRef = useRef({ t:0, particles:[], stars:[], nebulae:[], prevIdx:-1, transitioning:false, transX:0, transDir:1, rocketLaunchT:-1, rocketLaunching:false });
@@ -281,22 +335,22 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
   ];
 
   // Accent drives planet identity; streak still drives unlocking higher planets
-  // accentPlanetIdx pins the exact planet; streak gates how far you can go
   const streakMaxIdx = Math.min(Math.floor(streak.count / 14), PLANETS.length - 1);
-  const planetIdx = accentPlanetIdx !== undefined
-    ? Math.min(accentPlanetIdx, streakMaxIdx)   // can't skip ahead of streak progress
-    : streakMaxIdx;
-  const streakRank = getStreakRank(streak.count);
+  // Show the selected planet immediately on the card (live preview);
+  // the lock warning in Settings already communicates the unlock requirement.
+  const planetIdx = accentPlanetIdx !== undefined ? accentPlanetIdx : streakMaxIdx;
+  const planetLocked = accentPlanetIdx !== undefined && accentPlanetIdx > streakMaxIdx;
+  const streakRank = getStreakRank(streak.count, sceneTheme);
 
-  // Subtle daily shimmer — only shifts glow hue slightly, never overrides planet identity
+  // Subtle daily shimmer - only shifts glow hue slightly, never overrides planet identity
   const istNow = nowIST();
   const dayOfYear = Math.floor((istNow - new Date(istNow.getFullYear(),0,0))/(1000*60*60*24));
   const dailyGlowShift = (dayOfYear * 7) % 40 - 20; // ±20° hue wobble on glow only
   const planet = { ...PLANETS[planetIdx] };
-  // Preserve planet's true colours — only nudge the glow subtly
+  // Preserve planet's true colours - only nudge the glow subtly
   const baseGlowMatch = planet.glow.match(/^#([0-9a-f]{6})$/i);
   if (!baseGlowMatch) {
-    // hsl glow — shift the hue slightly
+    // hsl glow - shift the hue slightly
     planet.glow = planet.glow.replace(/hsl\((\d+)/, (_, h) => `hsl(${(+h + dailyGlowShift + 360) % 360}`);
   }
   // Keep structural properties (craters, bands, rings etc) from original
@@ -328,7 +382,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     base.addColorStop(1, p.shadow||darken(p.base,60));
     ctx.fillStyle = base; ctx.fillRect(cx-r,cy-r,r*2,r*2);
 
-    // ── SUBSURFACE SCATTER — warm inner glow ─────────────────────────────────
+    // ── SUBSURFACE SCATTER - warm inner glow ─────────────────────────────────
     const scatter = ctx.createRadialGradient(cx,cy,r*0.1,cx,cy,r*0.85);
     scatter.addColorStop(0,'rgba(255,240,200,0.07)');
     scatter.addColorStop(0.5,'rgba(255,200,100,0.03)');
@@ -439,7 +493,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       ctx.restore();
     }
 
-    // ── ATMOSPHERIC BANDS (Jupiter, Saturn, Neptune) — enhanced ──────────────
+    // ── ATMOSPHERIC BANDS (Jupiter, Saturn, Neptune) - enhanced ──────────────
     if(p.bands && p.bands.length){
       p.bands.forEach((c,i)=>{
         const frac = (i+0.5)/p.bands.length;
@@ -450,7 +504,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         // Main band
         ctx.fillStyle = c+'cc';
         ctx.beginPath(); ctx.ellipse(cx,by+wave,r*1.01,bh*0.5+Math.abs(wave2),0.04,0,Math.PI*2); ctx.fill();
-        // Turbulent edge — bright shimmer
+        // Turbulent edge - bright shimmer
         ctx.fillStyle = lighten(c,30)+'44';
         ctx.beginPath(); ctx.ellipse(cx,by+wave-bh*0.2,r*0.99,bh*0.09,0,0,Math.PI*2); ctx.fill();
         // Dark underbelly
@@ -470,7 +524,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       });
     }
 
-    // ── EARTH — realistic continents, ocean depth, clouds ───────────────────────
+    // ── EARTH - realistic continents, ocean depth, clouds ───────────────────────
     if(p.continents){
       // Ocean depth variation
       const oceanG=ctx.createRadialGradient(cx-r*0.1,cy-r*0.1,r*0.1,cx,cy,r);
@@ -479,7 +533,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       oceanG.addColorStop(1,'rgba(5,25,70,0.30)');
       ctx.fillStyle=oceanG; ctx.fillRect(cx-r,cy-r,r*2,r*2);
 
-      // Landmass painter — draws a filled multi-point polygon
+      // Landmass painter - draws a filled multi-point polygon
       function landPoly(pts, fill, alpha=1){
         if(pts.length<2) return;
         ctx.save(); ctx.globalAlpha=alpha;
@@ -548,7 +602,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         [-0.32,-0.55],[-0.20,-0.58],[-0.10,-0.52],[-0.14,-0.44],[-0.28,-0.44]
       ],'rgba(220,240,255,0.75)');    // mostly ice
 
-      // ── CLOUD SYSTEM — multi-layer animated ───────────────────
+      // ── CLOUD SYSTEM - multi-layer animated ───────────────────
       // Broad cloud bands (latitude-aligned)
       const cloudBands = [
         { y:-0.55, spread:0.12, speed:0.025, alpha:0.18 },
@@ -579,7 +633,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       }
     }
 
-    // ── POLAR CAPS — layered ice with crevasses ───────────────────────────────
+    // ── POLAR CAPS - layered ice with crevasses ───────────────────────────────
     if(p.polar){
       [-1,1].forEach((side,si)=>{
         const poleY = side < 0 ? cy-r*0.68 : cy+r*0.68;
@@ -604,7 +658,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       });
     }
 
-    // ── CRATERS (Mercury, Mars) — deep with ejecta rays ──────────────────────
+    // ── CRATERS (Mercury, Mars) - deep with ejecta rays ──────────────────────
     if(p.craters){
       p.craters.forEach(([ox,oy,sz])=>{
         const cx2=cx+ox*r, cy2=cy+oy*r, cr=sz*r;
@@ -638,9 +692,9 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       });
     }
 
-    // ── MARS SURFACE DETAIL — Valles Marineris + Olympus Mons ──────────────────
+    // ── MARS SURFACE DETAIL - Valles Marineris + Olympus Mons ──────────────────
     if(p.marsDetail){
-      // Valles Marineris — great canyon system (horizontal scar)
+      // Valles Marineris - great canyon system (horizontal scar)
       ctx.save(); ctx.globalAlpha=0.55;
       for(let layer=0;layer<3;layer++){
         const lw = (3-layer)*0.9;
@@ -664,14 +718,14 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       ctx.strokeStyle='rgba(220,160,110,0.7)'; ctx.lineWidth=0.7; ctx.stroke();
       ctx.restore();
 
-      // Tharsis Bulge — highland plateau (left side)
+      // Tharsis Bulge - highland plateau (left side)
       const thg=ctx.createRadialGradient(cx-r*0.30,cy-r*0.15,0,cx-r*0.30,cy-r*0.15,r*0.38);
       thg.addColorStop(0,'rgba(200,110,60,0.28)');
       thg.addColorStop(0.6,'rgba(180,80,40,0.12)');
       thg.addColorStop(1,'transparent');
       ctx.fillStyle=thg; ctx.fillRect(cx-r,cy-r,r*2,r*2);
 
-      // Olympus Mons — giant shield volcano (left, slightly above center)
+      // Olympus Mons - giant shield volcano (left, slightly above center)
       const omx=cx-r*0.32, omy=cy-r*0.22;
       const omg=ctx.createRadialGradient(omx,omy,r*0.02, omx,omy,r*0.18);
       omg.addColorStop(0,'rgba(230,140,80,0.75)');
@@ -685,7 +739,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       ctx.beginPath(); ctx.arc(omx,omy,r*0.04,0,Math.PI*2);
       ctx.strokeStyle='rgba(200,130,70,0.4)'; ctx.lineWidth=0.8; ctx.stroke();
 
-      // Hellas Basin — large impact crater in south (bright from ice)
+      // Hellas Basin - large impact crater in south (bright from ice)
       const hbx=cx+r*0.28, hby=cy+r*0.42;
       const hbg=ctx.createRadialGradient(hbx,hby,0,hbx,hby,r*0.22);
       hbg.addColorStop(0,'rgba(220,200,180,0.30)');
@@ -819,7 +873,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       ctx.fillStyle=innerGlow; ctx.fillRect(cx-r,cy-r,r*2,r*2);
     }
 
-    // ── SPECULAR HIGHLIGHT — polished sphere sheen ────────────────────────────
+    // ── SPECULAR HIGHLIGHT - polished sphere sheen ────────────────────────────
     const spec=ctx.createRadialGradient(cx-r*0.33,cy-r*0.33,0,cx-r*0.2,cy-r*0.2,r*0.78);
     spec.addColorStop(0,'rgba(255,255,255,0.28)');
     spec.addColorStop(0.3,'rgba(255,255,255,0.08)');
@@ -872,7 +926,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
   }
 
   // ══════════════════════════════════════════════════════════════════
-  // PREMIUM ROCKET — SpaceX-style, nose right (+x), engines left (−x)
+  // PREMIUM ROCKET - SpaceX-style, nose right (+x), engines left (-x)
   // ══════════════════════════════════════════════════════════════════
   function drawRocketH(ctx, x, y, sc, flameOn, t_anim){
     ctx.save();
@@ -882,12 +936,12 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     const flicker = 0.85 + 0.15 * Math.sin(now * 18.7);
     const flicker2 = 0.9  + 0.10 * Math.sin(now * 23.1 + 1.3);
 
-    // ── PLASMA EXHAUST (drawn first — behind everything) ─────────────
+    // ── PLASMA EXHAUST (drawn first - behind everything) ─────────────
     if(flameOn){
       // Outer plasma bloom
       const fLen = 28 * s * flicker;
       const fLen2 = 20 * s * flicker2;
-      // Primary nozzle flame — wide
+      // Primary nozzle flame - wide
       const fg1 = ctx.createRadialGradient(-11*s, 0, 0, -11*s - fLen*0.6, 0, fLen*1.1);
       fg1.addColorStop(0,  'rgba(255,255,255,1)');
       fg1.addColorStop(0.05,'rgba(200,240,255,0.98)');
@@ -966,7 +1020,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       ctx.closePath();
       ctx.fillStyle=nozG; ctx.fill();
       ctx.strokeStyle='rgba(60,120,200,0.4)'; ctx.lineWidth=0.6*s; ctx.stroke();
-      // Bell inner — red-hot glow when firing
+      // Bell inner - red-hot glow when firing
       if(flameOn){
         const heatG = ctx.createRadialGradient(-9.5*s,ny,0,-9.5*s,ny,2.5*s);
         heatG.addColorStop(0,'rgba(200,240,255,0.9)');
@@ -976,11 +1030,11 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       }
     }
 
-    // ── MAIN BODY — titanium/carbon-fibre fuselage ───────────────────
+    // ── MAIN BODY - titanium/carbon-fibre fuselage ───────────────────
     // Shadow underlay
-    ctx.beginPath(); ctx.roundRect(-11*s,-6*s,28*s,12*s,4*s);
+    ctx.beginPath(); rrect(ctx,-11*s,-6*s,28*s,12*s,4*s);
     ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fill();
-    // Main gradient — dark metallic to bright specular highlight
+    // Main gradient - dark metallic to bright specular highlight
     const bodyG = ctx.createLinearGradient(0,-6*s,0,6*s);
     bodyG.addColorStop(0,   '#0d1b2e');
     bodyG.addColorStop(0.08,'#1a3050');
@@ -990,12 +1044,12 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     bodyG.addColorStop(0.72,'#1e3555');
     bodyG.addColorStop(0.9, '#0a1828');
     bodyG.addColorStop(1,   '#060f1a');
-    ctx.beginPath(); ctx.roundRect(-11*s,-6*s,28*s,12*s,4*s);
+    ctx.beginPath(); rrect(ctx,-11*s,-6*s,28*s,12*s,4*s);
     ctx.fillStyle=bodyG; ctx.fill();
 
     // Body panel detail (clipped to body)
     ctx.save();
-    ctx.beginPath(); ctx.roundRect(-11*s,-6*s,28*s,12*s,4*s); ctx.clip();
+    ctx.beginPath(); rrect(ctx,-11*s,-6*s,28*s,12*s,4*s); ctx.clip();
     // Carbon-fibre cross-hatch texture (subtle)
     ctx.globalAlpha=0.04;
     for(let xi=-11;xi<17;xi+=2.5){
@@ -1003,7 +1057,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       ctx.strokeStyle='#fff'; ctx.lineWidth=1.5*s; ctx.stroke();
     }
     ctx.globalAlpha=1;
-    // Iridescent accent stripe — electric blue-violet
+    // Iridescent accent stripe - electric blue-violet
     const stripeG=ctx.createLinearGradient(0,-6*s,0,6*s);
     stripeG.addColorStop(0,'rgba(80,160,255,0.0)');
     stripeG.addColorStop(0.35,'rgba(100,200,255,0.7)');
@@ -1025,11 +1079,11 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     ctx.globalAlpha=1;
     ctx.restore();
 
-    // Body edge rim glow — blue-white
-    ctx.beginPath(); ctx.roundRect(-11*s,-6*s,28*s,12*s,4*s);
+    // Body edge rim glow - blue-white
+    ctx.beginPath(); rrect(ctx,-11*s,-6*s,28*s,12*s,4*s);
     ctx.strokeStyle='rgba(80,160,255,0.22)'; ctx.lineWidth=1*s; ctx.stroke();
 
-    // ── NOSE CONE — long ogive aerodynamic taper ─────────────────────
+    // ── NOSE CONE - long ogive aerodynamic taper ─────────────────────
     const noseG = ctx.createLinearGradient(14*s,-5*s,23*s,0);
     noseG.addColorStop(0,'#1a3555'); noseG.addColorStop(0.25,'#3a70c0');
     noseG.addColorStop(0.5,'#e0f0ff'); noseG.addColorStop(0.75,'#2a5080'); noseG.addColorStop(1,'#0a1828');
@@ -1213,7 +1267,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
     bodyGrad.addColorStop(0.6,'#f0f4f8');
     bodyGrad.addColorStop(1,'#b0c0d0');
     ctx.beginPath();
-    ctx.roundRect(-4*sc, -5*sc, 8*sc, 14*sc, 2*sc);
+    rrect(ctx,-4*sc, -5*sc, 8*sc, 14*sc, 2*sc);
     ctx.fillStyle=bodyGrad; ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=0.6*sc; ctx.stroke();
 
@@ -1305,9 +1359,515 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       }));
     }
 
-    // Yellow/orange Among Us player — always this palette
+    // Yellow/orange Among Us player - always this palette
     const BODY_COLOR = '#f59e0b';
     const VISOR_COLOR = '#93c5fd';
+
+
+    // ── MARINA YACHT SCENE ────────────────────────────────────────────────────
+    // Seed clouds and birds once
+    if(!s.clouds){
+      s.clouds = Array.from({length:5},(_,i)=>{
+        const w = 90 + Math.random()*60;
+        const h = 40 + Math.random()*20;
+        return {
+          x: (i/5)*VW*1.1 - VW*0.05,
+          y: 14 + Math.random()*55,
+          scale: 0.7 + Math.random()*0.55,
+          spd: 0.06 + Math.random()*0.10,
+          w, h,
+          puffs: [
+            { ox:-0.55, oy: 0.1, r:0.38 },
+            { ox: 0.00, oy:-0.2, r:0.50 },
+            { ox: 0.55, oy: 0.0, r:0.36 },
+            { ox:-0.28, oy:-0.5, r:0.30 },
+            { ox: 0.30, oy:-0.4, r:0.28 },
+          ],
+        };
+      });
+    }
+    if(!s.birds){
+      s.birds = Array.from({length:6},(_,i)=>({
+        x: Math.random()*VW,
+        y: 28 + Math.random()*65,
+        spd: 0.25 + Math.random()*0.35,
+        phase: Math.random()*Math.PI*2,
+        sz: 3.5 + Math.random()*3.5
+      }));
+    }
+
+    // Draw one 3D white cloud with black outline
+    function drawCloud(cx, cy, sc){
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(sc, sc);
+
+      // Define the puff positions/radii (single layer, clean)
+      const puffs = [
+        // bottom row - wide base
+        { x:-24, y: 8, r:14 },
+        { x:  0, y:10, r:16 },
+        { x: 24, y: 7, r:13 },
+        // top row - rounder, elevated
+        { x:-12, y:-4, r:13 },
+        { x:  5, y:-11, r:16 },
+        { x: 22, y:-3, r:12 },
+        // small accent top-left
+        { x: -4, y:-15, r: 9 },
+      ];
+
+      // ── Step 1: draw all outlines first (merged border effect) ──
+      ctx.fillStyle = '#222';
+      puffs.forEach(p => {
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 2.2, 0, Math.PI*2); ctx.fill();
+      });
+
+      // ── Step 2: fill all puffs white ──
+      ctx.fillStyle = '#ffffff';
+      puffs.forEach(p => {
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+      });
+
+      // ── Step 3: single soft 3D shading pass - grey underside, bright top ──
+      puffs.forEach(p => {
+        // Underside grey shadow
+        const shade = ctx.createRadialGradient(p.x, p.y + p.r*0.3, p.r*0.1, p.x, p.y, p.r);
+        shade.addColorStop(0,   'rgba(180,195,215,0.50)');
+        shade.addColorStop(0.55,'rgba(200,215,230,0.20)');
+        shade.addColorStop(1,   'rgba(255,255,255,0)');
+        ctx.fillStyle = shade;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+
+        // Top-left specular highlight
+        const spec = ctx.createRadialGradient(p.x - p.r*0.25, p.y - p.r*0.25, 0, p.x, p.y, p.r);
+        spec.addColorStop(0,   'rgba(255,255,255,0.85)');
+        spec.addColorStop(0.4, 'rgba(255,255,255,0.30)');
+        spec.addColorStop(1,   'rgba(255,255,255,0)');
+        ctx.fillStyle = spec;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+      });
+
+      ctx.restore();
+    }
+
+    function drawYacht(){
+      s.t += 0.016;
+      ctx.clearRect(0,0,VW,VH);
+
+      const waterY = VH * 0.60;
+      const noon = 1 - Math.abs(sunProgress-0.5)*2; // 0=dusk/dawn, 1=noon
+      const isDawn = sunProgress < 0.18;
+      const isDusk = sunProgress > 0.82;
+      const isGolden = isDawn || isDusk;
+
+      // ══ SKY ══════════════════════════════════════════════════════════════════
+      const sky = ctx.createLinearGradient(0,0,0,waterY);
+      if(isDay){
+        if(noon > 0.65){
+          // Bright midday
+          sky.addColorStop(0,'#0a3d7a'); sky.addColorStop(0.5,'#1565c0'); sky.addColorStop(1,'#4aa3d8');
+        } else if(isDawn){
+          const p2 = sunProgress/0.18;
+          sky.addColorStop(0,`rgb(${lerp(8,10,p2)},${lerp(12,50,p2)},${lerp(28,110,p2)})`);
+          sky.addColorStop(0.55,`rgb(${lerp(180,80,p2)},${lerp(70,100,p2)},${lerp(20,150,p2)})`);
+          sky.addColorStop(1,`rgb(${lerp(240,160,p2)},${lerp(110,140,p2)},${lerp(15,180,p2)})`);
+        } else if(isDusk){
+          const p2 = (sunProgress-0.82)/0.18;
+          sky.addColorStop(0,`rgb(${lerp(10,8,p2)},${lerp(50,12,p2)},${lerp(110,28,p2)})`);
+          sky.addColorStop(0.55,`rgb(${lerp(80,180,p2)},${lerp(100,70,p2)},${lerp(150,20,p2)})`);
+          sky.addColorStop(1,`rgb(${lerp(160,240,p2)},${lerp(140,110,p2)},${lerp(180,15,p2)})`);
+        } else {
+          const p2 = Math.min((sunProgress-0.18)/0.3,1);
+          sky.addColorStop(0,`rgb(${lerp(10,10,p2)},${lerp(50,61,p2)},${lerp(110,122,p2)})`);
+          sky.addColorStop(1,`rgb(${lerp(160,69,p2)},${lerp(140,162,p2)},${lerp(180,216,p2)})`);
+        }
+      } else {
+        // Night: deep navy gradient
+        sky.addColorStop(0,'#010510'); sky.addColorStop(0.5,'#040c22'); sky.addColorStop(1,'#071530');
+      }
+      ctx.fillStyle=sky; ctx.fillRect(0,0,VW,waterY);
+
+      // ══ NIGHT STARS & MILKY WAY ══════════════════════════════════════════════
+      if(!isDay || sunProgress<0.08 || sunProgress>0.92){
+        const starAlpha = isDay ? Math.max(0,(sunProgress<0.08?(0.08-sunProgress)/0.08:(sunProgress-0.92)/0.08)) : 1;
+        // Milky Way soft band
+        if(!isDay){
+          ctx.save(); ctx.globalAlpha=0.07;
+          const mw=ctx.createLinearGradient(0,0,VW,waterY);
+          mw.addColorStop(0,'transparent'); mw.addColorStop(0.35,'rgba(180,200,255,0.9)');
+          mw.addColorStop(0.65,'rgba(200,180,255,0.9)'); mw.addColorStop(1,'transparent');
+          ctx.fillStyle=mw;
+          ctx.beginPath(); ctx.ellipse(VW*0.5,waterY*0.4,VW*0.55,waterY*0.22,-0.2,0,Math.PI*2);
+          ctx.fill(); ctx.restore();
+        }
+        s.stars.forEach(st=>{
+          if(st.y>waterY) return;
+          st.twinkle+=st.speed;
+          const a=starAlpha*(0.35+0.65*Math.abs(Math.sin(st.twinkle)));
+          ctx.beginPath(); ctx.arc(st.x,st.y,st.r,0,Math.PI*2);
+          ctx.fillStyle=`${st.col}${a.toFixed(2)})`; ctx.fill();
+        });
+        // Shooting star occasionally
+        if(!isDay && Math.random()<0.002){
+          s.shootStar = { x:Math.random()*VW*0.8, y:Math.random()*waterY*0.4, len:60+Math.random()*40, life:1 };
+        }
+        if(s.shootStar){
+          s.shootStar.life -= 0.04;
+          const ss=s.shootStar;
+          if(ss.life>0){
+            const g=ctx.createLinearGradient(ss.x,ss.y,ss.x+ss.len,ss.y+ss.len*0.3);
+            g.addColorStop(0,'transparent'); g.addColorStop(1,`rgba(255,255,255,${ss.life*0.8})`);
+            ctx.strokeStyle=g; ctx.lineWidth=1.2;
+            ctx.beginPath(); ctx.moveTo(ss.x,ss.y); ctx.lineTo(ss.x+ss.len,ss.y+ss.len*0.3); ctx.stroke();
+          } else { s.shootStar=null; }
+        }
+      }
+
+      // ══ SUN (same arc: east→top→west) ════════════════════════════════════════
+      if(isDay){
+        const arcAngle = sunProgress*Math.PI;
+        const arcCX=VW*0.5, arcCY=VH*0.92, arcRX=VW*0.52, arcRY=VH*0.88;
+        const sx = arcCX+Math.cos(Math.PI-arcAngle)*arcRX;
+        const sy = arcCY-Math.sin(arcAngle)*arcRY;
+        if(sy < waterY+18){
+          // Atmospheric haze cone from sun to horizon
+          if(isGolden){
+            const hz=ctx.createRadialGradient(sx,sy,8,sx,waterY,VW*0.7);
+            const gc = isDawn ? 'rgba(255,130,30,' : 'rgba(255,100,20,';
+            hz.addColorStop(0,gc+'0.22)'); hz.addColorStop(0.4,gc+'0.08)'); hz.addColorStop(1,'transparent');
+            ctx.fillStyle=hz; ctx.fillRect(0,0,VW,waterY);
+          }
+          // Lens glare rays (day only, strongest at noon)
+          const glareA = noon*0.13;
+          for(let i=0;i<8;i++){
+            const ga=(i/8)*Math.PI*2+s.t*0.05;
+            const gl=ctx.createLinearGradient(sx,sy,sx+Math.cos(ga)*VW*0.4,sy+Math.sin(ga)*VW*0.4);
+            gl.addColorStop(0,`rgba(255,240,160,${glareA})`); gl.addColorStop(0.3,`rgba(255,220,100,${glareA*0.3})`); gl.addColorStop(1,'transparent');
+            ctx.fillStyle=gl; ctx.beginPath(); ctx.moveTo(sx,sy);
+            ctx.arc(sx,sy,VW*0.4,ga-0.04,ga+0.04); ctx.closePath(); ctx.fill();
+          }
+          // Outer glow corona
+          const cg=ctx.createRadialGradient(sx,sy,14,sx,sy,isGolden?70:50);
+          cg.addColorStop(0,isGolden?'rgba(255,160,40,0.35)':'rgba(255,220,60,0.22)');
+          cg.addColorStop(0.5,isGolden?'rgba(255,120,20,0.10)':'rgba(255,200,40,0.07)');
+          cg.addColorStop(1,'transparent');
+          ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(sx,sy,isGolden?70:50,0,Math.PI*2); ctx.fill();
+          // Rays
+          const rayC = isGolden?'rgba(255,170,50,':'rgba(255,210,40,';
+          for(let i=0;i<20;i++){
+            const ang=(i/20)*Math.PI*2+s.t*0.12;
+            const r1=16, r2=28+Math.sin(s.t*2.5+i*0.7)*5;
+            ctx.beginPath(); ctx.moveTo(sx+Math.cos(ang)*r1,sy+Math.sin(ang)*r1);
+            ctx.lineTo(sx+Math.cos(ang)*r2,sy+Math.sin(ang)*r2);
+            ctx.strokeStyle=`${rayC}${0.16+noon*0.1})`; ctx.lineWidth=2; ctx.stroke();
+          }
+          // Sun body
+          const sunR=isGolden?17:14;
+          const sb=ctx.createRadialGradient(sx-sunR*0.25,sy-sunR*0.25,1,sx,sy,sunR);
+          if(isGolden){ sb.addColorStop(0,'#fff5d0'); sb.addColorStop(0.4,'#ffcc44'); sb.addColorStop(0.75,'#ff8c00'); sb.addColorStop(1,'#e05000'); }
+          else { sb.addColorStop(0,'#fffde0'); sb.addColorStop(0.3,'#ffe066'); sb.addColorStop(0.7,'#fbbf24'); sb.addColorStop(1,'#f97316'); }
+          ctx.beginPath(); ctx.arc(sx,sy,sunR,0,Math.PI*2); ctx.fillStyle=sb; ctx.fill();
+          // Highlight
+          ctx.beginPath(); ctx.arc(sx-sunR*0.32,sy-sunR*0.32,sunR*0.34,0,Math.PI*2);
+          ctx.fillStyle='rgba(255,255,220,0.32)'; ctx.fill();
+          // Water glitter path (column of sparkles)
+          const glit = isGolden?0.22:0.12;
+          const sunCol = isGolden?'rgba(255,190,60,':'rgba(255,220,100,';
+          for(let gi=0;gi<14;gi++){
+            const gy=waterY+gi*5+Math.sin(s.t*2+gi)*2;
+            const gw=(14-gi)*2.5;
+            const ga2=Math.max(0, glit-gi*0.014)*Math.abs(Math.sin(s.t*3+gi*0.7));
+            ctx.beginPath(); ctx.ellipse(sx+(Math.sin(s.t+gi)*gw*0.3),gy,gw*(0.5+Math.random()*0.15),2,0,0,Math.PI*2);
+            ctx.fillStyle=`${sunCol}${ga2.toFixed(2)})`; ctx.fill();
+          }
+        }
+      }
+
+      // ══ MOON (same arc) ═══════════════════════════════════════════════════════
+      if(!isDay){
+        const nightProg = istHour<6?(istHour+6)/12:(istHour-18)/12;
+        const arcAngle = nightProg*Math.PI;
+        const arcCX=VW*0.5, arcCY=VH*0.92, arcRX=VW*0.52, arcRY=VH*0.88;
+        const mx=arcCX+Math.cos(Math.PI-arcAngle)*arcRX;
+        const my=arcCY-Math.sin(arcAngle)*arcRY;
+        const MR=14;
+        if(my<waterY+12){
+          // Outer atmospheric glow
+          const mg=ctx.createRadialGradient(mx,my,MR*0.5,mx,my,MR*4.5);
+          mg.addColorStop(0,'rgba(200,218,255,0.22)'); mg.addColorStop(0.5,'rgba(170,195,255,0.07)'); mg.addColorStop(1,'transparent');
+          ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(mx,my,MR*4.5,0,Math.PI*2); ctx.fill();
+          // Moon body
+          const moonG=ctx.createRadialGradient(mx-MR*0.28,my-MR*0.28,MR*0.05,mx,my,MR);
+          moonG.addColorStop(0,'#f4f7ff'); moonG.addColorStop(0.45,'#d8e2f4'); moonG.addColorStop(1,'#8898bb');
+          ctx.beginPath(); ctx.arc(mx,my,MR,0,Math.PI*2); ctx.fillStyle=moonG; ctx.fill();
+          // Craters
+          [[0.28,0.08,0.16],[-0.25,-0.22,0.12],[0.08,-0.3,0.10],[-0.06,0.28,0.09]].forEach(([ox,oy,sz])=>{
+            ctx.beginPath(); ctx.arc(mx+ox*MR,my+oy*MR,sz*MR,0,Math.PI*2);
+            ctx.fillStyle='rgba(0,0,0,0.10)'; ctx.fill();
+            ctx.beginPath(); ctx.arc(mx+ox*MR-sz*MR*0.2,my+oy*MR-sz*MR*0.2,sz*MR*0.45,0,Math.PI*2);
+            ctx.fillStyle='rgba(255,255,255,0.09)'; ctx.fill();
+          });
+          // Phase shadow
+          ctx.save(); ctx.beginPath(); ctx.arc(mx,my,MR,0,Math.PI*2); ctx.clip();
+          const phAngle=moonPhase*Math.PI*2;
+          const shadowX=Math.cos(phAngle)*MR*1.2;
+          const shadowG=ctx.createRadialGradient(mx+shadowX,my,MR*0.05,mx+shadowX,my,MR*1.3);
+          shadowG.addColorStop(0,'rgba(4,8,24,0.9)'); shadowG.addColorStop(0.5,'rgba(4,8,24,0.72)'); shadowG.addColorStop(1,'transparent');
+          ctx.fillStyle=shadowG; ctx.fillRect(mx-MR,my-MR,MR*2,MR*2); ctx.restore();
+          // Moonpath shimmer on water
+          const msh=ctx.createLinearGradient(mx-16,waterY,mx-16,waterY+65);
+          msh.addColorStop(0,'rgba(190,210,255,0.18)'); msh.addColorStop(1,'transparent');
+          ctx.fillStyle=msh;
+          for(let mi=0;mi<10;mi++){
+            const my2=waterY+mi*5+Math.sin(s.t*1.5+mi)*2;
+            const mw2=(10-mi)*3;
+            ctx.beginPath(); ctx.ellipse(mx+(Math.sin(s.t*0.8+mi)*mw2*0.25),my2,mw2,1.8,0,0,Math.PI*2);
+            ctx.fillStyle=`rgba(190,210,255,${(0.14-mi*0.012)*Math.abs(Math.sin(s.t*1.2+mi))})`; ctx.fill();
+          }
+        }
+      }
+
+      // ══ CLOUDS (day only) ═════════════════════════════════════════════════════
+      if(isDay){
+        const cloudAlpha = noon>0.3 ? 0.82 : noon/0.3*0.82;
+        s.clouds.forEach(cl=>{
+          cl.x += cl.spd;
+          if(cl.x > VW + cl.w*0.6) cl.x = -cl.w*0.6;
+          ctx.save(); ctx.globalAlpha = cloudAlpha*(isGolden?0.55:1);
+          // Shadow layer below
+          cl.puffs.forEach(p=>{
+            const pg2=ctx.createRadialGradient(cl.x+p.ox*cl.w*0.38,cl.y+p.oy*cl.h*0.5+cl.h*0.35,0,cl.x+p.ox*cl.w*0.38,cl.y+p.oy*cl.h*0.5+cl.h*0.3,cl.w*p.r*0.42);
+            pg2.addColorStop(0,'rgba(160,180,210,0.18)'); pg2.addColorStop(1,'transparent');
+            ctx.fillStyle=pg2; ctx.beginPath(); ctx.arc(cl.x+p.ox*cl.w*0.38,cl.y+p.oy*cl.h*0.5+cl.h*0.3,cl.w*p.r*0.42,0,Math.PI*2); ctx.fill();
+          });
+          // Main puffs
+          cl.puffs.forEach(p=>{
+            const pg=ctx.createRadialGradient(cl.x+p.ox*cl.w*0.38-cl.w*p.r*0.08,cl.y+p.oy*cl.h*0.5-cl.h*p.r*0.1,0,cl.x+p.ox*cl.w*0.38,cl.y+p.oy*cl.h*0.5,cl.w*p.r*0.5);
+            if(isGolden){
+              pg.addColorStop(0,'rgba(255,220,160,0.95)'); pg.addColorStop(0.5,'rgba(255,180,100,0.7)'); pg.addColorStop(1,'transparent');
+            } else {
+              pg.addColorStop(0,'rgba(255,255,255,0.96)'); pg.addColorStop(0.5,'rgba(230,240,255,0.75)'); pg.addColorStop(1,'transparent');
+            }
+            ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(cl.x+p.ox*cl.w*0.38,cl.y+p.oy*cl.h*0.5,cl.w*p.r*0.5,0,Math.PI*2); ctx.fill();
+          });
+          ctx.restore();
+        });
+      }
+
+      // ══ BIRDS (day only) ══════════════════════════════════════════════════════
+      if(isDay){
+        s.birds.forEach(b=>{
+          b.x += b.spd;
+          if(b.x > VW+20) b.x = -20;
+          b.phase += 0.06;
+          const flap = Math.sin(b.phase)*b.sz*0.55;
+          const bAlpha = noon>0.2?0.55:noon/0.2*0.55;
+          ctx.save(); ctx.globalAlpha=bAlpha;
+          ctx.strokeStyle=isGolden?'rgba(200,140,60,0.7)':'rgba(60,70,90,0.65)';
+          ctx.lineWidth=1.3; ctx.lineCap='round';
+          // Left wing
+          ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.quadraticCurveTo(b.x-b.sz*0.7,b.y-flap,b.x-b.sz*1.4,b.y-flap*0.3); ctx.stroke();
+          // Right wing
+          ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.quadraticCurveTo(b.x+b.sz*0.7,b.y-flap,b.x+b.sz*1.4,b.y-flap*0.3); ctx.stroke();
+          ctx.restore();
+        });
+      }
+
+      // ══ WATER ════════════════════════════════════════════════════════════════
+      // Deep ocean gradient
+      const wg=ctx.createLinearGradient(0,waterY,0,VH);
+      if(isDay){
+        if(noon>0.6){ wg.addColorStop(0,'#1255a0'); wg.addColorStop(1,'#0a3270'); }
+        else if(isGolden){ wg.addColorStop(0,'#7a3010'); wg.addColorStop(1,'#3a1008'); }
+        else { wg.addColorStop(0,`rgb(${lerp(18,18,noon)},${lerp(85,85,noon)},${lerp(160,160,noon)})`); wg.addColorStop(1,'#0a2040'); }
+      } else {
+        wg.addColorStop(0,'#06101e'); wg.addColorStop(1,'#030812');
+      }
+      ctx.fillStyle=wg; ctx.fillRect(0,waterY,VW,VH-waterY);
+
+      // Horizon shimmer line
+      const hsh=ctx.createLinearGradient(0,waterY,VW,waterY);
+      hsh.addColorStop(0,'transparent');
+      hsh.addColorStop(0.5,isDay?(isGolden?'rgba(255,180,60,0.35)':'rgba(150,210,255,0.28)'):'rgba(80,100,180,0.18)');
+      hsh.addColorStop(1,'transparent');
+      ctx.strokeStyle=hsh; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(0,waterY); ctx.lineTo(VW,waterY); ctx.stroke();
+
+      // Waves - multi-layer, parallax depth
+      for(let wi=0;wi<7;wi++){
+        const wy=waterY+wi*12+3;
+        const ph=s.t*(0.5+wi*0.08)+wi*1.1;
+        const freq=0.018+wi*0.003;
+        const amp=2.5+Math.sin(s.t*0.4+wi)*1.2;
+        const wAlpha=isDay?(isGolden?0.09-wi*0.008:0.07-wi*0.006):0.05-wi*0.004;
+        if(wAlpha<=0) continue;
+        ctx.beginPath(); ctx.moveTo(0,wy);
+        for(let wx=0;wx<=VW;wx+=6){
+          ctx.lineTo(wx, wy+Math.sin(wx*freq+ph)*amp+Math.sin(wx*freq*1.7+ph*1.3)*amp*0.5);
+        }
+        ctx.strokeStyle=`rgba(255,255,255,${wAlpha})`; ctx.lineWidth=wi<2?1.2:0.8; ctx.stroke();
+      }
+      // ══ YACHT - cartoon motor yacht ══════════════════════════════════════════
+      const yX=VW*0.5;
+      const bob=Math.sin(s.t*0.85)*2.2+Math.sin(s.t*1.4)*0.7;
+      const roll=Math.sin(s.t*0.7)*0.012;
+      const yY=waterY - 8 + bob;
+      const S = Math.min(1, VW/380); // scale factor
+
+      ctx.save();
+      ctx.translate(yX, yY);
+      ctx.rotate(roll);
+      ctx.scale(S, S);
+
+      // ── Shadow on water ──
+      ctx.save(); ctx.globalAlpha=0.18;
+      ctx.beginPath(); ctx.ellipse(0, 28, 85, 10, 0, 0, Math.PI*2);
+      ctx.fillStyle='#003'; ctx.fill(); ctx.restore();
+
+      // ── HULL - teal body, pointed bow right, flat stern left ──
+      // Hull fill (teal gradient)
+      ctx.beginPath();
+      ctx.moveTo(-90,  0);      // stern top
+      ctx.lineTo(-90, 22);      // stern bottom
+      ctx.lineTo( 55, 22);      // keel
+      ctx.bezierCurveTo( 75, 22,  95,  8,  95, -2);  // bow bottom curve
+      ctx.bezierCurveTo( 80,-10,  20,-14, -90,  0);  // sheerline
+      ctx.closePath();
+      const hG = ctx.createLinearGradient(0,-14,0,22);
+      hG.addColorStop(0,'#c8eee0'); hG.addColorStop(0.4,'#7ecfb4'); hG.addColorStop(1,'#3aaa8a');
+      ctx.fillStyle=hG; ctx.fill();
+      ctx.strokeStyle='#2a7a64'; ctx.lineWidth=2.5; ctx.stroke();
+
+      // ── WHITE DECK STRIPE along top of hull ──
+      ctx.beginPath();
+      ctx.moveTo(-90,  0);
+      ctx.bezierCurveTo(-30,-12, 40,-14,  95, -2);
+      ctx.bezierCurveTo( 80, -8,  20,-10, -90,  4);
+      ctx.closePath();
+      ctx.fillStyle='#f0f5f8'; ctx.fill();
+      ctx.strokeStyle='#c0ced8'; ctx.lineWidth=1; ctx.stroke();
+
+      // ── SUPERSTRUCTURE / CABIN ──
+      // Main cabin body
+      ctx.beginPath();
+      rrect(ctx, -70,-32, 95, 32, 6);
+      const cG=ctx.createLinearGradient(0,-32,0,0);
+      cG.addColorStop(0,'#f5f8fa'); cG.addColorStop(1,'#dde4ec');
+      ctx.fillStyle=cG; ctx.fill();
+      ctx.strokeStyle='#8a9aaa'; ctx.lineWidth=2; ctx.stroke();
+
+      // Cabin roof - overhang on both ends
+      ctx.beginPath();
+      ctx.moveTo(-74,-32);
+      ctx.lineTo( 28,-32);
+      ctx.bezierCurveTo( 36,-32,  38,-38,  30,-40); // front slope
+      ctx.lineTo(-76,-40);
+      ctx.bezierCurveTo(-80,-40, -80,-36, -74,-32);
+      ctx.closePath();
+      const rG=ctx.createLinearGradient(0,-40,0,-32);
+      rG.addColorStop(0,'#dde4ec'); rG.addColorStop(1,'#c8d2de');
+      ctx.fillStyle=rG; ctx.fill();
+      ctx.strokeStyle='#8a9aaa'; ctx.lineWidth=1.8; ctx.stroke();
+
+      // ── WINDSCREEN - tall blue angled glass ──
+      ctx.beginPath();
+      ctx.moveTo( 25,-32); ctx.lineTo( 28,-32);
+      ctx.bezierCurveTo( 36,-32,  38,-38,  30,-40);
+      ctx.lineTo(-10,-40);
+      ctx.lineTo(-10,-32);
+      ctx.closePath();
+      const wG=ctx.createLinearGradient(10,-40,10,-32);
+      wG.addColorStop(0,'rgba(100,190,255,0.85)');
+      wG.addColorStop(1,'rgba(60,150,230,0.70)');
+      ctx.fillStyle=wG; ctx.fill();
+      ctx.strokeStyle='#5080a8'; ctx.lineWidth=1.5; ctx.stroke();
+      // Glass pane dividers
+      [-3, 5, 13].forEach(lx=>{
+        ctx.beginPath(); ctx.moveTo(lx,-32); ctx.lineTo(lx-1.5,-40);
+        ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.lineWidth=1.5; ctx.stroke();
+      });
+      // Glare streak
+      ctx.save(); ctx.globalAlpha=0.45;
+      ctx.beginPath(); ctx.moveTo(-6,-39); ctx.lineTo(-2,-39); ctx.lineTo(-4,-33); ctx.lineTo(-8,-33); ctx.closePath();
+      ctx.fillStyle='#e8f6ff'; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(7,-39); ctx.lineTo(11,-39); ctx.lineTo(9,-33); ctx.lineTo(5,-33); ctx.closePath();
+      ctx.fillStyle='#e8f6ff'; ctx.fill();
+      ctx.restore();
+
+      // ── THREE ROUND PORTHOLES on hull side ──
+      [-52,-32,-12].forEach(px=>{
+        const py=8;
+        // Outer ring (dark blue)
+        ctx.beginPath(); ctx.arc(px,py,8,0,Math.PI*2);
+        ctx.fillStyle='#2060a0'; ctx.fill(); ctx.strokeStyle='#14457a'; ctx.lineWidth=1.5; ctx.stroke();
+        // Inner glass
+        ctx.beginPath(); ctx.arc(px,py,6,0,Math.PI*2);
+        const pgG=ctx.createRadialGradient(px-2,py-2,0.5,px,py,6);
+        pgG.addColorStop(0,'rgba(160,220,255,0.98)');
+        pgG.addColorStop(0.6,'rgba(60,160,230,0.90)');
+        pgG.addColorStop(1,'rgba(30,100,200,0.85)');
+        ctx.fillStyle=pgG; ctx.fill();
+        // Glare dot
+        ctx.beginPath(); ctx.arc(px-2,py-2,2.2,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,255,255,0.65)'; ctx.fill();
+      });
+
+      // ── ANTENNA / MAST ──
+      ctx.beginPath(); ctx.moveTo(-60,-40); ctx.lineTo(-62,-62);
+      ctx.strokeStyle='#7090a8'; ctx.lineWidth=2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(-62,-63,2.5,0,Math.PI*2);
+      ctx.fillStyle='#90a8bc'; ctx.fill();
+      // Radar dome (small circle on mast)
+      ctx.beginPath(); ctx.arc(-62,-55,4,0,Math.PI*2);
+      ctx.fillStyle='#d0dce8'; ctx.fill(); ctx.strokeStyle='#8a9aaa'; ctx.lineWidth=1; ctx.stroke();
+
+      // ── Night cabin light glow ──
+      if(!isDay){
+        [[-70+10,-26],[-70+28,-26],[-70+46,-26]].forEach(([wx,wy])=>{
+          ctx.beginPath(); rrect(ctx,wx,wy,14,8,2);
+          ctx.fillStyle='rgba(255,230,100,0.88)'; ctx.fill();
+          const lg=ctx.createRadialGradient(wx+7,wy+4,0,wx+7,wy+4,22);
+          lg.addColorStop(0,'rgba(255,220,60,0.22)'); lg.addColorStop(1,'transparent');
+          ctx.fillStyle=lg; ctx.fillRect(wx-15,wy-15,44,38);
+        });
+      }
+
+      ctx.restore();
+
+      // ══ WAKE - motor yacht bow wave + stern foam ═══════════════════════════
+      ctx.save();
+      // Bow wave (right side, pointing direction)
+      for(let wi2=0;wi2<5;wi2++){
+        const wAlpha2=(0.09-wi2*0.015)*(0.6+Math.sin(s.t*0.6+wi2)*0.3);
+        if(wAlpha2<=0) continue;
+        const wr=28+wi2*18;
+        ctx.beginPath();
+        ctx.moveTo(yX+70, yY+4+wi2*2);
+        ctx.quadraticCurveTo(yX+70+wr*0.5, yY+4+wi2*3, yX+70+wr, yY+12+wi2*5);
+        ctx.strokeStyle=`rgba(255,255,255,${wAlpha2})`; ctx.lineWidth=1.4-wi2*0.2; ctx.stroke();
+      }
+      // Stern wake (left side, trailing behind)
+      for(let wi2=0;wi2<4;wi2++){
+        const wA=(0.06-wi2*0.012)*(0.5+Math.sin(s.t*0.4+wi2)*0.35);
+        if(wA<=0) continue;
+        const wLen=40+wi2*25;
+        ctx.beginPath();
+        ctx.moveTo(yX-72, yY+8+wi2*2);
+        ctx.lineTo(yX-72-wLen, yY+10+wi2*4);
+        ctx.strokeStyle=`rgba(255,255,255,${wA})`; ctx.lineWidth=1-wi2*0.15; ctx.stroke();
+      }
+      // Stern foam patch
+      for(let fi=0;fi<5;fi++){
+        const fa=0.055-fi*0.009;
+        const fx=yX-72-fi*10-Math.sin(s.t*2+fi)*3;
+        const fy=yY+10+fi*2+Math.cos(s.t*1.8+fi)*1.5;
+        ctx.beginPath(); ctx.arc(fx, fy, 4-fi*0.5, 0, Math.PI*2);
+        ctx.fillStyle=`rgba(255,255,255,${fa})`; ctx.fill();
+      }
+      ctx.restore();
+
+      rafRef.current = requestAnimationFrame(drawYacht);
+    }
 
     function draw(){
       s.t += 0.016;
@@ -1335,7 +1895,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       }
       ctx.fillStyle=bg; ctx.fillRect(0,0,VW,VH);
 
-      // ── HORIZON DIVIDER — subtle separator below planet ──
+      // ── HORIZON DIVIDER - subtle separator below planet ──
       const horizonY = VH * 0.78;
       const horizonGrad = ctx.createLinearGradient(0, horizonY, VW, horizonY);
       horizonGrad.addColorStop(0, 'transparent');
@@ -1367,7 +1927,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         });
       }
 
-      // Sun — rises bottom-right (east), arcs through top-centre, sets bottom-left (west)
+      // Sun - rises bottom-right (east), arcs through top-centre, sets bottom-left (west)
       if(isDay){
         // Semicircular arc: progress 0=right, 0.5=top-centre, 1=left
         // arcAngle goes from 0 (right) → π (left) as sunProgress 0→1
@@ -1416,7 +1976,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         }
       }
 
-      // Moon — rises bottom-right (east), arcs through top-centre, sets bottom-left (west)
+      // Moon - rises bottom-right (east), arcs through top-centre, sets bottom-left (west)
       if(!isDay){
         const nightProg = istHour < 6 ? (istHour + 6) / 12 : (istHour - 18) / 12;
         const arcAngle = nightProg * Math.PI;
@@ -1452,7 +2012,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         ctx.restore();
       }
 
-      // Transition — smooth slide with easing
+      // Transition - smooth slide with easing
       const tx = s.transitioning ? s.transX : 0;
       if(s.transitioning){
         s.transX += Math.max(5, (VW+80-s.transX)*0.08);
@@ -1489,6 +2049,21 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
 
       // Planet
       drawPlanetBody(ctx,planet,curX,pY,pR,s.t);
+
+      // Lock overlay - dim + padlock for planets not yet unlocked by streak
+      if(planetLocked){
+        ctx.save();
+        ctx.beginPath(); ctx.arc(curX,pY,pR,0,Math.PI*2); ctx.clip();
+        ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fill();
+        ctx.restore();
+        // 🔒 icon above planet
+        ctx.save();
+        ctx.font=`${Math.round(pR*0.55)}px serif`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.globalAlpha=0.85;
+        ctx.fillText('🔒', curX, pY);
+        ctx.restore();
+      }
 
       // Planet surface ground highlight (ambient light)
       if(isDay){
@@ -1563,7 +2138,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         const ist = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
         const mins     = ist.getMinutes() + ist.getSeconds() / 60;
         const minAngle = (mins / 60) * Math.PI * 2 - Math.PI / 2; // 0 min = top, CW
-        const orR      = pR + Math.round(38 * scaleFactor); // orbit radius — fits in upper zone
+        const orR      = pR + Math.round(38 * scaleFactor); // orbit radius - fits in upper zone
 
         // rocket position on the circle
         const orX = curX + Math.cos(minAngle) * orR;
@@ -1571,7 +2146,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         // tangent = +90° → nose points in direction of travel
         const orAngle = minAngle + Math.PI / 2;
 
-        // ── ORBIT RING — glowing neon circle ───────────────────────────────
+        // ── ORBIT RING - glowing neon circle ───────────────────────────────
         // Base dashed ring
         ctx.save();
         ctx.setLineDash([5, 8]);
@@ -1581,7 +2156,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         ctx.lineWidth = 1.2; ctx.stroke();
         ctx.restore();
 
-        // Energy pulse — bright dot that races around the ring independently
+        // Energy pulse - bright dot that races around the ring independently
         const pulseAngle = (s.t * 1.4) % (Math.PI * 2);
         const pPx = curX + Math.cos(pulseAngle) * orR;
         const pPy = pY   + Math.sin(pulseAngle) * orR;
@@ -1599,7 +2174,7 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         pg2.addColorStop(0,'rgba(140,100,255,0.55)'); pg2.addColorStop(1,'transparent');
         ctx.fillStyle=pg2; ctx.beginPath(); ctx.arc(p2x,p2y,6,0,Math.PI*2); ctx.fill();
 
-        // ── ION TRAIL — glowing arc behind the rocket ──────────────────────
+        // ── ION TRAIL - glowing arc behind the rocket ──────────────────────
         const trailArc = Math.PI * 0.55; // how far back the trail extends
         // Draw from back of trail to rocket (fade in)
         const trailSteps = 48;
@@ -1660,8 +2235,8 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
         const ps = p.type===5 ? 1.5*p.life : 2.8*p.life;
         ctx.beginPath(); ctx.arc(p.x,p.y,ps,0,Math.PI*2);
         const col =
-          p.type===5 ? `rgba(160,220,255,${p.life*0.9})`  // ion spark — cyan
-          : p.type===4 ? `rgba(140,180,255,${p.life*0.55})` // cold thruster — blue
+          p.type===5 ? `rgba(160,220,255,${p.life*0.9})`  // ion spark - cyan
+          : p.type===4 ? `rgba(140,180,255,${p.life*0.55})` // cold thruster - blue
           : p.type===3 ? `rgba(220,235,255,${p.life*0.55})` // white contrail
           : p.type===0 ? `rgba(251,191,36,${p.life*0.82})`  // golden
           : p.type===1 ? `rgba(249,115,22,${p.life*0.78})`  // orange
@@ -1678,20 +2253,351 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
       rafRef.current = requestAnimationFrame(draw);
     }
 
-    rafRef.current = requestAnimationFrame(draw);
+    // ── ISLAND SCENE ──────────────────────────────────────────────────────────
+    function drawIsland(){
+      s.t += 0.016;
+      ctx.clearRect(0,0,VW,VH);
+      const waterY = VH * 0.62;
+      const isD = isDay;
+      const noon2 = 1 - Math.abs(sunProgress-0.5)*2;
+      const isGolden2 = sunProgress < 0.18 || sunProgress > 0.82;
+
+      // Sky
+      const sky2 = ctx.createLinearGradient(0,0,0,waterY);
+      if(isD){
+        sky2.addColorStop(0,'#1a6b2a'); // deep tropical green at horizon... no actually blue
+        sky2.addColorStop(0,'#1a4f8a'); sky2.addColorStop(1,'#64b8e0');
+      } else {
+        sky2.addColorStop(0,'#020a08'); sky2.addColorStop(1,'#061512');
+      }
+      ctx.fillStyle=sky2; ctx.fillRect(0,0,VW,waterY);
+
+      // Sun
+      if(isD){
+        const arcAngle2=sunProgress*Math.PI;
+        const sx2=VW*0.5+Math.cos(Math.PI-arcAngle2)*VW*0.45;
+        const sy2=VH*0.85-Math.sin(arcAngle2)*VH*0.80;
+        if(sy2<waterY+12){
+          const sg=ctx.createRadialGradient(sx2,sy2,10,sx2,sy2,45);
+          sg.addColorStop(0,isGolden2?'rgba(255,160,40,0.3)':'rgba(255,220,60,0.18)');
+          sg.addColorStop(1,'transparent');
+          ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(sx2,sy2,45,0,Math.PI*2); ctx.fill();
+          const sb2=ctx.createRadialGradient(sx2-3,sy2-3,1,sx2,sy2,13);
+          sb2.addColorStop(0,'#fffde0'); sb2.addColorStop(0.4,'#ffe066'); sb2.addColorStop(1,'#f97316');
+          ctx.beginPath(); ctx.arc(sx2,sy2,13,0,Math.PI*2); ctx.fillStyle=sb2; ctx.fill();
+        }
+      }
+
+      // Stars at night
+      if(!isD){
+        s.stars.forEach(st=>{ if(st.y>waterY) return; st.twinkle+=st.speed; const a=(0.3+0.65*Math.abs(Math.sin(st.twinkle))); ctx.beginPath(); ctx.arc(st.x,st.y,st.r,0,Math.PI*2); ctx.fillStyle=`rgba(255,255,255,${a})`; ctx.fill(); });
+        // Moon
+        const nightProg2 = istHour<6?(istHour+6)/12:(istHour-18)/12;
+        const moonAng2 = nightProg2*Math.PI;
+        const mx2=VW*0.5+Math.cos(Math.PI-moonAng2)*VW*0.45;
+        const my2=VH*0.85-Math.sin(moonAng2)*VH*0.80;
+        const MR2=13;
+        if(my2<waterY+10){
+          const mg2=ctx.createRadialGradient(mx2,my2,MR2*0.5,mx2,my2,MR2*4);
+          mg2.addColorStop(0,'rgba(200,218,255,0.20)'); mg2.addColorStop(1,'transparent');
+          ctx.fillStyle=mg2; ctx.beginPath(); ctx.arc(mx2,my2,MR2*4,0,Math.PI*2); ctx.fill();
+          const moonG2=ctx.createRadialGradient(mx2-MR2*0.28,my2-MR2*0.28,MR2*0.05,mx2,my2,MR2);
+          moonG2.addColorStop(0,'#f4f7ff'); moonG2.addColorStop(0.45,'#d8e2f4'); moonG2.addColorStop(1,'#8898bb');
+          ctx.beginPath(); ctx.arc(mx2,my2,MR2,0,Math.PI*2); ctx.fillStyle=moonG2; ctx.fill();
+          // Phase shadow
+          ctx.save(); ctx.beginPath(); ctx.arc(mx2,my2,MR2,0,Math.PI*2); ctx.clip();
+          const phAngle2=moonPhase*Math.PI*2;
+          const shadowG2=ctx.createRadialGradient(mx2+Math.cos(phAngle2)*MR2*1.2,my2,MR2*0.05,mx2+Math.cos(phAngle2)*MR2*1.2,my2,MR2*1.3);
+          shadowG2.addColorStop(0,'rgba(4,8,24,0.9)'); shadowG2.addColorStop(1,'transparent');
+          ctx.fillStyle=shadowG2; ctx.fillRect(mx2-MR2,my2-MR2,MR2*2,MR2*2); ctx.restore();
+        }
+      }
+
+      // Clouds (day only)
+      if(isD && s.clouds){
+        s.clouds.forEach(cl=>{
+          cl.x += cl.spd*0.7;
+          if(cl.x > VW + 60) cl.x = -60;
+          ctx.save(); ctx.globalAlpha = 0.85;
+          drawCloud(cl.x, cl.y, cl.scale*0.85);
+          ctx.restore();
+        });
+      }
+
+      // Ocean water
+      const wg2=ctx.createLinearGradient(0,waterY,0,VH);
+      wg2.addColorStop(0,isD?'#1a90c8':'#0a3040'); wg2.addColorStop(1,isD?'#0a5080':'#040e1a');
+      ctx.fillStyle=wg2; ctx.fillRect(0,waterY,VW,VH-waterY);
+
+      // Gentle waves
+      for(let wi=0;wi<5;wi++){
+        const wy2=waterY+wi*14+4;
+        const ph2=s.t*(0.4+wi*0.06)+wi*1.3;
+        const amp2=2+Math.sin(s.t*0.3+wi)*0.8;
+        const wA2=isD?0.055-wi*0.008:0.04-wi*0.006;
+        if(wA2<=0) continue;
+        ctx.beginPath(); ctx.moveTo(0,wy2);
+        for(let wx2=0;wx2<=VW;wx2+=8){ ctx.lineTo(wx2,wy2+Math.sin(wx2*0.018+ph2)*amp2); }
+        ctx.strokeStyle=`rgba(255,255,255,${wA2})`; ctx.lineWidth=1; ctx.stroke();
+      }
+
+      // ── ISLAND ──
+      const iX = VW*0.5, iY = waterY;
+      ctx.save(); ctx.translate(iX, iY);
+
+      // Island base (sandy mound rising from water)
+      ctx.beginPath();
+      ctx.moveTo(-90, 0);
+      ctx.bezierCurveTo(-90,-15,-60,-45,-20,-55);
+      ctx.bezierCurveTo(0,-62,20,-62,40,-52);
+      ctx.bezierCurveTo(70,-40,85,-18,85,0);
+      ctx.closePath();
+      const sandG=ctx.createLinearGradient(0,-62,0,0);
+      sandG.addColorStop(0,'#f5e6a0'); sandG.addColorStop(0.6,'#e8d070'); sandG.addColorStop(1,'#c8a840');
+      ctx.fillStyle=sandG; ctx.fill();
+      ctx.strokeStyle='#a07820'; ctx.lineWidth=1.5; ctx.stroke();
+
+      // Grass/vegetation on top of island
+      ctx.beginPath();
+      ctx.moveTo(-50,-28);
+      ctx.bezierCurveTo(-40,-50,-20,-58,-5,-58);
+      ctx.bezierCurveTo(12,-58,28,-52,38,-38);
+      ctx.bezierCurveTo(20,-32,0,-30,-50,-28);
+      ctx.closePath();
+      const grassG=ctx.createLinearGradient(0,-60,0,-28);
+      grassG.addColorStop(0,'#2d9e3a'); grassG.addColorStop(1,'#4ab840');
+      ctx.fillStyle=grassG; ctx.fill();
+
+      // Palm tree 1 (centre-left)
+      function palm(px,py,lean){
+        // Trunk
+        ctx.save(); ctx.translate(px,py);
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.bezierCurveTo(lean*0.3,-12,lean*0.7,-24,lean,-36);
+        ctx.strokeStyle='#7a4a10'; ctx.lineWidth=5; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.bezierCurveTo(lean*0.3,-12,lean*0.7,-24,lean,-36);
+        ctx.strokeStyle='#a06820'; ctx.lineWidth=3; ctx.stroke();
+        // Fronds
+        const fronds=[[-30,-8],[-22,-18],[0,-24],[20,-16],[28,-6],[-8,-26]];
+        fronds.forEach(([fx,fy])=>{
+          ctx.beginPath(); ctx.moveTo(lean,-36);
+          ctx.bezierCurveTo(lean+fx*0.4,fy-36+8,lean+fx*0.8,fy-36+4,lean+fx,fy-36);
+          ctx.strokeStyle='#228b22'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.stroke();
+          ctx.strokeStyle='#2da82d'; ctx.lineWidth=2; ctx.stroke();
+        });
+        // Coconuts
+        ctx.beginPath(); ctx.arc(lean-4,-38,3.5,0,Math.PI*2);
+        ctx.fillStyle='#5a3010'; ctx.fill();
+        ctx.beginPath(); ctx.arc(lean+3,-36,3,0,Math.PI*2);
+        ctx.fillStyle='#6a3818'; ctx.fill();
+        ctx.restore();
+      }
+      palm(-18,-52, -10);
+      palm(22,-50,  12);
+
+      // Small beach hut / shelter on sand
+      // Hut base
+      ctx.beginPath(); rrect(ctx,42,-22,22,14,2);
+      ctx.fillStyle='#d4a84e'; ctx.fill(); ctx.strokeStyle='#8a6010'; ctx.lineWidth=1.2; ctx.stroke();
+      // Hut thatched roof
+      ctx.beginPath();
+      ctx.moveTo(38,-22); ctx.lineTo(53,-36); ctx.lineTo(68,-22);
+      ctx.closePath();
+      ctx.fillStyle='#b8860b'; ctx.fill(); ctx.strokeStyle='#7a5800'; ctx.lineWidth=1.5; ctx.stroke();
+
+      // Starfish on beach
+      ctx.save(); ctx.translate(-55,-4); ctx.rotate(0.4);
+      for(let i=0;i<5;i++){
+        const a2=(i/5)*Math.PI*2;
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a2)*7,Math.sin(a2)*7);
+        ctx.strokeStyle='#e06030'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.stroke();
+      }
+      ctx.restore();
+
+      // Seagulls above island (day)
+      if(isD && s.birds){
+        s.birds.slice(0,4).forEach(b=>{
+          b.x+=b.spd*0.6; if(b.x>VW+20) b.x=-20;
+          b.phase+=0.055;
+          const flap2=Math.sin(b.phase)*b.sz*0.5;
+          ctx.save(); ctx.globalAlpha=0.6;
+          ctx.strokeStyle='rgba(50,60,70,0.7)'; ctx.lineWidth=1.2; ctx.lineCap='round';
+          ctx.beginPath(); ctx.moveTo(b.x-iX,b.y-iY-90); ctx.quadraticCurveTo(b.x-iX-b.sz*0.6,b.y-iY-90-flap2,b.x-iX-b.sz*1.2,b.y-iY-90-flap2*0.4); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(b.x-iX,b.y-iY-90); ctx.quadraticCurveTo(b.x-iX+b.sz*0.6,b.y-iY-90-flap2,b.x-iX+b.sz*1.2,b.y-iY-90-flap2*0.4); ctx.stroke();
+          ctx.restore();
+        });
+      }
+
+      ctx.restore();
+      rafRef.current = requestAnimationFrame(drawIsland);
+    }
+
+    // ── VOLCANO SCENE ─────────────────────────────────────────────────────────
+    function drawVolcano(){
+      s.t += 0.016;
+      ctx.clearRect(0,0,VW,VH);
+      const waterY = VH * 0.65;
+
+      // Dramatic sky - warm orange/red haze
+      const sky3=ctx.createLinearGradient(0,0,0,waterY);
+      if(isDay){
+        sky3.addColorStop(0,'#1a0a02'); sky3.addColorStop(0.4,'#6b2800'); sky3.addColorStop(1,'#c85000');
+      } else {
+        sky3.addColorStop(0,'#050002'); sky3.addColorStop(0.5,'#1a0508'); sky3.addColorStop(1,'#3a0a00');
+      }
+      ctx.fillStyle=sky3; ctx.fillRect(0,0,VW,waterY);
+
+      // Stars at night
+      if(!isDay){
+        s.stars.forEach(st=>{ if(st.y>waterY) return; st.twinkle+=st.speed; const a=(0.25+0.65*Math.abs(Math.sin(st.twinkle))); ctx.beginPath(); ctx.arc(st.x,st.y,st.r,0,Math.PI*2); ctx.fillStyle=`rgba(255,220,180,${a})`; ctx.fill(); });
+      }
+
+      // Lava glow on horizon
+      const lavaSky=ctx.createRadialGradient(VW*0.5,waterY,0,VW*0.5,waterY,VW*0.6);
+      lavaSky.addColorStop(0,'rgba(255,80,0,0.35)'); lavaSky.addColorStop(0.5,'rgba(200,40,0,0.12)'); lavaSky.addColorStop(1,'transparent');
+      ctx.fillStyle=lavaSky; ctx.fillRect(0,0,VW,waterY);
+
+      // Dark lava ocean
+      const wg3=ctx.createLinearGradient(0,waterY,0,VH);
+      wg3.addColorStop(0,'#1a0800'); wg3.addColorStop(1,'#080200');
+      ctx.fillStyle=wg3; ctx.fillRect(0,waterY,VW,VH-waterY);
+      // Lava glow on water surface
+      const wSurf=ctx.createLinearGradient(0,waterY,0,waterY+40);
+      wSurf.addColorStop(0,'rgba(255,60,0,0.25)'); wSurf.addColorStop(1,'transparent');
+      ctx.fillStyle=wSurf; ctx.fillRect(0,waterY,VW,40);
+      // Dark wave lines
+      for(let wi=0;wi<4;wi++){
+        const wA=0.06-wi*0.01; if(wA<=0) continue;
+        ctx.beginPath(); ctx.moveTo(0,waterY+wi*16+4);
+        for(let wx2=0;wx2<=VW;wx2+=8){ ctx.lineTo(wx2,waterY+wi*16+4+Math.sin(wx2*0.02+s.t*(0.4+wi*0.06)+wi)*1.8); }
+        ctx.strokeStyle=`rgba(255,100,20,${wA})`; ctx.lineWidth=1; ctx.stroke();
+      }
+
+      // ── VOLCANO ──
+      const vX=VW*0.5, vY=waterY;
+      ctx.save(); ctx.translate(vX, vY);
+
+      // Volcano mountain body
+      ctx.beginPath();
+      ctx.moveTo(-VW*0.55, 0);
+      ctx.lineTo(-80, 0);
+      ctx.bezierCurveTo(-70,-40,-50,-90,-8,-115);  // left slope
+      ctx.lineTo(8,-115);                           // crater rim
+      ctx.bezierCurveTo(50,-90,70,-40,80,0);
+      ctx.lineTo(VW*0.55,0);
+      ctx.closePath();
+      const volG=ctx.createLinearGradient(0,-115,0,0);
+      volG.addColorStop(0,'#2a0a00'); volG.addColorStop(0.5,'#4a1800'); volG.addColorStop(1,'#1a0800');
+      ctx.fillStyle=volG; ctx.fill();
+      ctx.strokeStyle='#1a0400'; ctx.lineWidth=2; ctx.stroke();
+
+      // Rock texture / ridges
+      [[-55,-30,-20,-70],[-30,-55,5,-100],[10,-100,40,-65],[30,-70,60,-30]].forEach(([x1,y1,x2,y2])=>{
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+        ctx.strokeStyle='rgba(80,20,0,0.5)'; ctx.lineWidth=2; ctx.stroke();
+      });
+
+      // Lava streams running down slopes
+      [[-15,-110,-30,-60,-55,-10],[8,-112,25,-60,48,-8]].forEach(([x1,y1,xm,ym,x2,y2])=>{
+        const lg=ctx.createLinearGradient(x1,y1,x2,y2);
+        lg.addColorStop(0,'rgba(255,200,0,0.9)'); lg.addColorStop(0.5,'rgba(255,80,0,0.7)'); lg.addColorStop(1,'rgba(180,20,0,0.3)');
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.quadraticCurveTo(xm,ym,x2,y2);
+        ctx.strokeStyle=lg; ctx.lineWidth=4+Math.sin(s.t*1.5)*1.5; ctx.lineCap='round'; ctx.stroke();
+        // Inner bright lava core
+        const lg2=ctx.createLinearGradient(x1,y1,x2,y2);
+        lg2.addColorStop(0,'rgba(255,240,100,0.95)'); lg2.addColorStop(1,'rgba(255,120,0,0.4)');
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.quadraticCurveTo(xm,ym,x2,y2);
+        ctx.strokeStyle=lg2; ctx.lineWidth=1.5; ctx.stroke();
+      });
+
+      // Crater rim
+      ctx.beginPath(); ctx.ellipse(0,-115,18,6,0,0,Math.PI*2);
+      ctx.fillStyle='#1a0400'; ctx.fill(); ctx.strokeStyle='#3a1000'; ctx.lineWidth=1.5; ctx.stroke();
+
+      // Lava pool in crater - glowing orange
+      const lavaG=ctx.createRadialGradient(0,-115,0,0,-115,14);
+      lavaG.addColorStop(0,'rgba(255,220,0,0.95)');
+      lavaG.addColorStop(0.4,'rgba(255,100,0,0.85)');
+      lavaG.addColorStop(1,'rgba(180,20,0,0.6)');
+      ctx.beginPath(); ctx.ellipse(0,-113,14,5,0,0,Math.PI*2);
+      ctx.fillStyle=lavaG; ctx.fill();
+
+      // ── ERUPTION - sparks and smoke puffs ──
+      // Smoke puffs
+      if(!s.volSmoke) s.volSmoke=[];
+      if(Math.random()<0.06){
+        s.volSmoke.push({ x:(Math.random()-0.5)*12, y:-118, vy:-(0.6+Math.random()*0.8), vx:(Math.random()-0.5)*0.5, r:5+Math.random()*6, life:1 });
+      }
+      s.volSmoke=s.volSmoke.filter(p=>p.life>0);
+      s.volSmoke.forEach(p=>{
+        p.x+=p.vx; p.y+=p.vy; p.r+=0.5; p.life-=0.012;
+        const sg2=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r);
+        sg2.addColorStop(0,`rgba(80,40,20,${p.life*0.55})`); sg2.addColorStop(1,'transparent');
+        ctx.fillStyle=sg2; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+      });
+
+      // Lava sparks flying up
+      if(!s.volSparks) s.volSparks=[];
+      if(Math.random()<0.18){
+        s.volSparks.push({ x:(Math.random()-0.5)*10, y:-114, vx:(Math.random()-0.5)*2.5, vy:-(2+Math.random()*3), life:1 });
+      }
+      s.volSparks=s.volSparks.filter(p=>p.life>0);
+      s.volSparks.forEach(p=>{
+        p.x+=p.vx; p.y+=p.vy; p.vy+=0.08; p.life-=0.025;
+        const col=p.life>0.5?`rgba(255,${Math.round(180*p.life)},0,${p.life*0.9})`:`rgba(200,20,0,${p.life*0.7})`;
+        ctx.beginPath(); ctx.arc(p.x,p.y,2.5*p.life,0,Math.PI*2);
+        ctx.fillStyle=col; ctx.fill();
+      });
+
+      // Glow halo around crater
+      const crGlow=ctx.createRadialGradient(0,-113,5,0,-113,55);
+      const pulse=0.35+Math.sin(s.t*2)*0.12;
+      crGlow.addColorStop(0,`rgba(255,120,0,${pulse})`); crGlow.addColorStop(0.5,`rgba(200,50,0,${pulse*0.3})`); crGlow.addColorStop(1,'transparent');
+      ctx.fillStyle=crGlow; ctx.fillRect(-80,-168,160,80);
+
+      ctx.restore();
+      rafRef.current = requestAnimationFrame(drawVolcano);
+    }
+
+    rafRef.current = requestAnimationFrame(
+      sceneTheme==='marina' ? drawYacht :
+      sceneTheme==='island' ? drawIsland :
+      sceneTheme==='volcano' ? drawVolcano :
+      draw
+    );
     return ()=>cancelAnimationFrame(rafRef.current);
-  },[todayLogged,streak.count,dark,dayOfYear,accentPlanetIdx]);
+  },[todayLogged,streak.count,dark,dayOfYear,accentPlanetIdx,sceneTheme]);
+
+  const sceneBg =
+    sceneTheme==='marina'  ? { background:"#020d1a", border:"1px solid #0a2a4a" } :
+    sceneTheme==='island'  ? { background:"#010d04", border:"1px solid #0a2a14" } :
+    sceneTheme==='volcano' ? { background:"#0d0200", border:"1px solid #2a0800" } :
+                             { background:"#020209", border:"1px solid #1e1b4b" };
 
   return (
-    <div style={{ borderRadius:20, overflow:"hidden", background:"#020209", border:"1px solid #1e1b4b" }}>
+    <div style={{ borderRadius:20, overflow:"hidden", ...sceneBg }}>
       <div style={{ position:"relative" }}>
         <canvas ref={canvasRef} style={{ width:"100%", height:320, display:"block" }}/>
         <div style={{ position:"absolute",top:10,left:12,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(6px)",borderRadius:8,padding:"3px 9px",border:"1px solid rgba(255,255,255,0.1)" }}>
           <span style={{ fontSize:11,fontWeight:700,color:streakRank.color,letterSpacing:"0.04em" }}>{streakRank.title}</span>
         </div>
-        <div style={{ position:"absolute",top:10,right:12,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(6px)",borderRadius:8,padding:"3px 9px",border:"1px solid rgba(255,255,255,0.1)" }}>
-          <span style={{ fontSize:10,color:"rgba(255,255,255,0.4)",fontFamily:"'DM Mono',monospace" }}>BEST </span>
-          <span style={{ fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Mono',monospace" }}>{streak.longestStreak||0}</span>
+        <div style={{ position:"absolute",top:10,right:12,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5 }}>
+          <div style={{ background:"rgba(0,0,0,0.55)",backdropFilter:"blur(6px)",borderRadius:8,padding:"3px 9px",border:"1px solid rgba(255,255,255,0.1)" }}>
+            <span style={{ fontSize:10,color:"rgba(255,255,255,0.4)",fontFamily:"'DM Mono',monospace" }}>BEST </span>
+            <span style={{ fontSize:11,fontWeight:700,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Mono',monospace" }}>{streak.longestStreak||0}</span>
+          </div>
+          {onSceneChange && (
+            <div style={{ display:"flex",gap:3,background:"rgba(0,0,0,0.55)",backdropFilter:"blur(6px)",borderRadius:10,padding:"3px 4px",border:"1px solid rgba(255,255,255,0.1)" }}>
+              {[{id:"space",e:"🚀"},{id:"marina",e:"⛵"},{id:"island",e:"🏝️"},{id:"volcano",e:"🌋"}].map(sc=>(
+                <button key={sc.id} onClick={()=>onSceneChange(sc.id)}
+                  style={{ width:24,height:24,borderRadius:7,border:"none",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",
+                    background:sceneTheme===sc.id?"rgba(255,255,255,0.22)":"transparent",
+                    boxShadow:sceneTheme===sc.id?"0 0 0 1px rgba(255,255,255,0.3)":"none",
+                    transition:"all 0.15s" }}>
+                  {sc.e}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {/* Bottom row: streak count | clock (centre) | buttons */}
         <div style={{ position:"absolute",bottom:8,left:14,right:12,display:"flex",alignItems:"center",justifyContent:"space-between" }}>
@@ -1705,13 +2611,13 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
               ? <button onClick={onLog} style={{ padding:"6px 12px",borderRadius:10,fontSize:12,fontWeight:700,background:"linear-gradient(135deg,#34d399,#059669)",border:"none",color:"#fff",cursor:"pointer",boxShadow:"0 2px 10px rgba(0,0,0,0.4)" }}>🚀 Log</button>
               : <div style={{ padding:"6px 11px",borderRadius:10,fontSize:12,fontWeight:600,background:"rgba(52,211,153,0.15)",border:"1px solid rgba(52,211,153,0.3)",color:"#34d399" }}>✓ Logged</div>
             }
-            <button onClick={onFreeze} style={{ padding:"6px 10px",borderRadius:10,fontSize:11,fontWeight:700,cursor:pitStopData.available>0?"pointer":"default",
-              background:pitStopData.available>0?"rgba(129,140,248,0.2)":"rgba(255,255,255,0.05)",
-              border:pitStopData.available>0?"1px solid rgba(129,140,248,0.4)":"1px solid rgba(255,255,255,0.08)",
-              color:pitStopData.available>0?"#a5b4fc":"rgba(255,255,255,0.2)",
+            <button onClick={onFreeze} style={{ padding:"6px 10px",borderRadius:10,fontSize:11,fontWeight:700,cursor:freezeData.available>0?"pointer":"default",
+              background:freezeData.available>0?"rgba(129,140,248,0.2)":"rgba(255,255,255,0.05)",
+              border:freezeData.available>0?"1px solid rgba(129,140,248,0.4)":"1px solid rgba(255,255,255,0.08)",
+              color:freezeData.available>0?"#a5b4fc":"rgba(255,255,255,0.2)",
               display:"flex",alignItems:"center",gap:4,boxShadow:"0 2px 10px rgba(0,0,0,0.4)" }}>
               <span>🛡️</span>
-              <span style={{ fontFamily:"'DM Mono',monospace",fontSize:10 }}>{pitStopData.available}/{pitStopData.earned}</span>
+              <span style={{ fontFamily:"'DM Mono',monospace",fontSize:10 }}>{freezeData.available}/{freezeData.earned}</span>
             </button>
           </div>
         </div>
@@ -1731,9 +2637,9 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, pitStopDat
   );
 }
 
-// Shield = "Pit Stop token" — 1 earned per 7 days elapsed in the month
+// Freeze token - 1 earned per 7 days elapsed in the month
 // On month boundary reset: usedThisMonth resets to 0, re-earn starts fresh
-function getPitStopData(shieldState) {
+function getFreezeData(shieldState) {
   const ist = nowIST();
   const currentMonth = `${ist.getFullYear()}-${String(ist.getMonth()+1).padStart(2,"0")}`;
   const dayOfMonth = ist.getDate(); // 1-based
@@ -1757,10 +2663,10 @@ function getEmiNextDueDate(loan, today) {
   const monthKey = d.toISOString().slice(0, 7);
   const paid = (loan.paidMonths || []).includes(monthKey);
   if (paid) {
-    // This month is paid — next due is next month
+    // This month is paid - next due is next month
     d.setMonth(d.getMonth() + 1);
   } else if (d < ist) {
-    // Due day already passed this month and not paid — it's overdue (keep as is)
+    // Due day already passed this month and not paid - it's overdue (keep as is)
   }
   return d.toISOString().split("T")[0];
 }
@@ -1850,7 +2756,7 @@ function buildTrendData(expenses) {
 // ════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ════════════════════════════════════════════════════════════════════════════
-// Solar-system accents — ordered from Sun outward.
+// Solar-system accents - ordered from Sun outward.
 // planetIdx maps to PLANETS array inside PlanetHopperGame.
 const ACCENTS = [
   { id:"mercury", label:"Mercury", light:"#9ca3af", dark:"#d1d5db",  planetIdx:0, dot:"#b8b8c8" },
@@ -2202,7 +3108,7 @@ function ReminderBanner({ item, onDismiss, onPay, dark }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// CATEGORY HELPERS — extracted so they're not recomputed inside render
+// CATEGORY HELPERS - extracted so they're not recomputed inside render
 // ════════════════════════════════════════════════════════════════════════════
 function useCategoryHelpers(categories, dark) {
   const getCatObj = useCallback((name) =>
@@ -2253,9 +3159,9 @@ function PinLock({ onUnlock, dark, accent }) {
     setBioError(""); setBioLoading(true);
     try { await verifyBiometric(); onUnlock(); }
     catch (e) {
-      if (e.message === "no-cred") setBioError("No biometric registered — use PIN");
+      if (e.message === "no-cred") setBioError("No biometric registered - use PIN");
       else if (e.name === "NotAllowedError") setBioError("");
-      else setBioError("Biometric failed — use PIN");
+      else setBioError("Biometric failed - use PIN");
     } finally { setBioLoading(false); }
   }
   async function tryRegister() {
@@ -2439,7 +3345,7 @@ function CategoryBubbles({ categories, catTotals, getCatStyle, getCatAccent, onS
                 <div style={{ flex:1,textAlign:"left" }}>
                   <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4 }}>
                     <span style={{ fontSize:13,fontWeight:600,color:dark?"#f9fafb":"#111827" }}>{cat.name}</span>
-                    <span style={{ fontSize:12,fontWeight:700,color:acc,fontFamily:"'DM Mono',monospace" }}>{spent>0?`₹${spent.toLocaleString()}`:"—"}</span>
+                    <span style={{ fontSize:12,fontWeight:700,color:acc,fontFamily:"'DM Mono',monospace" }}>{spent>0?`₹${spent.toLocaleString()}`:"-"}</span>
                   </div>
                   <div style={{ width:"100%",height:5,borderRadius:99,background:dark?"#1f2937":"#f3f4f6",overflow:"hidden" }}>
                     <div style={{ height:5,borderRadius:99,width:`${pct}%`,background:acc,transition:"width 0.5s ease" }}/>
@@ -2559,7 +3465,7 @@ function ExpenseDateList({ grouped, dailyTotal, today, dark, cardBg, border, sub
                 <span style={{ fontSize:11,color:textMute }}>{items.length} item{items.length!==1?"s":""}</span>
               </div>
               <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-                <span style={{ fontSize:12,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#ef4444",background:dark?"rgba(239,68,68,0.1)":"#fff1f2",padding:"1px 8px",borderRadius:99 }}>−₹{daySpend.toLocaleString()}</span>
+                <span style={{ fontSize:12,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#ef4444",background:dark?"rgba(239,68,68,0.1)":"#fff1f2",padding:"1px 8px",borderRadius:99 }}>-₹{daySpend.toLocaleString()}</span>
                 {!isToday && (
                   <div style={{ transform:isOpen?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s",flexShrink:0 }}>
                     <ChevDown color={textMute}/>
@@ -2653,7 +3559,7 @@ function VoiceLogger({ categories, onAdd, dark, cardBg, border, textMute, textMa
         <MicIcon size={18}/><span style={{ fontSize:14,fontWeight:700,color:textMain }}>Voice Log</span>
         <span style={{ fontSize:11,color:textMute,marginLeft:"auto" }}>Say amount + category + note</span>
       </div>
-      {!supported && <p style={{ margin:0,fontSize:13,color:"#ef4444" }}>Not supported — use Chrome on Android/iOS</p>}
+      {!supported && <p style={{ margin:0,fontSize:13,color:"#ef4444" }}>Not supported - use Chrome on Android/iOS</p>}
       {supported && (
         <>
           <button onClick={listening?stop:start}
@@ -2665,7 +3571,7 @@ function VoiceLogger({ categories, onAdd, dark, cardBg, border, textMute, textMa
           {error && <p style={{ margin:"8px 0 0",fontSize:12,color:"#ef4444" }}>{error}</p>}
           {parsed?.amount && (
             <div style={{ marginTop:12,padding:"12px",background:dark?"#052e16":"#f0fdf4",borderRadius:12,border:dark?"1px solid #065f46":"1px solid #bbf7d0" }}>
-              <p style={{ margin:"0 0 6px",fontSize:12,color:textMute,fontWeight:600 }}>Detected — confirm to add:</p>
+              <p style={{ margin:"0 0 6px",fontSize:12,color:textMute,fontWeight:600 }}>Detected - confirm to add:</p>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
                 <div><p style={{ margin:"0 0 3px",fontSize:11,color:textMute }}>Amount</p><p style={{ margin:0,fontSize:18,fontWeight:800,color:"#16a34a",fontFamily:"monospace" }}>₹{parsed.amount.toLocaleString()}</p></div>
                 <div><p style={{ margin:"0 0 3px",fontSize:11,color:textMute }}>Category</p>
@@ -2789,7 +3695,7 @@ function ReceiptScanner({ categories, onAdd, dark, cardBg, border, textMute, tex
         <div style={{ textAlign:"center",padding:"16px 0" }}>
           <div style={{ fontSize:24,marginBottom:6 }}>🔍</div>
           <p style={{ margin:0,fontSize:13,color:safeAccent,fontWeight:600 }}>{progress||"Processing…"}</p>
-          <p style={{ margin:"4px 0 0",fontSize:11,color:textMute }}>This may take 5–10 seconds</p>
+          <p style={{ margin:"4px 0 0",fontSize:11,color:textMute }}>This may take 5-10 seconds</p>
         </div>
       )}
       {error && <p style={{ margin:"8px 0",fontSize:12,color:"#ef4444" }}>{error}</p>}
@@ -2812,7 +3718,7 @@ function ReceiptScanner({ categories, onAdd, dark, cardBg, border, textMute, tex
             <p style={{ margin:"0 0 3px",fontSize:11,color:textMute }}>Note</p>
             <input value={parsed.note||""} onChange={e => setParsed(p => ({ ...p,note:e.target.value }))} placeholder="Add note" style={inputStyle}/>
           </div>
-          {!parsed.amount && <p style={{ margin:"0 0 8px",fontSize:12,color:"#f97316" }}>⚠️ No amount detected — enter manually above</p>}
+          {!parsed.amount && <p style={{ margin:"0 0 8px",fontSize:12,color:"#f97316" }}>⚠️ No amount detected - enter manually above</p>}
           <div style={{ display:"flex",gap:8 }}>
             <button onClick={() => { if (parsed?.amount) onAdd(parsed); }} disabled={!parsed.amount}
               style={{ flex:1,padding:"10px",borderRadius:12,border:"none",background:parsed.amount?"#16a34a":"#9ca3af",color:"#fff",fontSize:14,fontWeight:700,cursor:parsed.amount?"pointer":"not-allowed" }}>✓ Add Expense</button>
@@ -2869,6 +3775,7 @@ function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inpu
     setEmis(prev => prev.map(e => e.id!==loan.id?e:{ ...e, paidMonths:[...(e.paidMonths||[]),monthKey] }));
     setExpenses(prev => [...prev, { id:Date.now(), amount:loan.emi, category:"Bills", note:`${loan.name} EMI`, date:today, paySource:"bank" }]);
     setPot(p => deductPot(p, "bank", loan.emi));
+    setBanks(b => deductBank(b, "bank", loan.emi));
     logDay(today);
     showToast(`₹${loan.emi.toLocaleString()} EMI logged!`);
   }
@@ -3013,7 +3920,7 @@ function SavingsGoals({ goals, savings, dark, cardBg, border, textMute, textMain
   function daysLeft(deadline) {
     if (!deadline) return null;
     const ist = nowIST(); ist.setHours(0,0,0,0);
-    return Math.round((new Date(deadline+"T00:00:00") - ist) / 86_400_000);
+    return Math.round((new Date(deadline+"T00:00:00") - ist) / 86400000);
   }
 
   return (
@@ -3117,11 +4024,17 @@ export default function App() {
   // ── Theme / accent ────────────────────────────────────────────────────────
   const [dark, setDark] = useState(() => storageGet(KEYS.THEME, "light") === "dark");
   const [accentId, setAccentId] = useState(() => storageGet(KEYS.ACCENT, "earth"));
+  const [sceneTheme, setSceneTheme] = useState(() => storageGet(KEYS.SCENE, "space"));
   const accentObj = ACCENTS.find(a => a.id===accentId) || ACCENTS[0];
-  const accent = dark ? accentObj.dark : accentObj.light;
+  // Island uses sandy beige, volcano uses lava orange, others use planet accent
+  const accent =
+    sceneTheme === "island"  ? (dark ? "#f0c060" : "#c8902a") :
+    sceneTheme === "volcano" ? (dark ? "#ff6a20" : "#d94010") :
+    dark ? accentObj.dark : accentObj.light;
 
   useEffect(() => { storageSetDebounced(KEYS.THEME, dark?"dark":"light"); }, [dark]);
   useEffect(() => { storageSet(KEYS.ACCENT, accentId); }, [accentId]);
+  useEffect(() => { storageSet(KEYS.SCENE, sceneTheme); }, [sceneTheme]);
 
   // ── Core data ─────────────────────────────────────────────────────────────
   const [expenses, setExpenses] = useState(() => storageGet(KEYS.EXPENSES, []));
@@ -3147,7 +4060,7 @@ export default function App() {
   const [userName, setUserName] = useState(() => storageGet(KEYS.USER, ""));
   const [notifLog, setNotifLog] = useState(() => storageGet(KEYS.NOTIF_LOG, []));
   const [goals, setGoals] = useState(() => storageGet(KEYS.GOALS, []));
-  // Pit Stop (streak freeze) state
+  // Streak freeze state
   const [shieldState, setShieldState] = useState(() => storageGet(KEYS.SHIELD, { usedThisMonth: 0, lastResetMonth: "", usedDates: [] }));
 
   // Persist all core data
@@ -3197,7 +4110,7 @@ export default function App() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [rocketLaunchKey, setRocketLaunchKey] = useState(0); // increment to trigger launch
-  // EMI state (also owned by EmiTab — we mirror here for notifications)
+  // EMI state (also owned by EmiTab - we mirror here for notifications)
   const [emis, setEmis] = useState(() => storageGet(KEYS.EMI, []));
   useEffect(() => { storageSetDebounced(KEYS.EMI, emis); }, [emis]);
 
@@ -3248,20 +4161,20 @@ export default function App() {
     logDay(today); showToast("No-spend day logged! 🚀");
   }
 
-  // ── Pit Stop (streak freeze) system ───────────────────────────────────────
-  const pitStopData = useMemo(() => getPitStopData(shieldState), [shieldState, today]);
+  // ── Streak freeze system ───────────────────────────────────────────────────
+  const freezeData = useMemo(() => getFreezeData(shieldState), [shieldState, today]);
 
-  function usePitStop() {
-    if (pitStopData.available <= 0) { showToast("No Pit Stop tokens — earn one every 7 days 🏎️"); return; }
-    if (todayLogged) { showToast("Already logged today — no Pit Stop needed!"); return; }
-    const { currentMonth } = pitStopData;
+  function useFreeze() {
+    if (freezeData.available <= 0) { showToast("No freeze tokens - earn one every 7 days 🛡️"); return; }
+    if (todayLogged) { showToast("Already logged today - no freeze needed!"); return; }
+    const { currentMonth } = freezeData;
     // Reset usedThisMonth if new month, then increment
     const usedThisMonth = shieldState.lastResetMonth === currentMonth ? (shieldState.usedThisMonth || 0) : 0;
     const usedDates = [...(shieldState.usedDates || []), today];
     setShieldState({ usedThisMonth: usedThisMonth + 1, lastResetMonth: currentMonth, usedDates });
     // Log today to protect streak
     setStreak(prev => updateStreak(prev, today));
-    showToast(`🛡️ Freeze used! Streak protected. ${pitStopData.available - 1} left this month.`);
+    showToast(`🛡️ Freeze used! Streak protected. ${freezeData.available - 1} left this month.`);
   }
 
   // ── Period selector state (Expenses tab) ─────────────────────────────────
@@ -3354,7 +4267,7 @@ export default function App() {
   [allTimeCatTotals]);
 
   const streakMilestone = streak.count>=30?"30-day legend! 🏆":streak.count>=14?"2-week warrior!":streak.count>=7?"One week strong!":null;
-  const streakRank = getStreakRank(streak.count);
+  const streakRank = getStreakRank(streak.count, sceneTheme);
   const last14 = useMemo(() => getLastNDays(14), [today]);
 
   const potBase = monthlyIncome > 0 ? monthlyIncome : netWorthTotal > 0 ? netWorthTotal : 1;
@@ -3429,7 +4342,7 @@ export default function App() {
     if (!notifEnabled) {
       const granted = await requestNotifPermission();
       if (granted) { setNotifEnabled(true); showToast("Notifications on!"); }
-      else showToast("Permission denied — enable in browser settings");
+      else showToast("Permission denied - enable in browser settings");
     } else { setNotifEnabled(false); showToast("Notifications off"); }
   }
 
@@ -3486,7 +4399,6 @@ export default function App() {
       setAmountShake(true); setTimeout(() => setAmountShake(false), 500); return;
     }
     const num = Number(amount);
-    const isFirstSpendToday = !editingId && !expenses.some(e => e.date === date && e.id !== editingId) && date === today;
     if (editingId) {
       const old = expenses.find(e => e.id===editingId);
       if (old.paySource === "cash") {
@@ -3502,12 +4414,12 @@ export default function App() {
     } else {
       if (paySource === "cash") {
         const currentBal = Number(pot.usableCash)||0;
-        if (num > currentBal) showToast(`⚠️ Low balance — only ₹${currentBal.toLocaleString()} in cash`);
+        if (num > currentBal) showToast(`⚠️ Low balance - only ₹${currentBal.toLocaleString()} in cash`);
         setPot(p => deductPot(p,"cash",num));
       } else {
         const bank = resolveBank(paySource, banks);
         const currentBal = bank ? Number(bank.balance)||0 : 0;
-        if (num > currentBal) showToast(`⚠️ Low balance — only ₹${currentBal.toLocaleString()} in ${bank?.name||"bank"}`);
+        if (num > currentBal) showToast(`⚠️ Low balance - only ₹${currentBal.toLocaleString()} in ${bank?.name||"bank"}`);
         setBanks(b => deductBank(b, paySource, num));
       }
       setExpenses(p => [...p, { id:Date.now(), amount:num, category:selCat, note, date, paySource }]);
@@ -3515,7 +4427,7 @@ export default function App() {
       showToast(`Added · deducted from ${bankName}`);
     }
     logDay(date);
-    // Rocket fires on every expense save — navigate home so the animation is visible
+    // Rocket fires on every expense save - navigate home so the animation is visible
     setTab("home");
     setTimeout(() => setRocketLaunchKey(k => k + 1), 120);
     resetExpenseForm();
@@ -3525,7 +4437,13 @@ export default function App() {
 
   function deleteExpense(id) {
     const exp = expenses.find(e => e.id===id);
-    if (exp) setPot(p => refundPot(p, exp.paySource||"bank", exp.amount));
+    if (exp) {
+      if (exp.paySource === "cash") {
+        setPot(p => refundPot(p, "cash", exp.amount));
+      } else {
+        setBanks(b => refundBank(b, exp.paySource||"bank", exp.amount));
+      }
+    }
     setExpenses(p => p.filter(e => e.id!==id));
     showToast("Deleted & refunded.");
   }
@@ -3651,7 +4569,7 @@ export default function App() {
   function editGoal(g) { setGoalEditId(g.id); setGoalName(g.name); setGoalTarget(g.target); setGoalDeadline(g.deadline||""); setShowGoalForm(true); }
 
   // ── PIN / biometrics ──────────────────────────────────────────────────────
-  function resetPin() { storageRemove(KEYS.PIN); storageRemove(KEYS.BIO_CRED); setUnlocked(false); showToast("PIN cleared — set a new one on next open"); }
+  function resetPin() { storageRemove(KEYS.PIN); storageRemove(KEYS.BIO_CRED); setUnlocked(false); showToast("PIN cleared - set a new one on next open"); }
   function resetBiometric() { storageRemove(KEYS.BIO_CRED); showToast("Biometrics removed"); }
 
   // ── Name ──────────────────────────────────────────────────────────────────
@@ -3789,16 +4707,19 @@ export default function App() {
                 todayLogged={todayLogged}
                 last14={last14}
                 shieldState={shieldState}
-                pitStopData={pitStopData}
+                freezeData={freezeData}
                 dark={dark}
                 onLog={() => { haptic([10,50,10]); logNoSpend(); }}
-                onFreeze={() => { haptic([10,30,10]); usePitStop(); }}
+                onFreeze={() => { haptic([10,30,10]); useFreeze(); }}
                 haptic={haptic}
                 launchRocket={rocketLaunchKey}
                 onLaunchDone={() => {}}
-                accentPlanetIdx={accentObj.planetIdx ?? 2}
+                accentPlanetIdx={(accentObj.planetIdx !== undefined ? accentObj.planetIdx : 2)}
+                sceneTheme={sceneTheme}
+                onSceneChange={(s) => { haptic(6); setSceneTheme(s); }}
               />
 
+              <div style={{ height:12 }}/>
 
               {/* Stats grid */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
@@ -3816,7 +4737,7 @@ export default function App() {
                       : ((totalIn-monthlyTotal)>=0?"+":"")+"₹"+Math.abs(totalIn-monthlyTotal).toLocaleString()
                     }
                   </p>
-                  <p style={{ margin:"3px 0 0",fontSize:11,color:textMute }}>{budget>0?(remaining>=0?"available":"over budget"):"income − expenses"}</p>
+                  <p style={{ margin:"3px 0 0",fontSize:11,color:textMute }}>{budget>0?(remaining>=0?"available":"over budget"):"income - expenses"}</p>
                 </div>
                 <div onClick={() => { if(topCategory){haptic(8);setDrillCat(topCategory);} }}
                   style={{ background:cardBg,border:`1px solid ${topCategory?(dark?"#374151":"#e0e7ff"):border}`,borderRadius:16,padding:"14px 16px",cursor:topCategory?"pointer":"default" }}>
@@ -3827,7 +4748,7 @@ export default function App() {
                         </p>
                         <p style={{ margin:"5px 0 0",fontSize:11,color:textMute }}>₹{(allTimeCatTotals[topCategory]||0).toLocaleString()} · tap →</p>
                       </>
-                    : <p style={{ margin:0,fontSize:16,fontWeight:700,color:textMute }}>—</p>
+                    : <p style={{ margin:0,fontSize:16,fontWeight:700,color:textMute }}>-</p>
                   }
                 </div>
                 <div style={{ background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:"14px 16px" }}>
@@ -3887,12 +4808,12 @@ export default function App() {
                   <div style={{ background:cardBg,border:`1px solid ${border}`,borderRadius:16,overflow:"hidden",marginBottom:12 }}>
                     <div style={{ padding:"12px 16px",borderBottom:`1px solid ${border}`,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                       <span style={{ fontSize:13,fontWeight:700,color:textMain }}>Today's spends</span>
-                      <span style={{ fontSize:13,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#ef4444" }}>−₹{todayTotal.toLocaleString()}</span>
+                      <span style={{ fontSize:13,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#ef4444" }}>-₹{todayTotal.toLocaleString()}</span>
                     </div>
                     {todayItems.slice(0,5).map((item,i) => (
                       <div key={item.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:i<Math.min(todayItems.length,5)-1?`1px solid ${border}`:"none" }}>
                         <span style={{ fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:99,...getCatStyle(item.category),whiteSpace:"nowrap" }}>{item.category}</span>
-                        <span style={{ flex:1,fontSize:12,color:textMute,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.note||"—"}</span>
+                        <span style={{ flex:1,fontSize:12,color:textMute,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{item.note||"-"}</span>
                         <span style={{ fontSize:13,fontWeight:700,color:textMain,fontFamily:"'DM Mono',monospace",flexShrink:0 }}>₹{item.amount.toLocaleString()}</span>
                       </div>
                     ))}
@@ -3946,7 +4867,7 @@ export default function App() {
                       })}
                     </select>
                   </div>
-                  {/* Day — always show, disable when no data */}
+                  {/* Day - always show, disable when no data */}
                   <div style={{ flex:1 }}>
                     <label style={{ display:"block",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute,marginBottom:5 }}>📆 Day</label>
                     <select
@@ -3987,16 +4908,16 @@ export default function App() {
                       <span style={{ fontSize:11,color:textMute }}>· {periodExpenses.length} item{periodExpenses.length!==1?"s":""}</span>
                     </div>
                     <span style={{ fontSize:14,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#ef4444",letterSpacing:"-0.5px" }}>
-                      −₹{periodExpenses.reduce((s,e)=>s+e.amount,0).toLocaleString()}
+                      -₹{periodExpenses.reduce((s,e)=>s+e.amount,0).toLocaleString()}
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Category donut — scoped to selected period */}
+              {/* Category donut - scoped to selected period */}
               <CategoryBubbles categories={categories} catTotals={catTotals} getCatStyle={getCatStyle} getCatAccent={getCatAccent} onSelect={name => { setDrillCat(name); }} dark={dark} cardBg={cardBg} border={border} textMute={textMute} open={catDropdownOpen} setOpen={setCatDropdownOpen}/>
 
-              {/* Expense list — scoped to selected period */}
+              {/* Expense list - scoped to selected period */}
               {periodExpenses.length===0
                 ? <div style={{ ...cardStyle,textAlign:"center",padding:40 }}>
                     <p style={{ fontSize:24,margin:"0 0 8px" }}>🧾</p>
@@ -4045,14 +4966,14 @@ export default function App() {
                       <span style={{ fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#16a34a" }}>₹{(Number(pot.usableCash)||0).toLocaleString()}</span>
                       <div style={{ display:"flex",gap:4 }}>
                         <button onClick={() => setCashMode(cashMode==="add"?null:"add")} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:cashMode==="add"?"#16a34a":(dark?"#1f2937":"#f0fdf4"),color:cashMode==="add"?"#fff":(dark?"#34d399":"#16a34a"),lineHeight:1 }}>+</button>
-                        <button onClick={() => setCashMode(cashMode==="minus"?null:"minus")} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:cashMode==="minus"?"#dc2626":(dark?"#1f2937":"#fff1f2"),color:cashMode==="minus"?"#fff":(dark?"#f87171":"#dc2626"),lineHeight:1 }}>−</button>
+                        <button onClick={() => setCashMode(cashMode==="minus"?null:"minus")} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:cashMode==="minus"?"#dc2626":(dark?"#1f2937":"#fff1f2"),color:cashMode==="minus"?"#fff":(dark?"#f87171":"#dc2626"),lineHeight:1 }}>-</button>
                       </div>
                     </div>
                     {cashMode && (
                       <div style={{ display:"flex",gap:6,alignItems:"center" }}>
                         <input type="number" inputMode="decimal" value={cashAdj} onChange={e => setCashAdj(e.target.value)} placeholder={`₹ to ${cashMode}`} style={{ ...inputStyle,flex:1 }} autoFocus
                           onKeyDown={e => { if(e.key==="Enter"){quickAdjust("usableCash",cashMode,cashAdj);setCashAdj("");setCashMode(null);} }}/>
-                        <button onClick={() => { quickAdjust("usableCash",cashMode,cashAdj);setCashAdj("");setCashMode(null); }} style={{ ...btnPrimary,padding:"8px 14px",background:cashMode==="add"?"#16a34a":"#dc2626" }}>{cashMode==="add"?"+":"−"}</button>
+                        <button onClick={() => { quickAdjust("usableCash",cashMode,cashAdj);setCashAdj("");setCashMode(null); }} style={{ ...btnPrimary,padding:"8px 14px",background:cashMode==="add"?"#16a34a":"#dc2626" }}>{cashMode==="add"?"+":"-"}</button>
                         <button onClick={() => { setCashMode(null);setCashAdj(""); }} style={{ ...btnSecondary,padding:"8px 10px" }}>✕</button>
                       </div>
                     )}
@@ -4071,14 +4992,14 @@ export default function App() {
                           <span style={{ fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#2563eb" }}>₹{(Number(bk.balance)||0).toLocaleString()}</span>
                           <div style={{ display:"flex",gap:4 }}>
                             <button onClick={() => setBankMode(bkMode==="add"?null:{id:bk.id,dir:"add"})} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:bkMode==="add"?"#16a34a":(dark?"#1f2937":"#f0fdf4"),color:bkMode==="add"?"#fff":(dark?"#34d399":"#16a34a"),lineHeight:1 }}>+</button>
-                            <button onClick={() => setBankMode(bkMode==="minus"?null:{id:bk.id,dir:"minus"})} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:bkMode==="minus"?"#dc2626":(dark?"#1f2937":"#fff1f2"),color:bkMode==="minus"?"#fff":(dark?"#f87171":"#dc2626"),lineHeight:1 }}>−</button>
+                            <button onClick={() => setBankMode(bkMode==="minus"?null:{id:bk.id,dir:"minus"})} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:bkMode==="minus"?"#dc2626":(dark?"#1f2937":"#fff1f2"),color:bkMode==="minus"?"#fff":(dark?"#f87171":"#dc2626"),lineHeight:1 }}>-</button>
                           </div>
                         </div>
                         {bkMode && (
                           <div style={{ display:"flex",gap:6,alignItems:"center" }}>
                             <input type="number" inputMode="decimal" value={bankAdj} onChange={e => setBankAdj(e.target.value)} placeholder={`₹ to ${bkMode}`} style={{ ...inputStyle,flex:1 }} autoFocus
                               onKeyDown={e => { if(e.key==="Enter"){ adjustBankBalanceDirect(bk.id,bkMode,bankAdj);setBankAdj("");setBankMode(null); } }}/>
-                            <button onClick={() => { adjustBankBalanceDirect(bk.id,bkMode,bankAdj);setBankAdj("");setBankMode(null); }} style={{ ...btnPrimary,padding:"8px 14px",background:bkMode==="add"?"#16a34a":"#dc2626" }}>{bkMode==="add"?"+":"−"}</button>
+                            <button onClick={() => { adjustBankBalanceDirect(bk.id,bkMode,bankAdj);setBankAdj("");setBankMode(null); }} style={{ ...btnPrimary,padding:"8px 14px",background:bkMode==="add"?"#16a34a":"#dc2626" }}>{bkMode==="add"?"+":"-"}</button>
                             <button onClick={() => { setBankMode(null);setBankAdj(""); }} style={{ ...btnSecondary,padding:"8px 10px" }}>✕</button>
                           </div>
                         )}
@@ -4351,7 +5272,7 @@ export default function App() {
                     <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10 }}>
                       <span style={{ fontSize:16 }}>🌿</span>
                       <div>
-                        <p style={{ margin:0,fontSize:13,fontWeight:700,color:dark?"#34d399":"#065f46" }}>No-Spend Day — Back Fill</p>
+                        <p style={{ margin:0,fontSize:13,fontWeight:700,color:dark?"#34d399":"#065f46" }}>No-Spend Day - Back Fill</p>
                         <p style={{ margin:0,fontSize:11,color:dark?"rgba(52,211,153,0.6)":"#16a34a" }}>Log a day you forgot to record</p>
                       </div>
                     </div>
@@ -4578,7 +5499,37 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Planet accent theme */}
+                {/* Scene theme */}
+                <div style={{ padding:"12px 0",borderBottom:`1px solid ${border}` }}>
+                  <div style={{ fontSize:14,fontWeight:600,color:textMain,marginBottom:10 }}>Scene</div>
+                  <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+                    {[
+                      {id:"space",  label:"Space",   emoji:"🚀", desc:"Planet & rocket orbit"},
+                      {id:"marina", label:"Ocean",   emoji:"⛵", desc:"Yacht on open sea"},
+                      {id:"island", label:"Island",  emoji:"🏝️", desc:"Tropical paradise"},
+                      {id:"volcano",label:"Volcano", emoji:"🌋", desc:"Erupting lava island"},
+                    ].map(sc=>{
+                      const isActive = sceneTheme===sc.id;
+                      return (
+                        <button key={sc.id} onClick={()=>{ haptic(6); setSceneTheme(sc.id); }}
+                          style={{ padding:"10px 12px",borderRadius:12,border:isActive?`2px solid ${accent}`:`1px solid ${border}`,
+                            background:isActive?(dark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.03)"):"none",cursor:"pointer",textAlign:"left" }}>
+                          <div style={{ fontSize:20,marginBottom:3 }}>{sc.emoji}</div>
+                          <div style={{ fontSize:12,fontWeight:700,color:isActive?accent:textMain }}>{sc.label}</div>
+                          <div style={{ fontSize:10,color:textMute,marginTop:2 }}>{sc.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {(sceneTheme==='island'||sceneTheme==='volcano') && (
+                    <p style={{ margin:"8px 0 0",fontSize:11,color:textMute,textAlign:"center" }}>
+                      {sceneTheme==='island' ? '🏝️ Island theme uses beige accent' : '🌋 Volcano theme uses orange accent'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Planet accent theme - Space only */}
+                {sceneTheme==="space" && (
                 <div style={{ padding:"12px 0",borderBottom:`1px solid ${border}` }}>
                   <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:12 }}>
                     <span style={{ fontSize:14,fontWeight:600,color:textMain }}>Theme Planet</span>
@@ -4587,12 +5538,10 @@ export default function App() {
                   <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8 }}>
                     {ACCENTS.map((a,i) => {
                       const isActive = accentId===a.id;
-                      const PLANET_EMOJIS = ["🪨","🌕","🌍","🔴","🟠","🪐","🔵","🌑"];
                       return (
                         <button key={a.id} onClick={() => { haptic(6); setAccentId(a.id); }}
                           style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"10px 6px",borderRadius:12,border:isActive?`2px solid ${dark?a.dark:a.light}`:`1px solid ${border}`,
                             background:isActive?(dark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.03)"):"none",cursor:"pointer",transition:"all 0.15s",position:"relative" }}>
-                          {/* Planet swatch — circular with planet colour */}
                           <div style={{ width:32,height:32,borderRadius:"50%",background:a.dot,
                             boxShadow:isActive?`0 0 12px ${a.dot}99, 0 0 4px ${a.dot}`:"none",
                             transition:"box-shadow 0.2s",
@@ -4603,7 +5552,6 @@ export default function App() {
                       );
                     })}
                   </div>
-                  {/* Locked hint */}
                   {(() => {
                     const streakMaxIdx = Math.min(Math.floor(streak.count/14), ACCENTS.length-1);
                     const selectedIdx = ACCENTS.findIndex(a=>a.id===accentId);
@@ -4615,6 +5563,7 @@ export default function App() {
                     return null;
                   })()}
                 </div>
+                )}
 
                 {/* Notifications */}
                 <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:`1px solid ${border}` }}>
