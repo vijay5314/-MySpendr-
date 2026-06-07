@@ -23,6 +23,7 @@ const KEYS = {
   SHIELD:     "myspendr_shield_v1",
   BANKS:      "myspendr_banks_v1",
   SCENE:      "myspendr_scene_v1",
+  AVATAR:     "myspendr_avatar_v1",
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1353,10 +1354,11 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, freezeData
     if(s.prevIdx !== -1 && s.prevIdx !== planetIdx){ s.transitioning=true; s.transX=0; }
     s.prevIdx = planetIdx;
 
-    // Planet centred; sun/moon arc: rises bottom-right (east), peaks top-centre, sets bottom-left (west).
+    // Planet as semi-circle rising from the bottom centre
     const scaleFactor = Math.min(1, VW / 360);
-    const pX = VW*0.50, pY = VH*0.50;
-    const pR = Math.round(planet.size * 1.5 * scaleFactor);
+    const pR = Math.round(planet.size * 3.2 * scaleFactor); // larger since it's a half-sphere
+    const pX = VW * 0.50;
+    const pY = VH + pR * 0.12; // planet centre sits just below the bottom edge so only top half shows
 
     if(!s.stars.length){
       s.stars = Array.from({length:80},()=>({
@@ -1922,38 +1924,36 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, freezeData
       s.t += 0.016;
       ctx.clearRect(0,0,VW,VH);
 
-      // Sky
+      // ── SKY - realistic day/night gradient ────────────────────────────────
       const bg = ctx.createLinearGradient(0,0,0,VH);
       if(isDay){
         const noon = 1 - Math.abs(sunProgress-0.5)*2;
-        if(noon > 0.6){
-          bg.addColorStop(0,'#0c2461'); bg.addColorStop(1,'#1a6bb5');
-        } else if(sunProgress < 0.5){
-          const p2 = sunProgress*2;
-          bg.addColorStop(0,`rgb(${lerp(15,12,p2)},${lerp(10,36,p2)},${lerp(20,97,p2)})`);
-          bg.addColorStop(0.6,`rgb(${lerp(200,80,p2)},${lerp(80,120,p2)},${lerp(10,160,p2)})`);
-          bg.addColorStop(1,`rgb(${lerp(240,120,p2)},${lerp(120,160,p2)},${lerp(20,200,p2)})`);
+        const isDawn = sunProgress < 0.15;
+        const isDusk = sunProgress > 0.85;
+        if(isDawn){
+          const p2 = sunProgress/0.15;
+          bg.addColorStop(0,`rgb(${lerp(5,8,p2)},${lerp(5,20,p2)},${lerp(20,70,p2)})`);
+          bg.addColorStop(0.5,`rgb(${lerp(160,60,p2)},${lerp(60,90,p2)},${lerp(10,140,p2)})`);
+          bg.addColorStop(1,`rgb(${lerp(220,100,p2)},${lerp(100,130,p2)},${lerp(10,180,p2)})`);
+        } else if(isDusk){
+          const p2 = (sunProgress-0.85)/0.15;
+          bg.addColorStop(0,`rgb(${lerp(8,5,p2)},${lerp(20,5,p2)},${lerp(70,20,p2)})`);
+          bg.addColorStop(0.5,`rgb(${lerp(60,160,p2)},${lerp(90,60,p2)},${lerp(140,10,p2)})`);
+          bg.addColorStop(1,`rgb(${lerp(100,220,p2)},${lerp(130,100,p2)},${lerp(180,10,p2)})`);
+        } else if(noon > 0.6){
+          bg.addColorStop(0,'#0c2461'); bg.addColorStop(0.6,'#1a6bb5'); bg.addColorStop(1,'#2a85c8');
         } else {
-          const p2 = (sunProgress-0.5)*2;
-          bg.addColorStop(0,`rgb(${lerp(12,20,p2)},${lerp(36,10,p2)},${lerp(97,15,p2)})`);
-          bg.addColorStop(0.6,`rgb(${lerp(80,180,p2)},${lerp(120,70,p2)},${lerp(160,10,p2)})`);
-          bg.addColorStop(1,`rgb(${lerp(120,220,p2)},${lerp(160,100,p2)},${lerp(200,20,p2)})`);
+          const p2 = Math.min((sunProgress-0.15)/0.35,1);
+          bg.addColorStop(0,`rgb(${lerp(8,12,p2)},${lerp(20,36,p2)},${lerp(70,97,p2)})`);
+          bg.addColorStop(1,`rgb(${lerp(100,69,p2)},${lerp(130,130,p2)},${lerp(180,200,p2)})`);
         }
       } else {
-        bg.addColorStop(0,'#020209'); bg.addColorStop(0.4,'#060618'); bg.addColorStop(1,'#0d0d28');
+        // Night - deep space
+        const nightProg = istHour<6?(istHour+6)/12:(istHour-18)/12;
+        const depth = nightProg < 0.5 ? 1-nightProg*0.6 : 0.7+nightProg*0.3; // darkest at midnight
+        bg.addColorStop(0,`rgba(2,2,9,${depth})`); bg.addColorStop(0.4,`rgba(4,4,18,${depth})`); bg.addColorStop(1,`rgba(8,8,28,${depth})`);
       }
       ctx.fillStyle=bg; ctx.fillRect(0,0,VW,VH);
-
-      // ── HORIZON DIVIDER - subtle separator below planet ──
-      const horizonY = VH * 0.78;
-      const horizonGrad = ctx.createLinearGradient(0, horizonY, VW, horizonY);
-      horizonGrad.addColorStop(0, 'transparent');
-      horizonGrad.addColorStop(0.2, isDay ? 'rgba(180,220,255,0.12)' : 'rgba(100,120,200,0.10)');
-      horizonGrad.addColorStop(0.5, isDay ? 'rgba(180,220,255,0.18)' : 'rgba(100,120,200,0.15)');
-      horizonGrad.addColorStop(0.8, isDay ? 'rgba(180,220,255,0.12)' : 'rgba(100,120,200,0.10)');
-      horizonGrad.addColorStop(1, 'transparent');
-      ctx.strokeStyle = horizonGrad; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0, horizonY); ctx.lineTo(VW, horizonY); ctx.stroke();
 
       // Nebulae (night only)
       if(!isDay && s.nebulae){
@@ -1966,8 +1966,8 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, freezeData
       }
 
       // Stars (night + twilight)
-      if(!isDay || sunProgress < 0.08 || sunProgress > 0.92){
-        const starA = isDay ? Math.max(0,(0.08-sunProgress)/0.08) : 1;
+      if(!isDay || sunProgress < 0.1 || sunProgress > 0.9){
+        const starA = isDay ? Math.max(0,(sunProgress<0.1?(0.1-sunProgress)/0.1:(sunProgress-0.9)/0.1)) : 1;
         s.stars.forEach(st=>{
           st.twinkle += st.speed;
           const a = starA*(0.25+0.7*Math.abs(Math.sin(st.twinkle)));
@@ -1976,92 +1976,98 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, freezeData
         });
       }
 
-      // Sun - rises bottom-right (east), arcs through top-centre, sets bottom-left (west)
+      // ── SUN - 6am (right horizon) → noon (top-centre) → 6pm (left horizon) ──
       if(isDay){
-        // Semicircular arc: progress 0=right, 0.5=top-centre, 1=left
-        // arcAngle goes from 0 (right) → π (left) as sunProgress 0→1
-        const arcAngle = sunProgress * Math.PI; // 0→π
+        // sunProgress 0→1 maps to angle π→0 (right=π, top=π/2, left=0)
+        // Arc: centre below bottom of canvas, radius large enough to reach top at noon
+        const arcAngle = Math.PI - sunProgress * Math.PI; // π at 6am (right), 0 at 6pm (left)
         const arcCX = VW * 0.5;
-        const arcCY = VH * 0.92; // arc centre below bottom so it looks like a horizon arc
-        const arcRX = VW * 0.52;
-        const arcRY = VH * 0.88;
-        const sx = arcCX + Math.cos(Math.PI - arcAngle) * arcRX; // right→left
-        const sy = arcCY - Math.sin(arcAngle) * arcRY;           // rises then falls
-        // Corona outer glow
-        const cg=ctx.createRadialGradient(sx,sy,12,sx,sy,55);
-        cg.addColorStop(0,'rgba(255,220,60,0.22)'); cg.addColorStop(0.5,'rgba(255,160,20,0.08)'); cg.addColorStop(1,'transparent');
-        ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(sx,sy,55,0,Math.PI*2); ctx.fill();
-        // Sun rays
-        for(let i=0;i<16;i++){
-          const ang=(i/16)*Math.PI*2+s.t*0.15;
-          const r1=15, r2=24+Math.sin(s.t*2.2+i*0.8)*4;
-          const raya=0.18+0.12*Math.sin(s.t*1.5+i);
-          ctx.beginPath(); ctx.moveTo(sx+Math.cos(ang)*r1,sy+Math.sin(ang)*r1);
-          ctx.lineTo(sx+Math.cos(ang)*r2,sy+Math.sin(ang)*r2);
-          ctx.strokeStyle=`rgba(255,210,40,${raya})`; ctx.lineWidth=2.2; ctx.stroke();
-        }
-        // Short rays
-        for(let i=0;i<16;i++){
-          const ang=(i/16+0.5/16)*Math.PI*2+s.t*0.15;
-          const r1=15, r2=18+Math.sin(s.t*3+i)*2;
-          ctx.beginPath(); ctx.moveTo(sx+Math.cos(ang)*r1,sy+Math.sin(ang)*r1);
-          ctx.lineTo(sx+Math.cos(ang)*r2,sy+Math.sin(ang)*r2);
-          ctx.strokeStyle=`rgba(255,200,60,0.12)`; ctx.lineWidth=1.5; ctx.stroke();
-        }
-        // Sun body
-        const sb=ctx.createRadialGradient(sx-4,sy-4,1,sx,sy,15);
-        sb.addColorStop(0,'#fffde0'); sb.addColorStop(0.25,'#ffe066'); sb.addColorStop(0.65,'#fbbf24'); sb.addColorStop(1,'#f97316');
-        ctx.beginPath(); ctx.arc(sx,sy,15,0,Math.PI*2); ctx.fillStyle=sb; ctx.fill();
-        ctx.beginPath(); ctx.arc(sx-4,sy-4,5,0,Math.PI*2);
-        ctx.fillStyle='rgba(255,255,220,0.28)'; ctx.fill();
+        const arcCY = VH + 40; // pivot below bottom
+        const arcR  = Math.sqrt(Math.pow(VW*0.5,2) + Math.pow(VH+40,2)) * 1.05;
+        const sx = arcCX + Math.cos(arcAngle) * arcR;
+        const sy = arcCY - Math.sin(arcAngle) * arcR;
 
-        // Soft horizon glow beneath sun (sunrise/sunset warmth)
-        const horizonA = Math.max(0, 1 - Math.abs(sunProgress - 0.5) * 4);
-        if(horizonA > 0){
-          const hg = ctx.createRadialGradient(sx, VH, 0, sx, VH, VW * 0.5);
-          hg.addColorStop(0, `rgba(255,120,30,${horizonA * 0.18})`);
-          hg.addColorStop(1, 'transparent');
-          ctx.fillStyle = hg; ctx.fillRect(0, VH * 0.6, VW, VH * 0.4);
+        const isGolden = sunProgress < 0.12 || sunProgress > 0.88;
+        const noonA    = 1 - Math.abs(sunProgress-0.5)*2;
+
+        // Horizon warm glow at dawn/dusk
+        if(isGolden){
+          const hz=ctx.createRadialGradient(sx,VH,0,sx,VH,VW*0.7);
+          const gc=sunProgress<0.5?'rgba(255,130,30,':'rgba(255,80,10,';
+          hz.addColorStop(0,gc+'0.28)'); hz.addColorStop(0.4,gc+'0.10)'); hz.addColorStop(1,'transparent');
+          ctx.fillStyle=hz; ctx.fillRect(0,0,VW,VH);
+        }
+
+        // Rays
+        if(sy < VH+10){
+          const rayC = isGolden?'rgba(255,170,50,':'rgba(255,210,40,';
+          for(let i=0;i<20;i++){
+            const ang=(i/20)*Math.PI*2+s.t*0.12;
+            const r1=16, r2=28+Math.sin(s.t*2.2+i*0.8)*4;
+            ctx.beginPath(); ctx.moveTo(sx+Math.cos(ang)*r1,sy+Math.sin(ang)*r1);
+            ctx.lineTo(sx+Math.cos(ang)*r2,sy+Math.sin(ang)*r2);
+            ctx.strokeStyle=`${rayC}${0.18+noonA*0.12})`; ctx.lineWidth=2.2; ctx.stroke();
+          }
+          // Corona glow
+          const cg=ctx.createRadialGradient(sx,sy,12,sx,sy,isGolden?70:52);
+          cg.addColorStop(0,isGolden?'rgba(255,160,40,0.35)':'rgba(255,220,60,0.22)');
+          cg.addColorStop(0.5,isGolden?'rgba(255,100,20,0.10)':'rgba(255,180,40,0.07)');
+          cg.addColorStop(1,'transparent');
+          ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(sx,sy,isGolden?70:52,0,Math.PI*2); ctx.fill();
+          // Sun body
+          const sunR = isGolden?18:14;
+          const sb=ctx.createRadialGradient(sx-sunR*0.3,sy-sunR*0.3,1,sx,sy,sunR);
+          if(isGolden){ sb.addColorStop(0,'#fff5d0'); sb.addColorStop(0.35,'#ffcc44'); sb.addColorStop(0.7,'#ff8c00'); sb.addColorStop(1,'#e05000'); }
+          else { sb.addColorStop(0,'#fffde0'); sb.addColorStop(0.3,'#ffe066'); sb.addColorStop(0.65,'#fbbf24'); sb.addColorStop(1,'#f97316'); }
+          ctx.beginPath(); ctx.arc(sx,sy,sunR,0,Math.PI*2); ctx.fillStyle=sb; ctx.fill();
+          ctx.beginPath(); ctx.arc(sx-sunR*0.32,sy-sunR*0.32,sunR*0.35,0,Math.PI*2);
+          ctx.fillStyle='rgba(255,255,220,0.32)'; ctx.fill();
         }
       }
 
-      // Moon - rises bottom-right (east), arcs through top-centre, sets bottom-left (west)
+      // ── MOON - 6pm (right horizon) → midnight (top-centre) → 6am (left horizon) ──
       if(!isDay){
-        const nightProg = istHour < 6 ? (istHour + 6) / 12 : (istHour - 18) / 12;
-        const arcAngle = nightProg * Math.PI;
+        // nightProg 0→1: 6pm→midnight→6am
+        const nightProg = istHour >= 18 ? (istHour-18)/12 : (istHour+6)/12;
+        const arcAngle = Math.PI - nightProg * Math.PI;
         const arcCX = VW * 0.5;
-        const arcCY = VH * 0.92;
-        const arcRX = VW * 0.52;
-        const arcRY = VH * 0.88;
-        const mx = arcCX + Math.cos(Math.PI - arcAngle) * arcRX;
-        const my = arcCY - Math.sin(arcAngle) * arcRY;
-        const MR = 13;
-        // Moon glow
-        const mg=ctx.createRadialGradient(mx,my,MR*0.5,mx,my,MR*3);
-        mg.addColorStop(0,'rgba(200,215,255,0.18)'); mg.addColorStop(0.5,'rgba(180,200,255,0.06)'); mg.addColorStop(1,'transparent');
-        ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(mx,my,MR*3,0,Math.PI*2); ctx.fill();
-        // Moon body
-        const moonGrad=ctx.createRadialGradient(mx-MR*0.3,my-MR*0.3,MR*0.1,mx,my,MR);
-        moonGrad.addColorStop(0,'#f0f4ff'); moonGrad.addColorStop(0.5,'#d8e0f0'); moonGrad.addColorStop(1,'#a0b0cc');
-        ctx.beginPath(); ctx.arc(mx,my,MR,0,Math.PI*2); ctx.fillStyle=moonGrad; ctx.fill();
-        // Moon craters
-        [[0.25,0.1,0.18],[-0.28,-0.2,0.13],[0.1,-0.28,0.1],[-0.08,0.25,0.11]].forEach(([ox,oy,sz])=>{
-          ctx.beginPath(); ctx.arc(mx+ox*MR,my+oy*MR,sz*MR,0,Math.PI*2);
-          ctx.fillStyle='rgba(0,0,0,0.11)'; ctx.fill();
-          ctx.beginPath(); ctx.arc(mx+ox*MR-sz*MR*0.2,my+oy*MR-sz*MR*0.2,sz*MR*0.5,0,Math.PI*2);
-          ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fill();
-        });
-        // Phase shadow
-        ctx.save(); ctx.beginPath(); ctx.arc(mx,my,MR,0,Math.PI*2); ctx.clip();
-        const phAngle = moonPhase * Math.PI * 2;
-        const shadowX = Math.cos(phAngle) * MR * 1.2;
-        const shadowGrad=ctx.createRadialGradient(mx+shadowX,my,MR*0.1,mx+shadowX,my,MR*1.4);
-        shadowGrad.addColorStop(0,'rgba(4,8,24,0.88)'); shadowGrad.addColorStop(0.5,'rgba(4,8,24,0.7)'); shadowGrad.addColorStop(1,'transparent');
-        ctx.fillStyle=shadowGrad; ctx.fillRect(mx-MR,my-MR,MR*2,MR*2);
-        ctx.restore();
+        const arcCY = VH + 40;
+        const arcR  = Math.sqrt(Math.pow(VW*0.5,2) + Math.pow(VH+40,2)) * 1.05;
+        const mx = arcCX + Math.cos(arcAngle) * arcR;
+        const my = arcCY - Math.sin(arcAngle) * arcR;
+        const MR = 14;
+        // Moonlight glow brightens sky near moon
+        if(my < VH){
+          const mg2=ctx.createRadialGradient(mx,my,MR,mx,my,VW*0.4);
+          mg2.addColorStop(0,'rgba(180,200,255,0.04)'); mg2.addColorStop(1,'transparent');
+          ctx.fillStyle=mg2; ctx.fillRect(0,0,VW,VH);
+          // Outer atmospheric glow
+          const mg=ctx.createRadialGradient(mx,my,MR*0.5,mx,my,MR*3.5);
+          mg.addColorStop(0,'rgba(200,215,255,0.20)'); mg.addColorStop(0.5,'rgba(180,200,255,0.07)'); mg.addColorStop(1,'transparent');
+          ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(mx,my,MR*3.5,0,Math.PI*2); ctx.fill();
+          // Moon body
+          const moonGrad=ctx.createRadialGradient(mx-MR*0.28,my-MR*0.28,MR*0.08,mx,my,MR);
+          moonGrad.addColorStop(0,'#f4f7ff'); moonGrad.addColorStop(0.45,'#d8e2f0'); moonGrad.addColorStop(1,'#9aaabf');
+          ctx.beginPath(); ctx.arc(mx,my,MR,0,Math.PI*2); ctx.fillStyle=moonGrad; ctx.fill();
+          // Craters
+          [[0.25,0.1,0.18],[-0.28,-0.2,0.13],[0.1,-0.28,0.1],[-0.08,0.25,0.11]].forEach(([ox,oy,sz])=>{
+            ctx.beginPath(); ctx.arc(mx+ox*MR,my+oy*MR,sz*MR,0,Math.PI*2);
+            ctx.fillStyle='rgba(0,0,0,0.11)'; ctx.fill();
+            ctx.beginPath(); ctx.arc(mx+ox*MR-sz*MR*0.2,my+oy*MR-sz*MR*0.2,sz*MR*0.5,0,Math.PI*2);
+            ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fill();
+          });
+          // Phase shadow
+          ctx.save(); ctx.beginPath(); ctx.arc(mx,my,MR,0,Math.PI*2); ctx.clip();
+          const phAngle = moonPhase * Math.PI * 2;
+          const shadowX = Math.cos(phAngle) * MR * 1.2;
+          const shadowGrad=ctx.createRadialGradient(mx+shadowX,my,MR*0.1,mx+shadowX,my,MR*1.4);
+          shadowGrad.addColorStop(0,'rgba(4,8,24,0.90)'); shadowGrad.addColorStop(0.5,'rgba(4,8,24,0.72)'); shadowGrad.addColorStop(1,'transparent');
+          ctx.fillStyle=shadowGrad; ctx.fillRect(mx-MR,my-MR,MR*2,MR*2);
+          ctx.restore();
+        }
       }
 
-      // Transition - smooth slide with easing
+      // Transition - smooth slide
       const tx = s.transitioning ? s.transX : 0;
       if(s.transitioning){
         s.transX += Math.max(5, (VW+80-s.transX)*0.08);
@@ -2069,69 +2075,107 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, freezeData
         const oldP = PLANETS[Math.max(0,planetIdx-1)];
         const oldX = pX - tx;
         if(oldX > -oldP.size-10){
-          // Atmosphere glow for outgoing planet
           if(oldP.glow){
             const ag2=ctx.createRadialGradient(oldX,pY,oldP.size*0.8,oldX,pY,oldP.size*2.2);
             ag2.addColorStop(0,hexA(oldP.glow,0.22)); ag2.addColorStop(1,'transparent');
             ctx.fillStyle=ag2; ctx.beginPath(); ctx.arc(oldX,pY,oldP.size*2.2,0,Math.PI*2); ctx.fill();
           }
+          // Clip to top half for old planet too
+          ctx.save(); ctx.beginPath(); ctx.rect(0,0,VW,VH); ctx.clip();
           drawPlanetBody(ctx,oldP,oldX,pY,oldP.size,s.t);
+          ctx.restore();
         }
       }
 
       const curX = s.transitioning ? pX+(VW-tx)*1.0 : pX;
 
-
-      // (no next planet preview)
-
       // Atmosphere + glow for current planet
       if(planet.atmo){
-        const ag=ctx.createRadialGradient(curX,pY,pR*0.85,curX,pY,pR*1.8);
+        const ag=ctx.createRadialGradient(curX,pY,pR*0.85,curX,pY,pR*1.5);
         ag.addColorStop(0,planet.atmo); ag.addColorStop(1,'transparent');
-        ctx.fillStyle=ag; ctx.beginPath(); ctx.arc(curX,pY,pR*1.8,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle=ag; ctx.beginPath(); ctx.arc(curX,pY,pR*1.5,0,Math.PI*2); ctx.fill();
       }
       if(planet.glow){
-        const gg=ctx.createRadialGradient(curX,pY,pR*0.7,curX,pY,pR*(1.9+(planet.glowAlpha||0.3)));
-        gg.addColorStop(0,hexA(planet.glow,(planet.glowAlpha||0.3)*0.5)); gg.addColorStop(1,'transparent');
-        ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(curX,pY,pR*2.4,0,Math.PI*2); ctx.fill();
+        const gg=ctx.createRadialGradient(curX,pY,pR*0.7,curX,pY,pR*1.7);
+        gg.addColorStop(0,hexA(planet.glow,(planet.glowAlpha||0.3)*0.4)); gg.addColorStop(1,'transparent');
+        ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(curX,pY,pR*1.8,0,Math.PI*2); ctx.fill();
       }
 
-      // Planet
+      // ── PLANET SEMI-CIRCLE - clip to upper half only ──
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, VW, VH); // clip to canvas = natural bottom clip when planet extends below
+      ctx.clip();
       drawPlanetBody(ctx,planet,curX,pY,pR,s.t);
+      ctx.restore();
 
-      // Lock overlay - dim + padlock for planets not yet unlocked by streak
+      // Terminator line - horizon edge of the planet semi-circle
+      const horizonY2 = VH - 1;
+      const terminatorW = Math.sqrt(Math.max(0, pR*pR - Math.pow(pY - horizonY2, 2)));
+      if(terminatorW > 0){
+        const tg = ctx.createLinearGradient(curX-terminatorW, horizonY2, curX+terminatorW, horizonY2);
+        tg.addColorStop(0,'transparent');
+        tg.addColorStop(0.2, isDay?'rgba(255,230,160,0.22)':'rgba(100,130,200,0.14)');
+        tg.addColorStop(0.5, isDay?'rgba(255,230,160,0.35)':'rgba(120,150,230,0.22)');
+        tg.addColorStop(0.8, isDay?'rgba(255,230,160,0.22)':'rgba(100,130,200,0.14)');
+        tg.addColorStop(1,'transparent');
+        ctx.fillStyle=tg; ctx.fillRect(curX-terminatorW,horizonY2-3,terminatorW*2,4);
+      }
+
+      // Lock overlay for locked planets
       if(planetLocked){
         ctx.save();
         ctx.beginPath(); ctx.arc(curX,pY,pR,0,Math.PI*2); ctx.clip();
         ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fill();
         ctx.restore();
-        // 🔒 icon above planet
         ctx.save();
-        ctx.font=`${Math.round(pR*0.55)}px serif`;
+        ctx.font=`${Math.round(pR*0.45)}px serif`;
         ctx.textAlign='center'; ctx.textBaseline='middle';
         ctx.globalAlpha=0.85;
-        ctx.fillText('🔒', curX, pY);
+        ctx.fillText('🔒', curX, pY - pR*0.25);
         ctx.restore();
       }
 
-      // Planet surface ground highlight (ambient light)
+      // ── Sun-direction lighting on planet surface ──────────────────────────
       if(isDay){
-        const lightA=0.18*Math.sin(sunProgress*Math.PI);
+        const sunAngle = Math.PI - sunProgress * Math.PI; // matches sun arc angle
+        const sunDirX = Math.cos(sunAngle), sunDirY = -Math.sin(sunAngle);
+        const lightA = 0.18 * Math.sin(sunProgress * Math.PI);
         ctx.save(); ctx.beginPath(); ctx.arc(curX,pY,pR,0,Math.PI*2); ctx.clip();
-        const lightGrad=ctx.createLinearGradient(curX-pR,pY-pR,curX+pR,pY+pR);
-        lightGrad.addColorStop(0,`rgba(255,240,180,${lightA})`); lightGrad.addColorStop(1,'transparent');
+        const lightGrad = ctx.createLinearGradient(
+          curX + sunDirX * pR, pY + sunDirY * pR,
+          curX - sunDirX * pR, pY - sunDirY * pR
+        );
+        lightGrad.addColorStop(0,`rgba(255,240,180,${lightA})`);
+        lightGrad.addColorStop(0.5,'rgba(255,240,180,0)');
+        lightGrad.addColorStop(1,`rgba(0,0,0,${lightA*0.5})`);
         ctx.fillStyle=lightGrad; ctx.fillRect(curX-pR,pY-pR,pR*2,pR*2);
         ctx.restore();
+      } else {
+        // Night: blue-shifted moonlight from moon direction
+        const nightProg2 = istHour >= 18 ? (istHour-18)/12 : (istHour+6)/12;
+        const moonAngle = Math.PI - nightProg2 * Math.PI;
+        const moonDirX = Math.cos(moonAngle), moonDirY = -Math.sin(moonAngle);
+        ctx.save(); ctx.beginPath(); ctx.arc(curX,pY,pR,0,Math.PI*2); ctx.clip();
+        const moonLightGrad = ctx.createLinearGradient(
+          curX + moonDirX * pR, pY + moonDirY * pR,
+          curX - moonDirX * pR, pY - moonDirY * pR
+        );
+        moonLightGrad.addColorStop(0,'rgba(150,180,255,0.10)');
+        moonLightGrad.addColorStop(0.6,'rgba(150,180,255,0)');
+        moonLightGrad.addColorStop(1,'rgba(0,0,20,0.18)');
+        ctx.fillStyle=moonLightGrad; ctx.fillRect(curX-pR,pY-pR,pR*2,pR*2);
+        ctx.restore();
       }
 
-      // (orbit ring drawn in minute-hand section below)
-
-      // Orbiting moon particle
+      // Orbiting mini-moon particle
       const mA=s.t*0.7;
       const moonX=curX+Math.cos(mA)*(pR+20), moonY=pY+Math.sin(mA)*(pR+20)*0.35;
-      const moonMini=ctx.createRadialGradient(moonX,moonY,0.5,moonX,moonY,3);
-      moonMini.addColorStop(0,'rgba(255,255,255,0.7)'); moonMini.addColorStop(1,'rgba(255,255,255,0)');
-      ctx.fillStyle=moonMini; ctx.beginPath(); ctx.arc(moonX,moonY,3,0,Math.PI*2); ctx.fill();
+      if(moonY < VH){
+        const moonMini=ctx.createRadialGradient(moonX,moonY,0.5,moonX,moonY,3);
+        moonMini.addColorStop(0,'rgba(255,255,255,0.7)'); moonMini.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.fillStyle=moonMini; ctx.beginPath(); ctx.arc(moonX,moonY,3,0,Math.PI*2); ctx.fill();
+      }
 
       // ── ROCKET ────────────────────────────────────────────────────────────
       if(!s.rocketPhase) s.rocketPhase = 'orbit';
@@ -2195,13 +2239,12 @@ function PlanetHopperGame({ streak, todayLogged, last14, shieldState, freezeData
         // tangent = +90° → nose points in direction of travel
         const orAngle = minAngle + Math.PI / 2;
 
-        // ── ORBIT RING - glowing neon circle ───────────────────────────────
-        // Base dashed ring
+        // ── ORBIT RING - only draw the visible upper arc ───────────────────
         ctx.save();
         ctx.setLineDash([5, 8]);
-        ctx.lineDashOffset = -(s.t * 18) % 13; // animated march
-        ctx.beginPath(); ctx.arc(curX, pY, orR, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(80,160,255,0.18)';
+        ctx.lineDashOffset = -(s.t * 18) % 13;
+        ctx.beginPath(); ctx.arc(curX, pY, orR, Math.PI, 0); // top half arc only
+        ctx.strokeStyle = 'rgba(80,160,255,0.22)';
         ctx.lineWidth = 1.2; ctx.stroke();
         ctx.restore();
 
@@ -3258,14 +3301,26 @@ function buildTrendData(expenses) {
 // Solar-system accents - ordered from Sun outward.
 // planetIdx maps to PLANETS array inside PlanetHopperGame.
 const ACCENTS = [
-  { id:"mercury", label:"Mercury", light:"#9ca3af", dark:"#d1d5db",  planetIdx:0, dot:"#b8b8c8" },
-  { id:"venus",   label:"Venus",   light:"#d97706", dark:"#fbbf24",  planetIdx:1, dot:"#f0c84a" },
-  { id:"earth",   label:"Earth",   light:"#0369a1", dark:"#38bdf8",  planetIdx:2, dot:"#2a8fd4" },
-  { id:"mars",    label:"Mars",    light:"#b91c1c", dark:"#f87171",  planetIdx:3, dot:"#d94f30" },
-  { id:"jupiter", label:"Jupiter", light:"#b45309", dark:"#fcd34d",  planetIdx:4, dot:"#d4905a" },
-  { id:"saturn",  label:"Saturn",  light:"#a16207", dark:"#fde68a",  planetIdx:5, dot:"#d8b870" },
-  { id:"neptune", label:"Neptune", light:"#1d4ed8", dark:"#818cf8",  planetIdx:6, dot:"#3a6ae8" },
-  { id:"void",    label:"Void",    light:"#7c3aed", dark:"#c084fc",  planetIdx:7, dot:"#9a40e0" },
+  { id:"mercury", label:"Silver",   light:"#64748b", dark:"#cbd5e1",  dot:"#94a3b8" },
+  { id:"venus",   label:"Amber",    light:"#d97706", dark:"#fbbf24",  dot:"#f0c84a" },
+  { id:"earth",   label:"Sky",      light:"#0369a1", dark:"#38bdf8",  dot:"#2a8fd4" },
+  { id:"mars",    label:"Red",      light:"#b91c1c", dark:"#f87171",  dot:"#d94f30" },
+  { id:"jupiter", label:"Orange",   light:"#c2410c", dark:"#fb923c",  dot:"#ea7030" },
+  { id:"saturn",  label:"Gold",     light:"#a16207", dark:"#fde68a",  dot:"#d8b870" },
+  { id:"neptune", label:"Indigo",   light:"#1d4ed8", dark:"#818cf8",  dot:"#3a6ae8" },
+  { id:"void",    label:"Violet",   light:"#7c3aed", dark:"#c084fc",  dot:"#9a40e0" },
+  { id:"rose",    label:"Rose",     light:"#be185d", dark:"#f472b6",  dot:"#e0458a" },
+  { id:"emerald", label:"Emerald",  light:"#047857", dark:"#34d399",  dot:"#10a870" },
+  { id:"teal",    label:"Teal",     light:"#0f766e", dark:"#2dd4bf",  dot:"#14b8a6" },
+  { id:"cyan",    label:"Cyan",     light:"#0891b2", dark:"#67e8f9",  dot:"#06b6d4" },
+  { id:"lime",    label:"Lime",     light:"#4d7c0f", dark:"#a3e635",  dot:"#65a30d" },
+  { id:"fuchsia", label:"Fuchsia",  light:"#a21caf", dark:"#e879f9",  dot:"#c026d3" },
+  { id:"coral",   label:"Coral",    light:"#dc2626", dark:"#fca5a5",  dot:"#f05050" },
+  { id:"slate",   label:"Slate",    light:"#334155", dark:"#94a3b8",  dot:"#475569" },
+  { id:"pink",    label:"Pink",     light:"#db2777", dark:"#f9a8d4",  dot:"#ec4899" },
+  { id:"brown",   label:"Caramel",  light:"#92400e", dark:"#d97706",  dot:"#b45309" },
+  { id:"green",   label:"Green",    light:"#15803d", dark:"#4ade80",  dot:"#16a34a" },
+  { id:"night",   label:"Midnight", light:"#1e1b4b", dark:"#a5b4fc",  dot:"#4338ca" },
 ];
 const CAT_PALETTE = [
   { bg:"#fee2e2",text:"#dc2626",darkBg:"#450a0a",darkText:"#fca5a5" },
@@ -3293,6 +3348,26 @@ const DEFAULT_POT = {
 };
 const RECUR_FREQ = ["Monthly","Weekly","Yearly"];
 const AVATAR_COLORS = ["#4f46e5","#7c3aed","#db2777","#059669","#d97706","#dc2626","#0891b2"];
+const AVATAR_OPTIONS = [
+  { id:"initials", label:"Initials", emoji:null },
+  { id:"😊", label:"😊", emoji:"😊" },
+  { id:"😎", label:"😎", emoji:"😎" },
+  { id:"🤑", label:"🤑", emoji:"🤑" },
+  { id:"🦁", label:"🦁", emoji:"🦁" },
+  { id:"🐯", label:"🐯", emoji:"🐯" },
+  { id:"🦊", label:"🦊", emoji:"🦊" },
+  { id:"🐼", label:"🐼", emoji:"🐼" },
+  { id:"🐸", label:"🐸", emoji:"🐸" },
+  { id:"🦄", label:"🦄", emoji:"🦄" },
+  { id:"🐲", label:"🐲", emoji:"🐲" },
+  { id:"🚀", label:"🚀", emoji:"🚀" },
+  { id:"⚡", label:"⚡", emoji:"⚡" },
+  { id:"🔥", label:"🔥", emoji:"🔥" },
+  { id:"💎", label:"💎", emoji:"💎" },
+  { id:"👑", label:"👑", emoji:"👑" },
+  { id:"🎯", label:"🎯", emoji:"🎯" },
+  { id:"🏎️", label:"🏎️", emoji:"🏎️" },
+];
 
 function avatarColor(name) {
   if (!name) return "#4f46e5";
@@ -3367,22 +3442,6 @@ async function requestNotifPermission() {
   if (Notification.permission === "granted") return true;
   return (await Notification.requestPermission()) === "granted";
 }
-function scheduleReminderNotifs(recurring, dismissedMap) {
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const today = getTodayIST();
-  recurring.forEach(r => {
-    const days = daysFromToday(r.nextDue);
-    if (days > 3 || days < 0 || dismissedMap[r.id] === today) return;
-    try {
-      new Notification(`mySpendr: ${r.name}`, {
-        body: `₹${r.amount.toLocaleString()} ${days === 0 ? "due today" : `due in ${days} day${days === 1 ? "" : "s"}`}`,
-        icon: "/favicon.ico",
-        tag: `myspendr-reminder-${r.id}`,
-      });
-    } catch {}
-  });
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // ICONS
 // ════════════════════════════════════════════════════════════════════════════
@@ -4232,7 +4291,7 @@ function ReceiptScanner({ categories, onAdd, dark, cardBg, border, textMute, tex
 // ════════════════════════════════════════════════════════════════════════════
 // EMI TAB
 // ════════════════════════════════════════════════════════════════════════════
-function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inputBorder, setExpenses, setPot, showToast, today, logDay, accent, emis: emisProp, setEmis: setEmisProp }) {
+function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inputBorder, setExpenses, setPot, showToast, today, logDay, accent, emis: emisProp, setEmis: setEmisProp, banks, setBanks }) {
   const safeAccent = accent || "#4f46e5";
   const [emisLocal, setEmisLocal] = useState(() => storageGet(KEYS.EMI, []));
   // Use externally-provided state if available, otherwise fall back to local
@@ -4271,10 +4330,11 @@ function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inpu
   function payEmi(loan) {
     const monthKey = today.slice(0,7);
     if ((loan.paidMonths||[]).includes(monthKey)) { showToast("Already paid this month!"); return; }
+    const def = (banks||[]).find(b=>b.isDefault) || (banks||[])[0];
+    const src = def ? `bank:${def.id}` : "bank:1";
     setEmis(prev => prev.map(e => e.id!==loan.id?e:{ ...e, paidMonths:[...(e.paidMonths||[]),monthKey] }));
-    setExpenses(prev => [...prev, { id:Date.now(), amount:loan.emi, category:"Bills", note:`${loan.name} EMI`, date:today, paySource:"bank" }]);
-    setPot(p => deductPot(p, "bank", loan.emi));
-    setBanks(b => deductBank(b, "bank", loan.emi));
+    setExpenses(prev => [...prev, { id:Date.now(), amount:loan.emi, category:"Bills", note:`${loan.name} EMI`, date:today, paySource:src }]);
+    if (setBanks) setBanks(b => deductBank(b, src, loan.emi));
     logDay(today);
     showToast(`₹${loan.emi.toLocaleString()} EMI logged!`);
   }
@@ -4523,12 +4583,15 @@ export default function App() {
   // ── Theme / accent ────────────────────────────────────────────────────────
   const [dark, setDark] = useState(() => storageGet(KEYS.THEME, "light") === "dark");
   const [accentId, setAccentId] = useState(() => storageGet(KEYS.ACCENT, "earth"));
-  const [sceneTheme, setSceneTheme] = useState(() => storageGet(KEYS.SCENE, "space"));
+  const [sceneTheme, setSceneTheme] = useState(() => {
+    const saved = storageGet(KEYS.SCENE, "island");
+    // Migrate removed themes to island
+    return (saved === "space" || saved === "marina" || saved === "volcano") ? "island" : saved;
+  });
   const accentObj = ACCENTS.find(a => a.id===accentId) || ACCENTS[0];
-  // Island uses sandy beige, volcano uses lava orange, others use planet accent
+  // Island uses sandy beige, DBZ uses planet accent
   const accent =
-    sceneTheme === "island"  ? (dark ? "#f0c060" : "#c8902a") :
-    sceneTheme === "volcano" ? (dark ? "#ff6a20" : "#d94010") :
+    sceneTheme === "island" ? (dark ? "#f0c060" : "#c8902a") :
     dark ? accentObj.dark : accentObj.light;
 
   useEffect(() => { storageSetDebounced(KEYS.THEME, dark?"dark":"light"); }, [dark]);
@@ -4557,6 +4620,7 @@ export default function App() {
   const [dismissedMap, setDismissedMap] = useState(() => storageGet(KEYS.DISMISS, {}));
   const [notifEnabled, setNotifEnabled] = useState(() => storageGet(KEYS.NOTIF, false));
   const [userName, setUserName] = useState(() => storageGet(KEYS.USER, ""));
+  const [avatarId, setAvatarId] = useState(() => storageGet(KEYS.AVATAR, "initials"));
   const [notifLog, setNotifLog] = useState(() => storageGet(KEYS.NOTIF_LOG, []));
   const [goals, setGoals] = useState(() => storageGet(KEYS.GOALS, []));
   // Streak freeze state
@@ -4573,6 +4637,7 @@ export default function App() {
   useEffect(() => { storageSetDebounced(KEYS.DISMISS, dismissedMap); }, [dismissedMap]);
   useEffect(() => { storageSet(KEYS.NOTIF, notifEnabled); }, [notifEnabled]);
   useEffect(() => { storageSet(KEYS.USER, userName); }, [userName]);
+  useEffect(() => { storageSet(KEYS.AVATAR, avatarId); }, [avatarId]);
   useEffect(() => { storageSetDebounced(KEYS.NOTIF_LOG, notifLog); }, [notifLog]);
   useEffect(() => { storageSetDebounced(KEYS.GOALS, goals); }, [goals]);
   useEffect(() => { storageSet(KEYS.SHIELD, shieldState); }, [shieldState]);
@@ -4779,7 +4844,7 @@ export default function App() {
     const recurringReminders = recurring
       .filter(r => {
         const days = daysFromToday(r.nextDue);
-        if (days > 3) return false;
+        if (days > 3) return false;   // remind up to 3 days before (matches EMI window)
         if (dismissedMap[r.id] === today) return false;
         const paidTM = (r.paid||[]).some(d => {
           const pd = new Date(d+"T00:00:00");
@@ -4795,47 +4860,36 @@ export default function App() {
 
   function dismissReminder(id) { setDismissedMap(p => ({ ...p, [id]: today })); }
 
-  // Log reminders to notif history
-  useEffect(() => {
-    if (reminders.length===0) return;
-    setNotifLog(prev => {
-      let changed = false;
-      const next = [...prev];
-      reminders.forEach(r => {
-        const key = `${r.id}-${today}`;
-        if (!prev.some(n => n.key===key)) {
-          next.unshift({ key, id:r.id, name:r.name, amount:r.amount, daysUntil:r.daysUntil, dueDateStr:r.dueDateStr, ts:Date.now() });
-          changed = true;
-        }
-      });
-      return changed ? next.slice(0,50) : prev;
-    });
-  }, [today, reminders.length]);
-
-  // ── Notifications ─────────────────────────────────────────────────────────
+  // ── Notifications - fire once per day on due day ──────────────────────────
   const recurringRef = useRef(recurring);
   const dismissedMapRef = useRef(dismissedMap);
+  const emisRef = useRef(emis);                                  // FIX: keep emis fresh in ref
   useEffect(() => { recurringRef.current = recurring; }, [recurring]);
   useEffect(() => { dismissedMapRef.current = dismissedMap; }, [dismissedMap]);
+  useEffect(() => { emisRef.current = emis; }, [emis]);          // FIX: sync emis ref
   useEffect(() => {
-    if (notifEnabled) {
-      scheduleReminderNotifs(recurringRef.current, dismissedMapRef.current);
-      // Also fire notifications for upcoming EMIs
-      if (!("Notification" in window) || Notification.permission !== "granted") return;
-      const today2 = getTodayIST();
-      getEmiReminders(emis, today2, dismissedMapRef.current).forEach(r => {
-        const days = r.daysUntil;
-        if (days > 3 || days < 0) return;
-        try {
-          new Notification(`mySpendr: ${r.name}`, {
-            body: `₹${r.amount.toLocaleString()} ${days === 0 ? "due today" : `due in ${days} day${days===1?"":"s"}`}`,
-            icon: "/favicon.ico",
-            tag: `myspendr-emi-${r.id}`,
-          });
-        } catch {}
-      });
-    }
-  }, [notifEnabled, emis]);
+    if (!notifEnabled) return;
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const today2 = getTodayIST();
+    // FIX: guard so notifications only fire once per calendar day
+    const firedKey = `myspendr_notif_fired_${today2}`;
+    if (localStorage.getItem(firedKey)) return;
+    localStorage.setItem(firedKey, "1");
+    // Fire browser notification for items due within 3 days (not overdue, not dismissed)
+    [...recurringRef.current, ...getEmiReminders(emisRef.current, today2, dismissedMapRef.current)].forEach(r => {
+      const days = r.nextDue !== undefined ? daysFromToday(r.nextDue) : r.daysUntil;
+      if (days === undefined || days > 3 || days < 0) return;
+      if (dismissedMapRef.current && dismissedMapRef.current[r.id] === today2) return;
+      const dueLabel = days === 0 ? "due today" : days === 1 ? "due tomorrow" : `due in ${days} days`;
+      try {
+        new Notification(`mySpendr: ${r.name}`, {                // FIX: r.name || r.name → r.name
+          body: `₹${(r.amount||0).toLocaleString()} ${dueLabel}`,
+          icon: "/favicon.ico",
+          tag: `myspendr-reminder-${r.id}-${today2}`,
+        });
+      } catch {}
+    });
+  }, [notifEnabled, today]);
 
   async function toggleNotif() {
     if (!notifEnabled) {
@@ -4987,10 +5041,13 @@ export default function App() {
   function deleteRecurring(id) { setRecurring(p => p.filter(r => r.id!==id)); showToast("Removed."); }
   function markPaid(r, source="bank") {
     const pd = today;
-    setExpenses(p => [...p, { id:Date.now(), amount:r.amount, category:r.category, note:`${r.name} (${r.frequency})`, date:pd, paySource:source }]);
+    const def = banks.find(b=>b.isDefault) || banks[0];
+    const src = source === "cash" ? "cash" : (def ? `bank:${def.id}` : "bank:1");
+    setExpenses(p => [...p, { id:Date.now(), amount:r.amount, category:r.category, note:`${r.name} (${r.frequency})`, date:pd, paySource:src }]);
     const nextDue = getNextDueDate(pd, r.frequency);
     setRecurring(p => p.map(item => item.id!==r.id ? item : { ...item, nextDue, paid:[...(item.paid||[]),pd] }));
-    setPot(p => deductPot(p, source, r.amount));
+    if (src === "cash") setPot(p => deductPot(p, "cash", r.amount));
+    else setBanks(b => deductBank(b, src, r.amount));
     setDismissedMap(prev => { const n={...prev}; delete n[r.id]; return n; });
     logDay(pd); showToast(`${r.name} paid from ${source}!`);
   }
@@ -5001,10 +5058,12 @@ export default function App() {
       if (!loan) return;
       const monthKey = today.slice(0,7);
       if ((loan.paidMonths||[]).includes(monthKey)) { showToast("Already paid this month!"); return; }
+      const def = banks.find(b=>b.isDefault) || banks[0];
+      const src = source === "cash" ? "cash" : (def ? `bank:${def.id}` : "bank:1");
       setEmis(prev => prev.map(e => e.id!==loan.id?e:{ ...e, paidMonths:[...(e.paidMonths||[]),monthKey] }));
-      setExpenses(prev => [...prev, { id:Date.now(), amount:loan.emi, category:"Bills", note:`${loan.name} EMI`, date:today, paySource:source||"bank" }]);
-      setPot(p => deductPot(p, source||"bank", loan.emi));
-      if (source !== "cash") setBanks(b => deductBank(b, source||"bank", loan.emi));
+      setExpenses(prev => [...prev, { id:Date.now(), amount:loan.emi, category:"Bills", note:`${loan.name} EMI`, date:today, paySource:src }]);
+      if (src === "cash") setPot(p => deductPot(p, "cash", loan.emi));
+      else setBanks(b => deductBank(b, src, loan.emi));
       logDay(today); showToast(`₹${loan.emi.toLocaleString()} EMI paid!`);
       return;
     }
@@ -5047,23 +5106,47 @@ export default function App() {
   function saveIncome() {
     if (!incName.trim() || !isValidAmount(incAmt)) return;
     const entry = { id:incEditId||Date.now(), label:incName.trim(), amount:Number(incAmt), frequency:incFreq, active:true };
-    if (incEditId) { setPot(p => ({ ...p, incomes:p.incomes.map(i => i.id===incEditId?entry:i) })); showToast("Updated!"); }
-    else { setPot(p => ({ ...p, incomes:[...(p.incomes||[]),entry] })); showToast("Income added!"); }
+    if (incEditId) {
+      setPot(p => ({ ...p, incomes:p.incomes.map(i => i.id===incEditId?entry:i) }));
+      showToast("Updated!");
+    } else {
+      // Add income to pot list
+      setPot(p => ({ ...p, incomes:[...(p.incomes||[]),entry] }));
+      // Credit the income amount to default bank balance (net worth updates automatically)
+      const def = banks.find(b=>b.isDefault) || banks[0];
+      if (def) {
+        setBanks(b => b.map(bk => bk.id===def.id ? { ...bk, balance:(Number(bk.balance)||0)+Number(incAmt) } : bk));
+        showToast(`₹${Number(incAmt).toLocaleString()} income credited to ${def.name}!`);
+      } else {
+        showToast("Income added!");
+      }
+    }
     resetIncomeForm();
   }
   function deleteIncome(id) { setPot(p => ({ ...p, incomes:p.incomes.filter(i => i.id!==id) })); showToast("Removed."); }
   function editIncome(inc) { setIncEditId(inc.id); setIncName(inc.label); setIncAmt(inc.amount); setIncFreq(inc.frequency); setShowIncomeForm(true); }
-  function creditIncome(inc) { setPot(p => ({ ...p, usableBank:(Number(p.usableBank)||0)+Number(inc.amount) })); showToast(`₹${Number(inc.amount).toLocaleString()} credited to bank!`); }
+  function creditIncome(inc) {
+    const def = banks.find(b=>b.isDefault) || banks[0];
+    const src = def ? `bank:${def.id}` : null;
+    if (src) setBanks(b => b.map(bk => bk.id===def.id ? { ...bk, balance:(Number(bk.balance)||0)+Number(inc.amount) } : bk));
+    showToast(`₹${Number(inc.amount).toLocaleString()} credited to ${def?.name||"bank"}!`);
+  }
   function saveExtra() {
     if (!extraLabel.trim() || !isValidAmount(extraAmt)) return;
     const entry = { id:Date.now(), label:extraLabel.trim(), amount:Number(extraAmt), date:extraDate };
-    setPot(p => ({ ...p, extras:[...(p.extras||[]),entry], usableBank:(Number(p.usableBank)||0)+Number(extraAmt) }));
+    const def = banks.find(b=>b.isDefault) || banks[0];
+    setPot(p => ({ ...p, extras:[...(p.extras||[]),entry] }));
+    if (def) setBanks(b => b.map(bk => bk.id===def.id ? { ...bk, balance:(Number(bk.balance)||0)+Number(extraAmt) } : bk));
     setExtraLabel(""); setExtraAmt(""); setExtraDate(today); setShowExtraForm(false);
-    showToast(`₹${Number(extraAmt).toLocaleString()} added to bank!`);
+    showToast(`₹${Number(extraAmt).toLocaleString()} added to ${def?.name||"bank"}!`);
   }
   function deleteExtra(id) {
     const ex = (pot.extras||[]).find(e => e.id===id);
-    if (ex) setPot(p => ({ ...p, extras:p.extras.filter(e => e.id!==id), usableBank:Math.max(0,(Number(p.usableBank)||0)-ex.amount) }));
+    if (ex) {
+      const def = banks.find(b=>b.isDefault) || banks[0];
+      setPot(p => ({ ...p, extras:p.extras.filter(e => e.id!==id) }));
+      if (def) setBanks(b => b.map(bk => bk.id===def.id ? { ...bk, balance:Math.max(0,(Number(bk.balance)||0)-ex.amount) } : bk));
+    }
     showToast("Removed.");
   }
 
@@ -5186,7 +5269,10 @@ export default function App() {
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
               <button onClick={() => { haptic(8); setShowSettings(true); }}
                 style={{ width:40,height:40,borderRadius:"50%",background:avatarColor(userName),border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(0,0,0,0.15)" }}>
-                <span style={{ fontSize:15,fontWeight:800,color:"#fff",letterSpacing:"-0.5px" }}>{getInitials(userName)}</span>
+                {avatarId && avatarId !== "initials"
+                  ? <span style={{ fontSize:22,lineHeight:1 }}>{avatarId}</span>
+                  : <span style={{ fontSize:15,fontWeight:800,color:"#fff",letterSpacing:"-0.5px" }}>{getInitials(userName)}</span>
+                }
               </button>
               <div>
                 <h1 style={{ margin:0,fontSize:18,fontWeight:700,letterSpacing:"-0.3px",color:textMain }}>{tab==="home"?getGreeting(userName):"mySpendr"}</h1>
@@ -5574,13 +5660,18 @@ export default function App() {
                   </div>
                   <div style={cardStyle}>
                     <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:14 }}><TrendIcon/><span style={{ fontSize:14,fontWeight:700 }}>Breakdown</span></div>
-                    {[["usableCash","Cash in Hand","#16a34a"],["usableBank","Bank Balance","#2563eb"],["savings","Savings / FD","#7c3aed"],["investments","Investments","#db2777"]].map(([field,label,color]) => (
+                    {[["usableCash","Cash in Hand","#16a34a"],["savings","Savings / FD","#7c3aed"],["investments","Investments","#db2777"]].map(([field,label,color]) => (
                       <div key={field} style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}>
                         <div style={{ width:10,height:10,borderRadius:"50%",background:color,flexShrink:0 }}/>
                         <span style={{ flex:1,fontSize:13 }}>{label}</span>
                         <span style={{ fontSize:13,fontWeight:700,color,minWidth:90,textAlign:"right" }}>₹{(Number(pot[field])||0).toLocaleString()}</span>
                       </div>
                     ))}
+                    <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}>
+                      <div style={{ width:10,height:10,borderRadius:"50%",background:"#2563eb",flexShrink:0 }}/>
+                      <span style={{ flex:1,fontSize:13 }}>Bank Balance</span>
+                      <span style={{ fontSize:13,fontWeight:700,color:"#2563eb",minWidth:90,textAlign:"right" }}>₹{totalBankBalance.toLocaleString()}</span>
+                    </div>
                     <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}>
                       <div style={{ width:10,height:10,borderRadius:"50%",background:"#d97706",flexShrink:0 }}/>
                       <div style={{ flex:1 }}><span style={{ fontSize:13 }}>Gold</span>{pot.goldGrams>0&&pot.goldRate>0&&<span style={{ fontSize:11,color:textMute,marginLeft:6 }}>{pot.goldGrams}g × ₹{Number(pot.goldRate).toLocaleString()}/g</span>}</div>
@@ -5854,7 +5945,7 @@ export default function App() {
                             <input type="date" value={rDueDate} onChange={e => setRDueDate(e.target.value)} style={inputStyle}/>
                           </div>
                         </div>
-                        <p style={{ margin:"0 0 10px",fontSize:11,color:textMute }}>Reminders appear 3 days before due and repeat daily until paid.</p>
+                        <p style={{ margin:"0 0 10px",fontSize:11,color:textMute }}>Reminder appears the day before and on the due date each month.</p>
                         <div style={{ display:"flex",gap:8 }}><button onClick={saveRecurring} style={{ ...btnPrimary,flex:1 }}>{rEditId?"Update":"Add"}</button><button onClick={resetRForm} style={btnSecondary}>Cancel</button></div>
                       </div>
                     : <button onClick={() => setShowRForm(true)} style={{ ...btnPrimary,width:"100%",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}><PlusIcon/>Add Bill / Recurring</button>
@@ -5868,8 +5959,8 @@ export default function App() {
                     : <div style={{ background:cardBg,border:`1px solid ${border}`,borderRadius:16,overflow:"hidden" }}>
                         {recurring.map((r,i) => {
                           const days = daysFromToday(r.nextDue);
-                          const isOverdue=days<0, isDueToday=days===0, dueSoon=days<=3&&days>=0;
                           const paidTM = (r.paid||[]).some(d => { const pd=new Date(d+"T00:00:00"); return pd.getMonth()===istNow.getMonth()&&pd.getFullYear()===istNow.getFullYear(); });
+                          const isOverdue=days<0, isDueToday=days===0, dueSoon=days===1&&!paidTM;
                           return (
                             <div key={r.id} style={{ padding:"14px 16px",borderBottom:i<recurring.length-1?`1px solid ${border}`:"none" }}>
                               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
@@ -5879,7 +5970,7 @@ export default function App() {
                                     <span style={{ ...getCatStyle(r.category),padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:600 }}>{r.category}</span>
                                     {isOverdue&&!paidTM&&<span style={{ background:"#fef2f2",color:"#dc2626",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:700,border:"1px solid #fca5a5" }}>{Math.abs(days)}d overdue</span>}
                                     {isDueToday&&!paidTM&&<span style={{ background:"#fff7ed",color:"#ea580c",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:700 }}>Due today</span>}
-                                    {dueSoon&&!isDueToday&&!paidTM&&<span style={{ background:"#fffbeb",color:"#ca8a04",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600 }}>Due in {days}d</span>}
+                                    {dueSoon&&<span style={{ background:"#fffbeb",color:"#ca8a04",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600 }}>Due tomorrow</span>}
                                     {paidTM&&<span style={{ background:dark?"#052e16":"#d1fae5",color:dark?"#34d399":"#065f46",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:3 }}><CheckIcon/>Paid</span>}
                                   </div>
                                   <div style={{ display:"flex",gap:16,fontSize:12,color:textMute }}><span>₹{r.amount.toLocaleString()} / {r.frequency}</span><span>Next: {formatDate(r.nextDue)}</span></div>
@@ -5907,7 +5998,7 @@ export default function App() {
               {billsSubTab==="loans" && tab==="bills" && (
                 <EmiTab dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain} subbg={subbg} inputBg={inputBg} inputBorder={inputBorder}
                   setExpenses={setExpenses} setPot={setPot} showToast={showToast} today={today} logDay={logDay} accent={accent}
-                  emis={emis} setEmis={setEmis}/>
+                  emis={emis} setEmis={setEmis} banks={banks} setBanks={setBanks}/>
               )}
             </>
           )}
@@ -5925,7 +6016,6 @@ export default function App() {
               <div style={{ padding:"0 20px 8px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0 }}>
                 <p style={{ margin:0,fontSize:16,fontWeight:700,color:textMain }}>Notifications</p>
                 <div style={{ display:"flex",gap:8,alignItems:"center" }}>
-                  {notifLog.length>0 && <button onClick={() => { haptic(5); setNotifLog([]); }} style={{ fontSize:11,color:textMute,background:"none",border:"none",cursor:"pointer",fontWeight:500 }}>Clear all</button>}
                   <button onClick={() => { haptic(8); toggleNotif(); }}
                     style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:99,border:`1px solid ${border}`,background:"none",cursor:"pointer",fontSize:12,fontWeight:600,color:notifEnabled?(dark?"#818cf8":"#4f46e5"):textMute }}>
                     <BellIcon/>{notifEnabled?"On":"Off"}
@@ -5941,7 +6031,7 @@ export default function App() {
                         <div style={{ fontSize:18,flexShrink:0 }}>{item.daysUntil<0?"⚠️":item.daysUntil===0?"🔔":"⏰"}</div>
                         <div style={{ flex:1 }}>
                           <p style={{ margin:0,fontSize:13,fontWeight:700,color:item.daysUntil<0?"#ef4444":item.daysUntil===0?"#f97316":"#f59e0b" }}>{item.name}</p>
-                          <p style={{ margin:"1px 0 0",fontSize:11,color:textMute }}>₹{item.amount.toLocaleString()} · {item.daysUntil<0?`${Math.abs(item.daysUntil)}d overdue`:item.daysUntil===0?"due today":`due in ${item.daysUntil}d`}</p>
+                          <p style={{ margin:"1px 0 0",fontSize:11,color:textMute }}>₹{item.amount.toLocaleString()} · {item.daysUntil<0?`${Math.abs(item.daysUntil)}d overdue`:item.daysUntil===0?"due today":item.daysUntil===1?"due tomorrow":`due in ${item.daysUntil} days`}</p>
                         </div>
                         <button onClick={() => { haptic([10,30,10]); payFromReminder(item,"bank"); setShowNotifPanel(false); }} style={{ background:dark?"#064e3b":"#d1fae5",color:dark?"#34d399":"#065f46",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer" }}>Pay</button>
                         <button onClick={() => { haptic(5); dismissReminder(item.id); }} style={{ background:"none",border:`1px solid ${border}`,borderRadius:8,padding:"5px 8px",cursor:"pointer",color:textMute,display:"flex",alignItems:"center" }}><XIcon/></button>
@@ -5949,22 +6039,11 @@ export default function App() {
                     ))}
                   </div>
                 )}
-                {notifLog.length>0 && (
-                  <div>
-                    <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute }}>History</p>
-                    {notifLog.map(n => (
-                      <div key={n.key} style={{ display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderBottom:`1px solid ${border}` }}>
-                        <div style={{ width:6,height:6,borderRadius:"50%",background:dark?"#374151":"#d1d5db",flexShrink:0 }}/>
-                        <div style={{ flex:1 }}><p style={{ margin:0,fontSize:12,fontWeight:600,color:textMain }}>{n.name}</p><p style={{ margin:"1px 0 0",fontSize:11,color:textMute }}>₹{n.amount.toLocaleString()} · {n.dueDateStr}</p></div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {reminders.length===0&&notifLog.length===0 && (
+                {reminders.length===0 && (
                   <div style={{ textAlign:"center",padding:"40px 0" }}>
                     <p style={{ fontSize:28,marginBottom:8 }}>🔕</p>
                     <p style={{ margin:0,fontSize:13,fontWeight:600,color:textMain }}>All clear</p>
-                    <p style={{ margin:"4px 0 0",fontSize:12,color:textMute }}>No upcoming payments</p>
+                    <p style={{ margin:"4px 0 0",fontSize:12,color:textMute }}>No payments due today or tomorrow</p>
                   </div>
                 )}
               </div>
@@ -5994,97 +6073,90 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Name edit */}
+                {/* Profile / Avatar */}
                 <div style={{ padding:"12px 0",borderBottom:`1px solid ${border}` }}>
                   <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:editingName?8:0 }}>
                     <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                      <div style={{ width:28,height:28,borderRadius:"50%",background:avatarColor(userName),display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ fontSize:11,fontWeight:800,color:"#fff" }}>{getInitials(userName)}</span></div>
-                      <div><p style={{ margin:0,fontSize:14,color:textMain }}>{userName||"Set your name"}</p><p style={{ margin:0,fontSize:11,color:textMute }}>Shown in greeting</p></div>
+                      <div style={{ width:36,height:36,borderRadius:"50%",background:avatarColor(userName),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                        {avatarId && avatarId !== "initials"
+                          ? <span style={{ fontSize:20,lineHeight:1 }}>{avatarId}</span>
+                          : <span style={{ fontSize:13,fontWeight:800,color:"#fff" }}>{getInitials(userName)}</span>
+                        }
+                      </div>
+                      <div><p style={{ margin:0,fontSize:14,color:textMain }}>{userName||"Set your name"}</p><p style={{ margin:0,fontSize:11,color:textMute }}>Tap to edit</p></div>
                     </div>
                     <button onClick={() => { setEditingName(e => !e); setNameInput(userName); }} style={btnSecondary}>{editingName?"Cancel":"Edit"}</button>
                   </div>
                   {editingName && (
-                    <div style={{ display:"flex",gap:6 }}>
-                      <input value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="Your name" onKeyDown={e => e.key==="Enter"&&saveName()}
-                        style={{ flex:1,background:dark?"#1f2937":"#f8fafc",border:`1px solid ${dark?"#374151":"#e5e7eb"}`,color:textMain,borderRadius:10,padding:"7px 12px",fontSize:13,outline:"none" }} autoFocus/>
-                      <button onClick={saveName} style={{ background:accent,color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer" }}>Save</button>
-                    </div>
+                    <>
+                      <div style={{ display:"flex",gap:6,marginBottom:10 }}>
+                        <input value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="Your name" onKeyDown={e => e.key==="Enter"&&saveName()}
+                          style={{ flex:1,background:dark?"#1f2937":"#f8fafc",border:`1px solid ${dark?"#374151":"#e5e7eb"}`,color:textMain,borderRadius:10,padding:"7px 12px",fontSize:13,outline:"none" }} autoFocus/>
+                        <button onClick={saveName} style={{ background:accent,color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:13,fontWeight:600,cursor:"pointer" }}>Save</button>
+                      </div>
+                      <p style={{ margin:"0 0 8px",fontSize:12,fontWeight:600,color:textMute }}>Profile picture</p>
+                      <div style={{ display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6 }}>
+                        {AVATAR_OPTIONS.map(av => {
+                          const isActive = avatarId === av.id;
+                          return (
+                            <button key={av.id} onClick={() => { haptic(6); setAvatarId(av.id); }}
+                              style={{ height:44,borderRadius:12,border:isActive?`2px solid ${accent}`:`1px solid ${border}`,background:isActive?(dark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.04)"):"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s" }}>
+                              {av.emoji
+                                ? <span style={{ fontSize:22,lineHeight:1 }}>{av.emoji}</span>
+                                : <div style={{ width:26,height:26,borderRadius:"50%",background:avatarColor(userName),display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ fontSize:10,fontWeight:800,color:"#fff" }}>{getInitials(userName)||"A"}</span></div>
+                              }
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </div>
 
-                {/* Scene theme */}
+                {/* Themes — visual inline pickers */}
                 <div style={{ padding:"12px 0",borderBottom:`1px solid ${border}` }}>
-                  <div style={{ fontSize:14,fontWeight:600,color:textMain,marginBottom:10 }}>Scene</div>
-                  <div style={{ display:"flex",gap:6 }}>
-                    {[
-                      {id:"space",   label:"Space",   emoji:"🚀"},
-                      {id:"marina",  label:"Ocean",   emoji:"🎣"},
-                      {id:"island",  label:"F1",      emoji:"🏎️"},
-                      {id:"volcano", label:"Fuji",    emoji:"🗻"},
-                      {id:"dbz",     label:"DBZ",     emoji:"⚡"},
-                    ].map(sc=>{
+                  <p style={{ margin:"0 0 10px",fontSize:14,fontWeight:600,color:textMain }}>Themes</p>
+
+                  {/* Scene picker */}
+                  <p style={{ margin:"0 0 6px",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute }}>Scene</p>
+                  <div style={{ display:"flex",gap:8,marginBottom:14 }}>
+                    {[{id:"island",label:"F1",emoji:"🏎️"},{id:"dbz",label:"DBZ",emoji:"⚡"}].map(sc => {
                       const isActive = sceneTheme===sc.id;
                       return (
-                        <button key={sc.id} onClick={()=>{ haptic(6); setSceneTheme(sc.id); }}
-                          style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"9px 4px",borderRadius:12,
+                        <button key={sc.id} onClick={() => { haptic(6); setSceneTheme(sc.id); }}
+                          style={{ flex:1,display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:12,
                             border:isActive?`2px solid ${accent}`:`1px solid ${border}`,
-                            background:isActive?(dark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.04)"):"none",
+                            background:isActive?(dark?`${accent}22`:`${accent}11`):(dark?"#1f2937":"#f8fafc"),
                             cursor:"pointer",transition:"all 0.15s" }}>
-                          <span style={{ fontSize:22,lineHeight:1 }}>{sc.emoji}</span>
-                          <span style={{ fontSize:11,fontWeight:isActive?700:500,color:isActive?accent:textMute }}>{sc.label}</span>
+                          <span style={{ fontSize:26,lineHeight:1 }}>{sc.emoji}</span>
+                          <span style={{ fontSize:14,fontWeight:isActive?700:500,color:isActive?accent:textMain }}>{sc.label}</span>
+                          {isActive && <div style={{ marginLeft:"auto",width:8,height:8,borderRadius:"50%",background:accent }}/>}
                         </button>
                       );
                     })}
                   </div>
-                  {(sceneTheme==='island'||sceneTheme==='volcano'||sceneTheme==='dbz') && (
-                    <p style={{ margin:"8px 0 0",fontSize:11,color:textMute,textAlign:"center" }}>
-                      {sceneTheme==='island' ? '🏎️ F1 uses beige accent' : sceneTheme==='volcano' ? '🗻 Fuji uses orange accent' : '⚡ Power your streak, Saiyan!'}
-                    </p>
-                  )}
-                </div>
 
-                {/* Planet accent theme - Space only */}
-                {sceneTheme==="space" && (
-                <div style={{ padding:"12px 0",borderBottom:`1px solid ${border}` }}>
-                  <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:12 }}>
-                    <span style={{ fontSize:14,fontWeight:600,color:textMain }}>Theme Planet</span>
-                    <span style={{ fontSize:10,color:textMute,marginLeft:"auto" }}>Solar order ☀️ → 🌌</span>
+                  {/* Colour picker — styled select with dot preview */}
+                  <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute }}>Colour</p>
+                  <div style={{ position:"relative" }}>
+                    <div style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",width:18,height:18,borderRadius:"50%",background:(ACCENTS.find(a=>a.id===accentId)||ACCENTS[0]).dot,pointerEvents:"none",zIndex:1,boxShadow:`0 0 6px ${(ACCENTS.find(a=>a.id===accentId)||ACCENTS[0]).dot}99` }}/>
+                    <select value={accentId} onChange={e => { haptic(6); setAccentId(e.target.value); }}
+                      style={{ width:"100%",appearance:"none",WebkitAppearance:"none",background:dark?"#1f2937":"#f8fafc",border:`1.5px solid ${accent}`,color:textMain,borderRadius:12,padding:"10px 36px 10px 38px",fontSize:14,fontWeight:600,outline:"none",cursor:"pointer" }}>
+                      {ACCENTS.map(a => (
+                        <option key={a.id} value={a.id}>{a.label}</option>
+                      ))}
+                    </select>
+                    <div style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:textMute }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
                   </div>
-                  <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8 }}>
-                    {ACCENTS.map((a,i) => {
-                      const isActive = accentId===a.id;
-                      return (
-                        <button key={a.id} onClick={() => { haptic(6); setAccentId(a.id); }}
-                          style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"10px 6px",borderRadius:12,border:isActive?`2px solid ${dark?a.dark:a.light}`:`1px solid ${border}`,
-                            background:isActive?(dark?"rgba(255,255,255,0.06)":"rgba(0,0,0,0.03)"):"none",cursor:"pointer",transition:"all 0.15s",position:"relative" }}>
-                          <div style={{ width:32,height:32,borderRadius:"50%",background:a.dot,
-                            boxShadow:isActive?`0 0 12px ${a.dot}99, 0 0 4px ${a.dot}`:"none",
-                            transition:"box-shadow 0.2s",
-                            border:isActive?`2px solid ${dark?a.dark:a.light}`:"2px solid transparent" }}/>
-                          <span style={{ fontSize:11,fontWeight:isActive?700:500,color:isActive?(dark?a.dark:a.light):textMute,lineHeight:1 }}>{a.label}</span>
-                          {isActive && <div style={{ position:"absolute",top:5,right:5,width:6,height:6,borderRadius:"50%",background:dark?a.dark:a.light }}/>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {(() => {
-                    const streakMaxIdx = Math.min(Math.floor(streak.count/14), ACCENTS.length-1);
-                    const selectedIdx = ACCENTS.findIndex(a=>a.id===accentId);
-                    if(selectedIdx > streakMaxIdx) return (
-                      <p style={{ margin:"8px 0 0",fontSize:11,color:"#f59e0b",textAlign:"center" }}>
-                        🔒 Streak to day {selectedIdx*14} to unlock {ACCENTS[selectedIdx].label}
-                      </p>
-                    );
-                    return null;
-                  })()}
                 </div>
-                )}
 
                 {/* Notifications */}
                 <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:`1px solid ${border}` }}>
                   <div style={{ display:"flex",alignItems:"center",gap:10 }}>
                     <BellIcon/>
-                    <div><span style={{ fontSize:14,color:textMain }}>Notifications</span><p style={{ margin:0,fontSize:11,color:textMute }}>Bill reminders 3 days before due</p></div>
+                    <div><span style={{ fontSize:14,color:textMain }}>Notifications</span><p style={{ margin:0,fontSize:11,color:textMute }}>Reminder the day before and on due date</p></div>
                   </div>
                   <button onClick={toggleNotif} style={{ width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:notifEnabled?"#4f46e5":"#e5e7eb",transition:"background 0.2s" }}>
                     <div style={{ position:"absolute",top:2,left:notifEnabled?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
