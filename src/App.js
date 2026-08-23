@@ -24,6 +24,8 @@ const KEYS = {
   BANKS:      "myspendr_banks_v1",
   SCENE:      "myspendr_scene_v1",
   AVATAR:     "myspendr_avatar_v1",
+  FRIENDS:    "myspendr_friends_v1",
+  SPLITS:     "myspendr_splits_v1",
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -3339,6 +3341,7 @@ const CAT_PALETTE = [
 const DEFAULT_CATEGORIES = [
   {name:"Food",colorIdx:0},{name:"Groceries",colorIdx:1},{name:"Travel",colorIdx:2},
   {name:"Shopping",colorIdx:3},{name:"Bills",colorIdx:4},{name:"Entertainment",colorIdx:5},
+  {name:"Others",colorIdx:6},
 ];
 const DEFAULT_POT = {
   usableCash:0,usableBank:0,savings:0,investments:0,gold:0,
@@ -3475,6 +3478,7 @@ const WalletIcon = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0
 const EmiIcon    = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="7" y2="15"/><line x1="12" y1="15" x2="12" y2="15"/></svg>;
 const MicIcon    = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
 const CameraIcon = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
+const UsersIcon  = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 const ChevDown   = ({ color }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>;
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -4606,9 +4610,11 @@ export default function App() {
     return typeof v === "string" ? Number(v) : v;
   });
   const [categories, setCategories] = useState(() => {
-    const p = storageGet(KEYS.CATEGORIES, DEFAULT_CATEGORIES);
+    let p = storageGet(KEYS.CATEGORIES, DEFAULT_CATEGORIES);
     // Migrate old string-array format
-    if (p.length>0 && typeof p[0]==="string") return p.map((name,i) => ({ name, colorIdx: i%CAT_PALETTE.length }));
+    if (p.length>0 && typeof p[0]==="string") p = p.map((name,i) => ({ name, colorIdx: i%CAT_PALETTE.length }));
+    // Ensure an "Others" catch-all category always exists (needed for category deletion)
+    if (!p.find(c => c.name==="Others")) p = [...p, { name:"Others", colorIdx: p.length%CAT_PALETTE.length, excludeFromBudget:false }];
     return p;
   });
   const [streak, setStreak] = useState(() => storageGet(KEYS.STREAK, EMPTY_STREAK));
@@ -4660,8 +4666,25 @@ export default function App() {
   const [bankEditId, setBankEditId] = useState(null);
   const [budgetInput, setBudgetInput] = useState("");
   const [editingBudget, setEditingBudget] = useState(false);
-  const [newCatName, setNewCatName] = useState("");
   const [addingCat, setAddingCat] = useState(false);
+  const [catDeleteConfirm, setCatDeleteConfirm] = useState(null);
+  const newCatInputRef = useRef(null);
+
+  // ── Split with Friends (kept separate from Expenses) ────────────────────
+  const [friends, setFriends] = useState(() => storageGet(KEYS.FRIENDS, []));
+  const [splits, setSplits] = useState(() => storageGet(KEYS.SPLITS, []));
+  useEffect(() => { storageSetDebounced(KEYS.FRIENDS, friends); }, [friends]);
+  useEffect(() => { storageSetDebounced(KEYS.SPLITS, splits); }, [splits]);
+  const newFriendInputRef = useRef(null);
+  const [splitTitle, setSplitTitle] = useState("");
+  const [splitIncludeMe, setSplitIncludeMe] = useState(false);
+  const [splitSelectedIds, setSplitSelectedIds] = useState([]);
+  const [splitPaidMap, setSplitPaidMap] = useState({}); // id -> paid amount string
+  const [splitMode, setSplitMode] = useState("equal"); // "equal" | "unequal"
+  const [splitShareMap, setSplitShareMap] = useState({}); // id -> custom owed-share string (unequal mode only)
+  const [splitResult, setSplitResult] = useState(null); // computed settlement for last saved/preview split
+  const [friendDeleteConfirm, setFriendDeleteConfirm] = useState(null);
+  const [splitDeleteConfirm, setSplitDeleteConfirm] = useState(null);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [toast, setToast] = useState(null);
@@ -5077,15 +5100,139 @@ export default function App() {
   }
 
   // ── Categories ────────────────────────────────────────────────────────────
+  // NOTE: this input is intentionally uncontrolled (via ref, not React state).
+  // Making it a controlled input caused a bug on mobile (most visible in portrait
+  // mode) where every keystroke re-rendered the field and reset the cursor to the
+  // start, so each new letter got inserted before the previous ones — the text
+  // effectively came out reversed. Reading the value from the DOM on submit
+  // avoids re-rendering on every keystroke entirely, so the browser handles the
+  // cursor natively and typing behaves normally.
   function addCategory() {
-    const name = newCatName.trim();
+    const name = (newCatInputRef.current?.value || "").trim();
     if (!name || categories.find(c => c.name===name)) { showToast("Name is empty or already exists."); return; }
     setCategories(p => [...p, { name, colorIdx: p.length % CAT_PALETTE.length, excludeFromBudget: false }]);
-    setNewCatName(""); setAddingCat(false); showToast("Category added!");
+    if (newCatInputRef.current) newCatInputRef.current.value = "";
+    setAddingCat(false); showToast("Category added!");
   }
 
   function toggleCatBudgetExclusion(catName) {
     setCategories(p => p.map(c => c.name===catName ? { ...c, excludeFromBudget: !c.excludeFromBudget } : c));
+  }
+
+  // Remove a category. Its expenses are reassigned to "Others" (auto-created if
+  // missing) and the original category name is recorded in each expense's note
+  // by default, so nothing about where the spend used to be categorized is lost.
+  function deleteCategory(catName) {
+    if (catName === "Others") { showToast("The Others category can't be removed."); return; }
+    if (categories.length <= 1) { showToast("You need at least one category."); return; }
+    setCategories(prev => {
+      const rest = prev.filter(c => c.name !== catName);
+      const hasOthers = rest.some(c => c.name === "Others");
+      return hasOthers ? rest : [...rest, { name:"Others", colorIdx: rest.length % CAT_PALETTE.length, excludeFromBudget:false }];
+    });
+    setExpenses(prev => prev.map(e => {
+      if (e.category !== catName) return e;
+      const tag = `(was: ${catName})`;
+      return { ...e, category:"Others", note: e.note ? `${e.note} ${tag}` : tag };
+    }));
+    if (selCat === catName) setSelCat("Others");
+    setCatDeleteConfirm(null);
+    showToast(`"${catName}" removed — its expenses moved to Others`);
+  }
+
+  // ── Friends & Splitting ──────────────────────────────────────────────────
+  // Deliberately its own data (friends/splits), never written into `expenses` —
+  // splitting a bill with friends should never affect the budget/expense totals
+  // unless the person explicitly logs their own share as a real expense.
+  function addFriend() {
+    const name = (newFriendInputRef.current?.value || "").trim();
+    if (!name) return;
+    if (friends.find(f => f.name.toLowerCase()===name.toLowerCase())) { showToast("That friend is already added."); return; }
+    setFriends(p => [...p, { id:Date.now(), name }]);
+    if (newFriendInputRef.current) newFriendInputRef.current.value = "";
+    showToast(`${name} added!`);
+  }
+  function deleteFriend(id) {
+    setFriends(p => p.filter(f => f.id!==id));
+    setSplitSelectedIds(p => p.filter(x => x!==id));
+    setSplitPaidMap(p => { const n = { ...p }; delete n[id]; return n; });
+    setFriendDeleteConfirm(null);
+    showToast("Friend removed.");
+  }
+  function toggleSplitParticipant(id) {
+    setSplitSelectedIds(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  }
+  function setSplitPaid(id, val) {
+    setSplitPaidMap(prev => ({ ...prev, [id]: val }));
+  }
+  function setSplitShare(id, val) {
+    setSplitShareMap(prev => ({ ...prev, [id]: val }));
+  }
+  function toggleSplitIncludeMe() {
+    setSplitIncludeMe(v => {
+      const next = !v;
+      setSplitSelectedIds(prev => next ? [...new Set([...prev, "me"])] : prev.filter(x=>x!=="me"));
+      return next;
+    });
+  }
+  function buildSplitEntries() {
+    return splitSelectedIds.map(id => {
+      if (id === "me") return { id:"me", name: userName ? userName : "Me", paid: Number(splitPaidMap.me)||0, shares: splitShareMap.me };
+      const f = friends.find(x=>x.id===id);
+      return f ? { id:f.id, name:f.name, paid: Number(splitPaidMap[f.id])||0, shares: splitShareMap[f.id] } : null;
+    }).filter(Boolean);
+  }
+  // Equal-split settlement by default: everyone owes an equal portion of the
+  // pooled total. In "shares" mode, each participant is assigned a number of
+  // shares (e.g. B=2 shares, C=1 share, A=1 share → 4 shares total) and owes
+  // (their shares ÷ total shares) × total paid — a blank share box defaults to 1.
+  function computeSettlement(entries, mode = "equal") {
+    const total = entries.reduce((s,e) => s + (Number(e.paid)||0), 0);
+    const equalShare = entries.length ? total / entries.length : 0;
+    const useShares = mode === "shares";
+    const shareCount = e => { const n = Number(e.shares); return n > 0 ? n : 1; };
+    const totalShares = useShares ? entries.reduce((s,e) => s + shareCount(e), 0) : 0;
+    const perShare = useShares && totalShares ? total / totalShares : 0;
+    const balances = entries.map(e => {
+      const owed = useShares ? shareCount(e) * perShare : equalShare;
+      return { id:e.id, name:e.name, paid:Number(e.paid)||0, shares: useShares ? shareCount(e) : null, owed, balance: Math.round(((Number(e.paid)||0) - owed) * 100) / 100 };
+    });
+    const debtors = balances.filter(b => b.balance < -0.005).map(b => ({ ...b })).sort((a,b) => a.balance - b.balance);
+    const creditors = balances.filter(b => b.balance > 0.005).map(b => ({ ...b })).sort((a,b) => b.balance - a.balance);
+    const transactions = [];
+    let i = 0, j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const d = debtors[i], c = creditors[j];
+      const amt = Math.round(Math.min(-d.balance, c.balance) * 100) / 100;
+      if (amt > 0.005) transactions.push({ from:d.name, to:c.name, amount:amt });
+      d.balance = Math.round((d.balance + amt) * 100) / 100;
+      c.balance = Math.round((c.balance - amt) * 100) / 100;
+      if (Math.abs(d.balance) < 0.01) i++;
+      if (Math.abs(c.balance) < 0.01) j++;
+    }
+    return { total, share: equalShare, totalShares, perShare, mode, balances, transactions };
+  }
+  function previewSplit() {
+    const entries = buildSplitEntries();
+    if (entries.length < 2) { showToast("Pick at least 2 people to split between."); return; }
+    setSplitResult(computeSettlement(entries, splitMode));
+  }
+  function saveSplit() {
+    const entries = buildSplitEntries();
+    if (entries.length < 2) { showToast("Pick at least 2 people to split between."); return; }
+    const result = computeSettlement(entries, splitMode);
+    const record = { id:Date.now(), title: splitTitle.trim() || "Split", date: today, entries, includeMe: splitIncludeMe, mode: splitMode, total: result.total, transactions: result.transactions };
+    setSplits(prev => [record, ...prev]);
+    setSplitResult(result);
+    showToast("Split saved!");
+  }
+  function resetSplitForm() {
+    setSplitTitle(""); setSplitIncludeMe(false); setSplitSelectedIds([]); setSplitPaidMap({}); setSplitShareMap({}); setSplitMode("equal"); setSplitResult(null);
+  }
+  function deleteSplit(id) {
+    setSplits(prev => prev.filter(s => s.id!==id));
+    setSplitDeleteConfirm(null);
+    showToast("Split deleted.");
   }
 
   // ── Pot helpers ───────────────────────────────────────────────────────────
@@ -5808,9 +5955,9 @@ export default function App() {
                   {!addingCat
                     ? <button onClick={() => setAddingCat(true)} style={{ ...btnSecondary,padding:"8px 12px",display:"flex",alignItems:"center",gap:4 }}><GridIcon/>+ Cat</button>
                     : <div style={{ display:"flex",gap:4,flex:1 }}>
-                        <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Category name" onKeyDown={e => e.key==="Enter"&&addCategory()} style={{ ...inputStyle,flex:1 }}/>
+                        <input ref={newCatInputRef} defaultValue="" placeholder="Category name" onKeyDown={e => e.key==="Enter"&&addCategory()} style={{ ...inputStyle,flex:1 }} autoFocus/>
                         <button onClick={addCategory} style={btnPrimary}>Add</button>
-                        <button onClick={() => setAddingCat(false)} style={btnSecondary}>✕</button>
+                        <button onClick={() => { if(newCatInputRef.current) newCatInputRef.current.value=""; setAddingCat(false); }} style={btnSecondary}>✕</button>
                       </div>
                   }
                 </div>
@@ -5839,6 +5986,8 @@ export default function App() {
                   {categories.map(cat => {
                     const cs = getCatStyle(cat.name);
                     const excluded = !!cat.excludeFromBudget;
+                    const confirming = catDeleteConfirm === cat.name;
+                    const isOthers = cat.name === "Others";
                     return (
                       <div key={cat.name} style={{ display:"flex",alignItems:"center",gap:10,padding:"7px 10px",borderRadius:10,background:dark?"#1f2937":"#f8fafc",border:`1px solid ${excluded?(dark?"rgba(99,102,241,0.3)":"rgba(99,102,241,0.2)"):border}` }}>
                         <span style={{ ...cs,padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:600,flex:1,display:"flex",alignItems:"center",gap:4 }}>
@@ -5852,6 +6001,13 @@ export default function App() {
                             style={{ width:36,height:20,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:excluded?(dark?"#6366f1":"#4f46e5"):(dark?"#374151":"#e5e7eb"),transition:"background 0.2s",flexShrink:0 }}>
                             <div style={{ position:"absolute",top:2,left:excluded?18:2,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)" }}/>
                           </button>
+                          {!isOthers && (
+                            confirming
+                              ? <button onClick={() => { haptic([10,20,10]); deleteCategory(cat.name); }}
+                                  style={{ background:"#ef4444",color:"#fff",border:"none",borderRadius:8,padding:"4px 8px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}>Confirm?</button>
+                              : <button onClick={() => { haptic(6); setCatDeleteConfirm(cat.name); }} title="Remove category"
+                                  style={{ background:"none",border:"none",cursor:"pointer",color:textMute,display:"flex",alignItems:"center",padding:2,flexShrink:0 }}><TrashIcon/></button>
+                          )}
                         </div>
                       </div>
                     );
@@ -5999,6 +6155,177 @@ export default function App() {
                 <EmiTab dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain} subbg={subbg} inputBg={inputBg} inputBorder={inputBorder}
                   setExpenses={setExpenses} setPot={setPot} showToast={showToast} today={today} logDay={logDay} accent={accent}
                   emis={emis} setEmis={setEmis} banks={banks} setBanks={setBanks}/>
+              )}
+            </>
+          )}
+
+          {/* ════════════════════════════════════════════════════════════════
+              SPLIT WITH FRIENDS TAB — kept separate from Expenses
+          ════════════════════════════════════════════════════════════════ */}
+          {tab==="split" && (
+            <>
+              <div style={cardStyle}>
+                <h2 style={{ margin:"0 0 12px",fontSize:14,fontWeight:600 }}>Friends</h2>
+                <div style={{ display:"flex",gap:6,marginBottom:friends.length?12:0 }}>
+                  <input ref={newFriendInputRef} defaultValue="" placeholder="Friend's name" onKeyDown={e => e.key==="Enter"&&addFriend()} style={{ ...inputStyle,flex:1 }}/>
+                  <button onClick={addFriend} style={btnPrimary}>Add</button>
+                </div>
+                {friends.length>0 && (
+                  <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
+                    {friends.map(f => {
+                      const confirming = friendDeleteConfirm===f.id;
+                      return (
+                        <div key={f.id} style={{ display:"flex",alignItems:"center",gap:6,background:subbg,border:`1px solid ${border}`,borderRadius:99,padding:"6px 10px" }}>
+                          <span style={{ fontSize:12,fontWeight:600,color:textMain }}>{f.name}</span>
+                          {confirming
+                            ? <button onClick={() => deleteFriend(f.id)} style={{ background:"#ef4444",color:"#fff",border:"none",borderRadius:8,padding:"2px 6px",fontSize:10,fontWeight:700,cursor:"pointer" }}>Confirm?</button>
+                            : <button onClick={() => setFriendDeleteConfirm(f.id)} style={{ background:"none",border:"none",cursor:"pointer",color:textMute,display:"flex",alignItems:"center",padding:0 }}><XIcon/></button>
+                          }
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {friends.length===0 && <p style={{ margin:0,fontSize:12,color:textMute }}>Add friends here to start splitting bills with them. This never affects your expense totals.</p>}
+              </div>
+
+              <div style={cardStyle}>
+                <h2 style={{ margin:"0 0 4px",fontSize:14,fontWeight:600 }}>New Split</h2>
+                <p style={{ margin:"0 0 12px",fontSize:11,color:textMute }}>Kept separate from your Expenses — nothing here is added to your budget unless you log it yourself.</p>
+                <div style={{ marginBottom:10 }}>
+                  <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Title (optional)</label>
+                  <input value={splitTitle} onChange={e => setSplitTitle(e.target.value)} placeholder="e.g. Goa trip, Dinner" style={inputStyle}/>
+                </div>
+
+                <div style={{ marginBottom:12 }}>
+                  <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Split type</label>
+                  <div style={{ display:"flex",gap:8 }}>
+                    {[{id:"equal",label:"Equal split"},{id:"shares",label:"By shares"}].map(m => {
+                      const active = splitMode===m.id;
+                      return (
+                        <button key={m.id} onClick={() => setSplitMode(m.id)}
+                          style={{ flex:1,padding:"8px 10px",borderRadius:10,border:`1.5px solid ${active?accent:border}`,background:active?(dark?`${accent}22`:`${accent}11`):subbg,color:active?accent:textMute,fontSize:12,fontWeight:700,cursor:"pointer" }}>
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {splitMode==="shares" && <p style={{ margin:"6px 0 0",fontSize:11,color:textMute }}>Give each person a number of shares — e.g. B=2, C=1, A=1. Whoever has more shares owes more of the total. Leave blank for 1 share.</p>}
+                </div>
+
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,padding:"8px 10px",background:subbg,borderRadius:10,border:`1px solid ${border}` }}>
+                  <span style={{ fontSize:13,color:textMain }}>Include my own expenses in this split</span>
+                  <button onClick={toggleSplitIncludeMe} style={{ width:40,height:22,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:splitIncludeMe?accent:(dark?"#374151":"#e5e7eb"),flexShrink:0 }}>
+                    <div style={{ position:"absolute",top:2,left:splitIncludeMe?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s" }}/>
+                  </button>
+                </div>
+
+                {friends.length===0
+                  ? <p style={{ margin:0,fontSize:12,color:textMute }}>Add at least one friend above to create a split.</p>
+                  : (
+                    <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:12 }}>
+                      {splitMode==="shares" && (
+                        <div style={{ display:"flex",gap:8,paddingLeft:28 }}>
+                          <span style={{ flex:1 }}/>
+                          <span style={{ width:110,fontSize:10,fontWeight:700,color:textMute,textTransform:"uppercase",letterSpacing:"0.04em" }}>Paid</span>
+                          <span style={{ width:80,fontSize:10,fontWeight:700,color:textMute,textTransform:"uppercase",letterSpacing:"0.04em" }}>Shares</span>
+                        </div>
+                      )}
+                      {splitIncludeMe && (
+                        <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                          <span style={{ flex:1,fontSize:13,color:textMain,fontWeight:600 }}>{userName||"Me"}</span>
+                          <input type="number" inputMode="decimal" value={splitPaidMap.me||""} onChange={e => setSplitPaidMap(p => ({ ...p,me:e.target.value }))} placeholder="₹ paid" style={{ ...inputStyle,width:110 }}/>
+                          {splitMode==="shares" && <input type="number" inputMode="decimal" value={splitShareMap.me||""} onChange={e => setSplitShare("me",e.target.value)} placeholder="1" style={{ ...inputStyle,width:80,textAlign:"center" }}/>}
+                        </div>
+                      )}
+                      {friends.map(f => {
+                        const checked = splitSelectedIds.includes(f.id);
+                        return (
+                          <div key={f.id} style={{ display:"flex",alignItems:"center",gap:8 }}>
+                            <button onClick={() => toggleSplitParticipant(f.id)} style={{ width:20,height:20,borderRadius:6,border:`1.5px solid ${checked?accent:border}`,background:checked?accent:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff" }}>
+                              {checked && <CheckIcon/>}
+                            </button>
+                            <span style={{ flex:1,fontSize:13,color:textMain }}>{f.name}</span>
+                            {checked && <input type="number" inputMode="decimal" value={splitPaidMap[f.id]||""} onChange={e => setSplitPaid(f.id,e.target.value)} placeholder="₹ paid" style={{ ...inputStyle,width:110 }}/>}
+                            {checked && splitMode==="shares" && <input type="number" inputMode="decimal" value={splitShareMap[f.id]||""} onChange={e => setSplitShare(f.id,e.target.value)} placeholder="1" style={{ ...inputStyle,width:80,textAlign:"center" }}/>}
+                          </div>
+                        );
+                      })}
+                      {splitMode==="shares" && splitSelectedIds.length>0 && (() => {
+                        const entries = buildSplitEntries();
+                        const totalShares = entries.reduce((s,e) => s + (Number(e.shares)>0?Number(e.shares):1), 0);
+                        const paidTotal = entries.reduce((s,e)=>s+(Number(e.paid)||0),0);
+                        const perShare = totalShares ? paidTotal/totalShares : 0;
+                        return (
+                          <p style={{ margin:0,fontSize:11,color:textMute }}>
+                            {totalShares} shares total · ₹{perShare.toLocaleString(undefined,{maximumFractionDigits:2})} per share
+                          </p>
+                        );
+                      })()}
+                    </div>
+                  )
+                }
+
+                <div style={{ display:"flex",gap:8 }}>
+                  <button onClick={previewSplit} style={{ ...btnSecondary,flex:1 }}>Preview</button>
+                  <button onClick={saveSplit} style={{ ...btnPrimary,flex:1 }}>Save Split</button>
+                </div>
+              </div>
+
+              {splitResult && (
+                <div style={cardStyle}>
+                  <h2 style={{ margin:"0 0 10px",fontSize:14,fontWeight:600 }}>Settlement</h2>
+                  <p style={{ margin:"0 0 10px",fontSize:12,color:textMute }}>
+                    Total ₹{splitResult.total.toLocaleString()} split {splitResult.balances.length} ways
+                    {splitResult.mode==="unequal" ? " · custom shares" : ` · ₹${Math.round(splitResult.share).toLocaleString()} each`}
+                  </p>
+                  {splitResult.transactions.length===0
+                    ? <p style={{ margin:0,fontSize:13,color:textMain }}>Everyone's already even — nobody owes anything 🎉</p>
+                    : (
+                      <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+                        {splitResult.transactions.map((t,i) => (
+                          <div key={i} style={{ display:"flex",alignItems:"center",gap:6,padding:"8px 10px",background:subbg,borderRadius:10,border:`1px solid ${border}`,fontSize:13 }}>
+                            <strong style={{ color:textMain }}>{t.from}</strong>
+                            <span style={{ color:textMute }}>owes</span>
+                            <strong style={{ color:textMain }}>{t.to}</strong>
+                            <span style={{ marginLeft:"auto",fontWeight:700,color:accent }}>₹{t.amount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  }
+                  <button onClick={resetSplitForm} style={{ ...btnSecondary,marginTop:10,width:"100%" }}>New split</button>
+                </div>
+              )}
+
+              {splits.length>0 && (
+                <div style={cardStyle}>
+                  <h2 style={{ margin:"0 0 12px",fontSize:14,fontWeight:600 }}>Past Splits</h2>
+                  <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                    {splits.map(s => {
+                      const confirming = splitDeleteConfirm===s.id;
+                      return (
+                        <div key={s.id} style={{ padding:"10px 12px",background:subbg,borderRadius:12,border:`1px solid ${border}` }}>
+                          <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
+                            <span style={{ flex:1,fontSize:13,fontWeight:700,color:textMain }}>{s.title}</span>
+                            <span style={{ fontSize:11,color:textMute }}>{formatDate(s.date)}</span>
+                            {confirming
+                              ? <button onClick={() => deleteSplit(s.id)} style={{ background:"#ef4444",color:"#fff",border:"none",borderRadius:8,padding:"3px 8px",fontSize:10,fontWeight:700,cursor:"pointer" }}>Confirm?</button>
+                              : <button onClick={() => setSplitDeleteConfirm(s.id)} style={{ background:"none",border:"none",cursor:"pointer",color:textMute,display:"flex",alignItems:"center",padding:0 }}><TrashIcon/></button>
+                            }
+                          </div>
+                          <p style={{ margin:"0 0 6px",fontSize:11,color:textMute }}>₹{s.total.toLocaleString()} between {s.entries.map(e=>e.name).join(", ")}</p>
+                          {s.transactions.length===0
+                            ? <p style={{ margin:0,fontSize:12,color:textMain }}>Settled — nobody owed anything.</p>
+                            : s.transactions.map((t,i) => (
+                              <p key={i} style={{ margin:0,fontSize:12,color:textMain }}>{t.from} → {t.to}: <strong>₹{t.amount.toLocaleString()}</strong></p>
+                            ))
+                          }
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </>
           )}
@@ -6195,6 +6522,7 @@ export default function App() {
             { id:"scanvoice", label:"Add",     icon:<div style={{ width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${accentObj.light},${accentObj.dark})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(79,70,229,0.4)",marginTop:-20,border:`3px solid ${dark?"#030712":"#fff"}` }}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div> },
             { id:"bills",       label:"Bills & Loans",   icon:<EmiIcon size={22}/> },
             { id:"pot",       label:"My Pot",  icon:<WalletIcon size={22}/> },
+            { id:"split",     label:"Split",   icon:<UsersIcon size={22}/> },
           ].map(({ id, label, icon }) => {
             const active = tab===id;
             const isScan = id==="scanvoice";
