@@ -26,6 +26,8 @@ const KEYS = {
   AVATAR:     "myspendr_avatar_v1",
   FRIENDS:    "myspendr_friends_v1",
   SPLITS:     "myspendr_splits_v1",
+  THEME_STYLE:"myspendr_theme_style_v1",
+  SIMPLE:     "myspendr_simple_v1",
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -3323,7 +3325,25 @@ const ACCENTS = [
   { id:"brown",   label:"Caramel",  light:"#92400e", dark:"#d97706",  dot:"#b45309" },
   { id:"green",   label:"Green",    light:"#15803d", dark:"#4ade80",  dot:"#16a34a" },
   { id:"night",   label:"Midnight", light:"#1e1b4b", dark:"#a5b4fc",  dot:"#4338ca" },
+  { id:"ledger",  label:"Ledger",   light:"#0d7d7a", dark:"#5ecfcf",  dot:"#4fc3c7" },
 ];
+// Optional full theme (background + surfaces + accent), independent of the
+// per-hue ACCENTS above — matches the reference icon: white/cream base, bold
+// retro-ink outlines, teal chrome bars, orange as the primary accent, yellow
+// as a secondary highlight.
+const RETRO_THEME = {
+  bg:          "#f4f1e6",
+  cardBg:      "#ffffff",
+  border:      "#0e1c54",
+  textMain:    "#0e1c54",
+  textMute:    "#5b6690",
+  inputBg:     "#ffffff",
+  inputBorder: "#0e1c54",
+  subbg:       "#eef0fa",
+  teal:        "#5cc9c6",
+  orange:      "#f2a25e",
+  yellow:      "#f6da6e",
+};
 const CAT_PALETTE = [
   { bg:"#fee2e2",text:"#dc2626",darkBg:"#450a0a",darkText:"#fca5a5" },
   { bg:"#dcfce7",text:"#16a34a",darkBg:"#052e16",darkText:"#86efac" },
@@ -3338,6 +3358,22 @@ const CAT_PALETTE = [
   { bg:"#fff7ed",text:"#c2410c",darkBg:"#431407",darkText:"#fb923c" },
   { bg:"#f0fdf4",text:"#15803d",darkBg:"#052e16",darkText:"#4ade80" },
 ];
+// Category colours used only when the Retro theme is active — light tints in
+// the teal/orange/yellow/retro family so chips stay on-palette on the white cards.
+const RETRO_CAT_PALETTE = [
+  { bg:"#e0f5f3", text:"#0f7a72" },
+  { bg:"#fdebd8", text:"#c2680f" },
+  { bg:"#fdf3d0", text:"#9c7a12" },
+  { bg:"#e5e9f7", text:"#1c2f6e" },
+  { bg:"#daf3ef", text:"#127a6e" },
+  { bg:"#ffe4cf", text:"#c2450f" },
+  { bg:"#fff2c4", text:"#8a6b1f" },
+  { bg:"#dff0f7", text:"#0e7490" },
+  { bg:"#e1f7ea", text:"#0f7a4a" },
+  { bg:"#ffe3da", text:"#c2451f" },
+  { bg:"#e8eaf8", text:"#33418a" },
+  { bg:"#f7f0dc", text:"#8a6b1f" },
+];
 const DEFAULT_CATEGORIES = [
   {name:"Food",colorIdx:0},{name:"Groceries",colorIdx:1},{name:"Travel",colorIdx:2},
   {name:"Shopping",colorIdx:3},{name:"Bills",colorIdx:4},{name:"Entertainment",colorIdx:5},
@@ -3351,6 +3387,7 @@ const DEFAULT_POT = {
 };
 const RECUR_FREQ = ["Monthly","Weekly","Yearly"];
 const AVATAR_COLORS = ["#4f46e5","#7c3aed","#db2777","#059669","#d97706","#dc2626","#0891b2"];
+const RETRO_AVATAR_COLORS = ["#f2a25e","#5cc9c6","#f6da6e","#7ec9e8","#f28b6b","#8fd9c4","#e0c088"];
 const AVATAR_OPTIONS = [
   { id:"initials", label:"Initials", emoji:null },
   { id:"😊", label:"😊", emoji:"😊" },
@@ -3372,11 +3409,12 @@ const AVATAR_OPTIONS = [
   { id:"🏎️", label:"🏎️", emoji:"🏎️" },
 ];
 
-function avatarColor(name) {
-  if (!name) return "#4f46e5";
+function avatarColor(name, retro) {
+  const palette = retro ? RETRO_AVATAR_COLORS : AVATAR_COLORS;
+  if (!name) return palette[0];
   let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % AVATAR_COLORS.length;
-  return AVATAR_COLORS[h];
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % palette.length;
+  return palette[h];
 }
 function getInitials(name) {
   if (!name) return "?";
@@ -3672,22 +3710,24 @@ function ReminderBanner({ item, onDismiss, onPay, dark }) {
 // ════════════════════════════════════════════════════════════════════════════
 // CATEGORY HELPERS - extracted so they're not recomputed inside render
 // ════════════════════════════════════════════════════════════════════════════
-function useCategoryHelpers(categories, dark) {
+function useCategoryHelpers(categories, dark, retro) {
   const getCatObj = useCallback((name) =>
     categories.find(c => c.name === name) || { name, colorIdx: 0 },
   [categories]);
 
   const getCatStyle = useCallback((name) => {
     const cat = getCatObj(name);
+    if (retro) { const p = RETRO_CAT_PALETTE[cat.colorIdx % RETRO_CAT_PALETTE.length]; return { background:p.bg, color:p.text }; }
     const p = CAT_PALETTE[cat.colorIdx % CAT_PALETTE.length];
     return dark ? { background: p.darkBg, color: p.darkText } : { background: p.bg, color: p.text };
-  }, [getCatObj, dark]);
+  }, [getCatObj, dark, retro]);
 
   const getCatAccent = useCallback((name) => {
     const cat = getCatObj(name);
+    if (retro) { return RETRO_CAT_PALETTE[cat.colorIdx % RETRO_CAT_PALETTE.length].text; }
     const p = CAT_PALETTE[cat.colorIdx % CAT_PALETTE.length];
     return dark ? p.darkText : p.text;
-  }, [getCatObj, dark]);
+  }, [getCatObj, dark, retro]);
 
   return { getCatStyle, getCatAccent };
 }
@@ -3695,8 +3735,8 @@ function useCategoryHelpers(categories, dark) {
 // ════════════════════════════════════════════════════════════════════════════
 // PIN LOCK
 // ════════════════════════════════════════════════════════════════════════════
-function PinLock({ onUnlock, dark, accent }) {
-  const safeAccent = accent || "#4f46e5";
+function PinLock({ onUnlock, dark, accent, isRetro, userName }) {
+  const safeAccent = accent || (isRetro ? RETRO_THEME.orange : "#4f46e5");
   const savedPin = () => storageGet(KEYS.PIN, "");
   const hasPin = savedPin().length === 4;
   const hasCred = !!loadBioCred();
@@ -3754,20 +3794,22 @@ function PinLock({ onUnlock, dark, accent }) {
     }
   }
 
-  const bg = dark ? "#030712" : "#f8fafc";
-  const card = dark ? "#111827" : "#ffffff";
-  const textMain = dark ? "#f9fafb" : "#111827";
-  const textMute = dark ? "#6b7280" : "#9ca3af";
+  const bg       = isRetro ? RETRO_THEME.bg       : dark ? "#030712" : "#f8fafc";
+  const card     = isRetro ? RETRO_THEME.cardBg   : dark ? "#111827" : "#ffffff";
+  const textMain = isRetro ? RETRO_THEME.textMain : dark ? "#f9fafb" : "#111827";
+  const textMute = isRetro ? RETRO_THEME.textMute : dark ? "#6b7280" : "#9ca3af";
+  const inkBorder = isRetro ? RETRO_THEME.border : (dark ? "#1f2937" : "#e5e7eb");
 
   if (offerBioSetup) return (
-    <div style={{ minHeight:"100vh",background:bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24 }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
+    <div className={isRetro?"retro-sharp":undefined} style={{ minHeight:"100vh",background:bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24 }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&display=swap" rel="stylesheet"/>
+      {isRetro && <style>{`.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; } .retro-sharp { font-family:'Racing Sans One','DM Sans',sans-serif !important; }`}</style>}
       <div style={{ width:"100%",maxWidth:320,display:"flex",flexDirection:"column",alignItems:"center",gap:12 }}>
         <div style={{ fontSize:56 }}>🔑</div>
-        <h1 style={{ margin:0,fontSize:22,fontWeight:700,color:textMain,textAlign:"center",letterSpacing:"-0.5px" }}>Enable Face ID / Fingerprint?</h1>
+        <h1 style={{ margin:0,fontSize:22,fontWeight:isRetro?800:700,color:textMain,textAlign:"center",letterSpacing:"-0.5px" }}>Enable Face ID / Fingerprint?</h1>
         <p style={{ margin:"0 0 24px",fontSize:13,color:textMute,textAlign:"center",lineHeight:1.6 }}>Skip the PIN next time and unlock instantly with your device biometrics.</p>
         {bioError && <p style={{ margin:"0 0 8px",fontSize:12,color:"#ef4444",textAlign:"center" }}>{bioError}</p>}
-        <button onClick={tryRegister} disabled={bioLoading} style={{ width:"100%",padding:14,borderRadius:14,border:"none",background:safeAccent,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",opacity:bioLoading?0.7:1 }}>
+        <button onClick={tryRegister} disabled={bioLoading} style={{ width:"100%",padding:14,border:isRetro?`2.5px solid ${RETRO_THEME.border}`:"none",background:safeAccent,color:isRetro?RETRO_THEME.border:"#fff",fontSize:15,fontWeight:isRetro?800:700,cursor:"pointer",opacity:bioLoading?0.7:1,boxShadow:isRetro?"3px 3px 0px 0px rgba(14,28,84,1)":"none" }}>
           {bioLoading ? "Setting up…" : "Enable Biometrics"}
         </button>
         <button onClick={() => { setOfferBioSetup(false); onUnlock(); }} style={{ background:"none",border:"none",cursor:"pointer",color:textMute,fontSize:13,textDecoration:"underline" }}>Skip for now</button>
@@ -3775,37 +3817,41 @@ function PinLock({ onUnlock, dark, accent }) {
     </div>
   );
 
-  const title = mode === "setup" ? "Set a PIN" : mode === "confirm" ? "Confirm PIN" : "Welcome back";
+  const firstName = (userName||"").trim().split(" ")[0];
+  const title = mode === "setup" ? "Set a PIN" : mode === "confirm" ? "Confirm PIN" : firstName ? `Welcome back, ${firstName}` : "Welcome back";
   const subtitle = mode === "setup" ? "Choose a 4-digit PIN to secure your data"
     : mode === "confirm" ? "Re-enter your PIN to confirm"
     : hasCred ? "Unlock with biometrics or enter your PIN"
     : "Enter your PIN to continue";
 
   return (
-    <div style={{ minHeight:"100vh",background:bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24 }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
-      <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}`}</style>
+    <div className={isRetro?"retro-sharp":undefined} style={{ minHeight:"100vh",background:bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24 }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&display=swap" rel="stylesheet"/>
+      <style>{`
+        @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+        ${isRetro ? `.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; } .retro-sharp { font-family:'Racing Sans One','DM Sans',sans-serif !important; }` : ``}
+      `}</style>
       <div style={{ width:"100%",maxWidth:320,display:"flex",flexDirection:"column",alignItems:"center",gap:8 }}>
         <div style={{ fontSize:48,marginBottom:4 }}>🔐</div>
-        <h1 style={{ margin:0,fontSize:22,fontWeight:700,color:textMain,letterSpacing:"-0.5px" }}>{title}</h1>
+        <h1 style={{ margin:0,fontSize:22,fontWeight:isRetro?800:700,color:textMain,letterSpacing:"-0.5px",textAlign:"center" }}>{title}</h1>
         <p style={{ margin:"0 0 28px",fontSize:13,color:textMute,textAlign:"center" }}>{subtitle}</p>
         <div style={{ display:"flex",gap:14,marginBottom:32,animation:shake?"shake 0.4s ease":"none" }}>
           {[0,1,2,3].map(i => (
-            <div key={i} style={{ width:14,height:14,borderRadius:"50%",background:digits.length>i?safeAccent:(dark?"#1f2937":"#e5e7eb"),border:`2px solid ${digits.length>i?safeAccent:(dark?"#374151":"#d1d5db")}`,transition:"background 0.15s" }} />
+            <div key={i} style={{ width:14,height:14,background:digits.length>i?safeAccent:(isRetro?RETRO_THEME.cardBg:dark?"#1f2937":"#e5e7eb"),border:isRetro?`2px solid ${RETRO_THEME.border}`:`2px solid ${digits.length>i?safeAccent:(dark?"#374151":"#d1d5db")}`,transition:"background 0.15s" }} />
           ))}
         </div>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,width:"100%",maxWidth:280 }}>
           {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k,i) => (
             k === "" ? <div key={i}/> :
             <button key={i} onClick={() => k==="⌫" ? del() : press(k)}
-              style={{ height:64,borderRadius:16,border:`1px solid ${dark?"#1f2937":"#e5e7eb"}`,background:k==="⌫"?(dark?"#1f2937":"#f3f4f6"):card,color:textMain,fontSize:k==="⌫"?20:22,fontWeight:600,cursor:"pointer",fontFamily:"'DM Mono',monospace" }}>
+              style={{ height:64,border:isRetro?`2px solid ${RETRO_THEME.border}`:`1px solid ${inkBorder}`,background:k==="⌫"?(isRetro?RETRO_THEME.subbg:dark?"#1f2937":"#f3f4f6"):card,color:textMain,fontSize:k==="⌫"?20:22,fontWeight:isRetro?800:600,cursor:"pointer",fontFamily:"'DM Mono',monospace",boxShadow:isRetro?"2px 2px 0px 0px rgba(14,28,84,0.35)":"none" }}>
               {k}
             </button>
           ))}
         </div>
         {mode === "enter" && bioAvail && (
           <button onClick={tryVerify} disabled={bioLoading}
-            style={{ marginTop:20,display:"flex",alignItems:"center",gap:8,background:"none",border:`1px solid ${dark?"#374151":"#e5e7eb"}`,borderRadius:12,padding:"10px 20px",cursor:"pointer",color:dark?"#9ca3af":"#6b7280",fontSize:13,fontWeight:500,opacity:bioLoading?0.6:1 }}>
+            style={{ marginTop:20,display:"flex",alignItems:"center",gap:8,background:isRetro?"#ffffff":"none",border:isRetro?`2px solid ${RETRO_THEME.border}`:`1px solid ${dark?"#374151":"#e5e7eb"}`,padding:"10px 20px",cursor:"pointer",color:isRetro?RETRO_THEME.textMain:dark?"#9ca3af":"#6b7280",fontSize:13,fontWeight:isRetro?700:500,opacity:bioLoading?0.6:1 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839-1.132c.09-.52.138-1.05.138-1.587 0-3.038-1.362-5.762-3.509-7.6"/>
             </svg>
@@ -4587,20 +4633,30 @@ export default function App() {
   // ── Theme / accent ────────────────────────────────────────────────────────
   const [dark, setDark] = useState(() => storageGet(KEYS.THEME, "light") === "dark");
   const [accentId, setAccentId] = useState(() => storageGet(KEYS.ACCENT, "earth"));
+  const [themeStyle, setThemeStyle] = useState(() => storageGet(KEYS.THEME_STYLE, "classic")); // "classic" | "retro"
+  const isRetro = themeStyle === "retro";
   const [sceneTheme, setSceneTheme] = useState(() => {
     const saved = storageGet(KEYS.SCENE, "island");
     // Migrate removed themes to island
     return (saved === "space" || saved === "marina" || saved === "volcano") ? "island" : saved;
   });
   const accentObj = ACCENTS.find(a => a.id===accentId) || ACCENTS[0];
-  // Island uses sandy beige, DBZ uses planet accent
+  // Island uses sandy beige, DBZ uses planet accent, Retro theme always uses its own teal
   const accent =
+    isRetro ? RETRO_THEME.orange :
     sceneTheme === "island" ? (dark ? "#f0c060" : "#c8902a") :
     dark ? accentObj.dark : accentObj.light;
 
   useEffect(() => { storageSetDebounced(KEYS.THEME, dark?"dark":"light"); }, [dark]);
   useEffect(() => { storageSet(KEYS.ACCENT, accentId); }, [accentId]);
+  useEffect(() => { storageSet(KEYS.THEME_STYLE, themeStyle); }, [themeStyle]);
+  useEffect(() => { if (isRetro && dark) setDark(false); }, [isRetro, dark]);
   useEffect(() => { storageSet(KEYS.SCENE, sceneTheme); }, [sceneTheme]);
+
+  // ── Simple mode ───────────────────────────────────────────────────────────
+  const [simpleMode, setSimpleMode] = useState(() => storageGet(KEYS.SIMPLE, false));
+  useEffect(() => { storageSet(KEYS.SIMPLE, simpleMode); }, [simpleMode]);
+  useEffect(() => { if (simpleMode) setPotSection("usable"); }, [simpleMode]);
 
   // ── Core data ─────────────────────────────────────────────────────────────
   const [expenses, setExpenses] = useState(() => storageGet(KEYS.EXPENSES, []));
@@ -4736,7 +4792,7 @@ export default function App() {
   }
 
   // ── Category helpers ──────────────────────────────────────────────────────
-  const { getCatStyle, getCatAccent } = useCategoryHelpers(categories, dark);
+  const { getCatStyle, getCatAccent } = useCategoryHelpers(categories, dark, isRetro);
 
   // ── Streak helpers ────────────────────────────────────────────────────────
   const todayLogged = streak.loggedDates.includes(today);
@@ -5316,19 +5372,20 @@ export default function App() {
   function saveName() { const n = nameInput.trim(); if (!n) return; setUserName(n); setEditingName(false); setNameInput(""); showToast("Name saved!"); }
 
   // ── Theme ─────────────────────────────────────────────────────────────────
-  const bg       = dark ? "#030712" : "#f8fafc";
-  const cardBg   = dark ? "#111827" : "#ffffff";
-  const border   = dark ? "#1f2937" : "#f1f5f9";
-  const textMain = dark ? "#f9fafb" : "#111827";
-  const textMute = dark ? "#6b7280" : "#6b7280";
-  const inputBg  = dark ? "#1f2937" : "#ffffff";
-  const inputBorder = dark ? "#374151" : "#e5e7eb";
-  const subbg    = dark ? "#1f2937" : "#f8fafc";
-  const cardStyle  = { background:cardBg, border:`1px solid ${border}`, borderRadius:16, padding:16, marginBottom:12 };
-  const inputStyle = { background:inputBg, border:`1px solid ${inputBorder}`, color:textMain, borderRadius:12, padding:"10px 12px", fontSize:15, outline:"none", width:"100%", boxSizing:"border-box" };
-  const btnPrimary   = { background:accent, color:"#fff", border:"none", borderRadius:12, padding:"10px 16px", fontSize:14, fontWeight:600, cursor:"pointer" };
-  const btnSecondary = { background:dark?"#374151":"#f3f4f6", color:dark?"#d1d5db":"#374151", border:"none", borderRadius:12, padding:"8px 12px", fontSize:13, fontWeight:500, cursor:"pointer" };
-  const btnGreen  = { background:dark?"#064e3b":"#d1fae5", color:dark?"#34d399":"#065f46", border:"none", borderRadius:12, padding:"6px 12px", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:4 };
+  const bg       = isRetro ? RETRO_THEME.bg       : dark ? "#030712" : "#f8fafc";
+  const cardBg   = isRetro ? RETRO_THEME.cardBg   : dark ? "#111827" : "#ffffff";
+  const border   = isRetro ? RETRO_THEME.border   : dark ? "#1f2937" : "#f1f5f9";
+  const textMain = isRetro ? RETRO_THEME.textMain : dark ? "#f9fafb" : "#111827";
+  const textMute = isRetro ? RETRO_THEME.textMute : dark ? "#6b7280" : "#6b7280";
+  const inputBg  = isRetro ? RETRO_THEME.inputBg  : dark ? "#1f2937" : "#ffffff";
+  const inputBorder = isRetro ? RETRO_THEME.inputBorder : dark ? "#374151" : "#e5e7eb";
+  const subbg    = isRetro ? RETRO_THEME.subbg    : dark ? "#1f2937" : "#f8fafc";
+  const R = isRetro ? { card:0, input:0, btn:0 } : { card:16, input:12, btn:12 }; // true sharp rectangles in Retro theme
+  const cardStyle  = { background:cardBg, border:isRetro?`3px solid ${border}`:`1px solid ${border}`, borderRadius:R.card, padding:16, marginBottom:12 };
+  const inputStyle = { background:inputBg, border:isRetro?`2.5px solid ${inputBorder}`:`1px solid ${inputBorder}`, color:textMain, borderRadius:R.input, padding:"10px 12px", fontSize:15, outline:"none", width:"100%", boxSizing:"border-box" };
+  const btnPrimary   = { background:accent, color:isRetro?RETRO_THEME.border:"#fff", border:isRetro?`2.5px solid ${RETRO_THEME.border}`:"none", borderRadius:R.btn, padding:"10px 16px", fontSize:14, fontWeight:800, cursor:"pointer" };
+  const btnSecondary = { background:isRetro?"#ffffff":(dark?"#374151":"#f3f4f6"), color:isRetro?RETRO_THEME.textMain:(dark?"#d1d5db":"#374151"), border:isRetro?`2.5px solid ${RETRO_THEME.border}`:"none", borderRadius:R.btn, padding:"8px 12px", fontSize:13, fontWeight:isRetro?700:500, cursor:"pointer" };
+  const btnGreen  = { background:isRetro?"#e1f7ea":(dark?"#064e3b":"#d1fae5"), color:isRetro?"#0f7a4a":(dark?"#34d399":"#065f46"), border:isRetro?"2.5px solid #0f7a4a":"none", borderRadius:R.btn, padding:"6px 12px", fontSize:12, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:4 };
   const btnDanger = { background:"none", border:"none", cursor:"pointer", color:textMute, padding:4 };
 
   // ── Inject CSS custom property for accent ─────────────────────────────────
@@ -5337,7 +5394,7 @@ export default function App() {
   }, [accent]);
 
   // ── LOCK SCREEN ───────────────────────────────────────────────────────────
-  if (!unlocked) return <PinLock onUnlock={() => setUnlocked(true)} dark={dark} accent={accent}/>;
+  if (!unlocked) return <PinLock onUnlock={() => setUnlocked(true)} dark={dark} accent={accent} isRetro={isRetro} userName={userName}/>;
 
   // ── CATEGORY DRILL-DOWN ───────────────────────────────────────────────────
   if (drillCat) {
@@ -5348,9 +5405,9 @@ export default function App() {
     const catAccent = getCatAccent(drillCat);
     return (
       <ErrorBoundary dark={dark}>
-        <div style={{ minHeight:"100vh", background:bg, color:textMain, fontFamily:"'DM Sans',sans-serif" }}>
-          <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
-          <style>{`@keyframes tabFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.tabContent{animation:tabFade 0.15s ease}`}</style>
+        <div className={isRetro?"retro-sharp":undefined} style={{ minHeight:"100vh", background:bg, color:textMain, fontFamily:"'DM Sans',sans-serif" }}>
+          <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&display=swap" rel="stylesheet"/>
+          <style>{`@keyframes tabFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.tabContent{animation:tabFade 0.15s ease}${isRetro ? `.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; } .retro-sharp { font-family:'Racing Sans One','DM Sans',sans-serif !important; }` : ``}`}</style>
           <div style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }} className="tabContent">
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
               <button onClick={() => setDrillCat(null)} style={{ ...btnSecondary, display:"flex", alignItems:"center", padding:"6px 10px" }}><ChevronL/></button>
@@ -5396,8 +5453,8 @@ export default function App() {
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <ErrorBoundary dark={dark}>
-      <div style={{ minHeight:"100vh", background:bg, color:textMain, fontFamily:"'DM Sans',sans-serif", transition:"background 0.3s" }}>
-        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
+      <div className={isRetro?"retro-sharp":undefined} style={{ minHeight:"100vh", background:bg, color:textMain, fontFamily:"'DM Sans',sans-serif", transition:"background 0.3s" }}>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&display=swap" rel="stylesheet"/>
         <style>{`
           @keyframes tabFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
           @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
@@ -5405,6 +5462,8 @@ export default function App() {
           .tabContent{animation:tabFade 0.15s ease}
           input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{opacity:1}
           input[type=number]{-moz-appearance:textfield}
+          ${isRetro ? `.retro-sharp { font-family:'Racing Sans One','DM Sans',sans-serif !important; }` : ``}
+          ${isRetro ? `.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; }` : ``}
         `}</style>
 
         <Toast msg={toast}/>
@@ -5415,10 +5474,10 @@ export default function App() {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
               <button onClick={() => { haptic(8); setShowSettings(true); }}
-                style={{ width:40,height:40,borderRadius:"50%",background:avatarColor(userName),border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(0,0,0,0.15)" }}>
+                style={{ width:40,height:40,borderRadius:isRetro?0:"50%",background:avatarColor(userName,isRetro),border:isRetro?`2px solid ${RETRO_THEME.border}`:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:isRetro?"none":"0 2px 8px rgba(0,0,0,0.15)" }}>
                 {avatarId && avatarId !== "initials"
                   ? <span style={{ fontSize:22,lineHeight:1 }}>{avatarId}</span>
-                  : <span style={{ fontSize:15,fontWeight:800,color:"#fff",letterSpacing:"-0.5px" }}>{getInitials(userName)}</span>
+                  : <span style={{ fontSize:15,fontWeight:800,color:isRetro?RETRO_THEME.border:"#fff",letterSpacing:"-0.5px" }}>{getInitials(userName)}</span>
                 }
               </button>
               <div>
@@ -5427,13 +5486,17 @@ export default function App() {
               </div>
             </div>
             <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+              <button onClick={() => { haptic(8); setTab("split"); }} title="Split"
+                style={{ ...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center",position:"relative",color:tab==="split"?accent:btnSecondary.color,border:tab==="split"&&isRetro?`2.5px solid ${accent}`:btnSecondary.border }}>
+                <UsersIcon size={18}/>
+              </button>
               <button onClick={() => { haptic(8); setShowNotifPanel(true); }} title="Notifications"
                 style={{ ...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center",position:"relative" }}>
                 <BellIcon/>
                 {reminders.length>0 && <span style={{ position:"absolute",top:5,right:5,width:8,height:8,borderRadius:"50%",background:"#ef4444",border:`2px solid ${cardBg}` }}/>}
               </button>
-              <button onClick={() => { haptic(8); setDark(d => !d); }}
-                style={{ ...btnSecondary, padding:"8px 10px", display:"flex", alignItems:"center" }}>
+              <button onClick={() => { if (isRetro) return; haptic(8); setDark(d => !d); }}
+                style={{ ...btnSecondary, padding:"8px 10px", display:"flex", alignItems:"center", opacity:isRetro?0.5:1, cursor:isRetro?"not-allowed":"pointer" }}>
                 {dark?<SunIcon/>:<MoonIcon/>}
               </button>
             </div>
@@ -5445,6 +5508,7 @@ export default function App() {
           {tab==="home" && (
             <>
               {/* ── PLANET HOPPER STREAK GAME ── */}
+              {!simpleMode && (
               <PlanetHopperGame
                 streak={streak}
                 todayLogged={todayLogged}
@@ -5461,6 +5525,7 @@ export default function App() {
                 sceneTheme={sceneTheme}
                 onSceneChange={(s) => { haptic(6); setSceneTheme(s); }}
               />
+              )}
 
               <div style={{ height:12 }}/>
 
@@ -5482,6 +5547,7 @@ export default function App() {
                   </p>
                   <p style={{ margin:"3px 0 0",fontSize:11,color:textMute }}>{budget>0?(remaining>=0?"available":"over budget"):"income - expenses"}</p>
                 </div>
+                {!simpleMode && (
                 <div onClick={() => { if(topCategory){haptic(8);setDrillCat(topCategory);} }}
                   style={{ background:cardBg,border:`1px solid ${topCategory?(dark?"#374151":"#e0e7ff"):border}`,borderRadius:16,padding:"14px 16px",cursor:topCategory?"pointer":"default" }}>
                   <p style={{ margin:0,fontSize:11,color:textMute,fontWeight:500,marginBottom:4 }}>Top category</p>
@@ -5494,14 +5560,17 @@ export default function App() {
                     : <p style={{ margin:0,fontSize:16,fontWeight:700,color:textMute }}>-</p>
                   }
                 </div>
+                )}
+                {!simpleMode && (
                 <div style={{ background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:"14px 16px" }}>
                   <p style={{ margin:0,fontSize:11,color:textMute,fontWeight:500,marginBottom:4 }}>Daily avg</p>
                   <p style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:textMain }}>₹{dailyAvg.toLocaleString()}</p>
                   <p style={{ margin:"3px 0 0",fontSize:11,color:textMute }}>this month</p>
                 </div>
+                )}
               </div>
 
-              {expenses.length>0 && <SpendingTrendChart data={trendData} dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain}/>}
+              {!simpleMode && expenses.length>0 && <SpendingTrendChart data={trendData} dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain}/>}
 
               {/* Budget bar */}
               {budget>0 && (
@@ -5683,6 +5752,7 @@ export default function App() {
           ════════════════════════════════════════════════════════════════ */}
           {tab==="pot" && (
             <>
+              {!simpleMode && (
               <div style={{ display:"flex",gap:4,marginBottom:12,background:subbg,borderRadius:12,padding:4,border:`1px solid ${border}` }}>
                 {[["usable","Usable"],["networth","Net Worth"],["income","Income"]].map(([k,label]) => (
                   <button key={k} onClick={() => setPotSection(k)}
@@ -5691,6 +5761,7 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              )}
 
               {potSection==="usable" && (
                 <>
@@ -6338,7 +6409,7 @@ export default function App() {
         {showNotifPanel && (
           <>
             <div onClick={() => setShowNotifPanel(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:200,backdropFilter:"blur(2px)" }}/>
-            <div style={{ position:"fixed",bottom:0,left:0,right:0,zIndex:201,background:cardBg,borderRadius:"20px 20px 0 0",maxHeight:"75vh",display:"flex",flexDirection:"column",boxShadow:"0 -8px 32px rgba(0,0,0,0.18)" }}>
+            <div style={{ position:"fixed",bottom:0,left:0,right:0,zIndex:201,background:cardBg,borderRadius:isRetro?"0":"20px 20px 0 0",maxHeight:"75vh",display:"flex",flexDirection:"column",boxShadow:"0 -8px 32px rgba(0,0,0,0.18)" }}>
               <div style={{ display:"flex",justifyContent:"center",padding:"12px 0 4px",flexShrink:0 }}><div style={{ width:36,height:4,borderRadius:99,background:dark?"#374151":"#e5e7eb" }}/></div>
               <div style={{ padding:"0 20px 8px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0 }}>
                 <p style={{ margin:0,fontSize:16,fontWeight:700,color:textMain }}>Notifications</p>
@@ -6384,7 +6455,7 @@ export default function App() {
         {showSettings && (
           <>
             <div onClick={() => setShowSettings(false)} style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:200,backdropFilter:"blur(2px)" }}/>
-            <div style={{ position:"fixed",bottom:0,left:0,right:0,zIndex:201,background:cardBg,borderRadius:"20px 20px 0 0",padding:"0 0 env(safe-area-inset-bottom,20px)",boxShadow:"0 -8px 32px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",maxHeight:"88vh" }}>
+            <div style={{ position:"fixed",bottom:0,left:0,right:0,zIndex:201,background:cardBg,borderRadius:isRetro?"0":"20px 20px 0 0",padding:"0 0 env(safe-area-inset-bottom,20px)",boxShadow:"0 -8px 32px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",maxHeight:"88vh" }}>
               <div style={{ display:"flex",justifyContent:"center",padding:"12px 0 4px",flexShrink:0 }}><div style={{ width:36,height:4,borderRadius:99,background:dark?"#374151":"#e5e7eb" }}/></div>
               <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 20px 8px",flexShrink:0 }}>
                 <p style={{ margin:0,fontSize:16,fontWeight:700,color:textMain }}>Settings</p>
@@ -6395,19 +6466,34 @@ export default function App() {
                 {/* Dark mode toggle */}
                 <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:`1px solid ${border}` }}>
                   <div style={{ display:"flex",alignItems:"center",gap:10 }}>{dark?<MoonIcon/>:<SunIcon/>}<span style={{ fontSize:14,color:textMain }}>Dark mode</span></div>
-                  <button onClick={() => setDark(d => !d)} style={{ width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:dark?"#4f46e5":"#e5e7eb",transition:"background 0.2s" }}>
+                  <button onClick={() => setDark(d => !d)} disabled={isRetro} style={{ width:44,height:24,borderRadius:99,border:"none",cursor:isRetro?"not-allowed":"pointer",position:"relative",background:dark?"#4f46e5":"#e5e7eb",transition:"background 0.2s",opacity:isRetro?0.5:1 }}>
                     <div style={{ position:"absolute",top:2,left:dark?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
                   </button>
+                </div>
+
+                {/* Retro theme toggle — optional full palette (white/retro-ink outline + teal/orange/yellow) */}
+                <div style={{ padding:"12px 0",borderBottom:`1px solid ${border}` }}>
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                      <div style={{ width:18,height:18,borderRadius:0,background:"#ffffff",border:`2.5px solid ${RETRO_THEME.border}`,flexShrink:0 }}/>
+                      <span style={{ fontSize:14,color:textMain }}>Retro theme</span>
+                    </div>
+                    <button onClick={() => { const next = !isRetro; setThemeStyle(next?"retro":"classic"); if (next) setDark(false); haptic(6); }}
+                      style={{ width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:isRetro?RETRO_THEME.orange:(dark?"#374151":"#e5e7eb"),transition:"background 0.2s" }}>
+                      <div style={{ position:"absolute",top:2,left:isRetro?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
+                    </button>
+                  </div>
+                  <p style={{ margin:"6px 0 0",fontSize:11,color:textMute }}>A bold white &amp; retro-outline palette with teal, orange &amp; yellow accents — replaces your accent color choice while on.</p>
                 </div>
 
                 {/* Profile / Avatar */}
                 <div style={{ padding:"12px 0",borderBottom:`1px solid ${border}` }}>
                   <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:editingName?8:0 }}>
                     <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                      <div style={{ width:36,height:36,borderRadius:"50%",background:avatarColor(userName),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                      <div style={{ width:36,height:36,borderRadius:isRetro?0:"50%",background:avatarColor(userName,isRetro),border:isRetro?`2px solid ${RETRO_THEME.border}`:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
                         {avatarId && avatarId !== "initials"
                           ? <span style={{ fontSize:20,lineHeight:1 }}>{avatarId}</span>
-                          : <span style={{ fontSize:13,fontWeight:800,color:"#fff" }}>{getInitials(userName)}</span>
+                          : <span style={{ fontSize:13,fontWeight:800,color:isRetro?RETRO_THEME.border:"#fff" }}>{getInitials(userName)}</span>
                         }
                       </div>
                       <div><p style={{ margin:0,fontSize:14,color:textMain }}>{userName||"Set your name"}</p><p style={{ margin:0,fontSize:11,color:textMute }}>Tap to edit</p></div>
@@ -6430,7 +6516,7 @@ export default function App() {
                               style={{ height:44,borderRadius:12,border:isActive?`2px solid ${accent}`:`1px solid ${border}`,background:isActive?(dark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.04)"):"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s" }}>
                               {av.emoji
                                 ? <span style={{ fontSize:22,lineHeight:1 }}>{av.emoji}</span>
-                                : <div style={{ width:26,height:26,borderRadius:"50%",background:avatarColor(userName),display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ fontSize:10,fontWeight:800,color:"#fff" }}>{getInitials(userName)||"A"}</span></div>
+                                : <div style={{ width:26,height:26,borderRadius:isRetro?0:"50%",background:avatarColor(userName,isRetro),border:isRetro?`2px solid ${RETRO_THEME.border}`:"none",display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ fontSize:10,fontWeight:800,color:isRetro?RETRO_THEME.border:"#fff" }}>{getInitials(userName)||"A"}</span></div>
                               }
                             </button>
                           );
@@ -6465,10 +6551,10 @@ export default function App() {
 
                   {/* Colour picker — styled select with dot preview */}
                   <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",color:textMute }}>Colour</p>
-                  <div style={{ position:"relative" }}>
-                    <div style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",width:18,height:18,borderRadius:"50%",background:(ACCENTS.find(a=>a.id===accentId)||ACCENTS[0]).dot,pointerEvents:"none",zIndex:1,boxShadow:`0 0 6px ${(ACCENTS.find(a=>a.id===accentId)||ACCENTS[0]).dot}99` }}/>
-                    <select value={accentId} onChange={e => { haptic(6); setAccentId(e.target.value); }}
-                      style={{ width:"100%",appearance:"none",WebkitAppearance:"none",background:dark?"#1f2937":"#f8fafc",border:`1.5px solid ${accent}`,color:textMain,borderRadius:12,padding:"10px 36px 10px 38px",fontSize:14,fontWeight:600,outline:"none",cursor:"pointer" }}>
+                  <div style={{ position:"relative",opacity:isRetro?0.5:1 }}>
+                    <div style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",width:18,height:18,borderRadius:"50%",background:isRetro?RETRO_THEME.teal:(ACCENTS.find(a=>a.id===accentId)||ACCENTS[0]).dot,pointerEvents:"none",zIndex:1,boxShadow:`0 0 6px ${(isRetro?RETRO_THEME.teal:(ACCENTS.find(a=>a.id===accentId)||ACCENTS[0]).dot)}99` }}/>
+                    <select value={accentId} disabled={isRetro} onChange={e => { haptic(6); setAccentId(e.target.value); }}
+                      style={{ width:"100%",appearance:"none",WebkitAppearance:"none",background:dark?"#1f2937":"#f8fafc",border:`1.5px solid ${accent}`,color:textMain,borderRadius:12,padding:"10px 36px 10px 38px",fontSize:14,fontWeight:600,outline:"none",cursor:isRetro?"not-allowed":"pointer" }}>
                       {ACCENTS.map(a => (
                         <option key={a.id} value={a.id}>{a.label}</option>
                       ))}
@@ -6477,6 +6563,18 @@ export default function App() {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
                   </div>
+                  {isRetro && <p style={{ margin:"6px 0 0",fontSize:11,color:textMute }}>Colour is fixed to teal while Retro theme is on.</p>}
+                </div>
+
+                {/* Simple mode */}
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:`1px solid ${border}` }}>
+                  <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                    <div><span style={{ fontSize:14,color:textMain }}>Simple mode</span><p style={{ margin:0,fontSize:11,color:textMute }}>Hides the streak game, charts & net worth — just the essentials</p></div>
+                  </div>
+                  <button onClick={() => { haptic(6); setSimpleMode(s => !s); }} style={{ width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:simpleMode?"#4f46e5":"#e5e7eb",transition:"background 0.2s" }}>
+                    <div style={{ position:"absolute",top:2,left:simpleMode?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
+                  </button>
                 </div>
 
                 {/* Notifications */}
@@ -6515,23 +6613,31 @@ export default function App() {
         {/* ════════════════════════════════════════════════════════════════
             BOTTOM NAV
         ════════════════════════════════════════════════════════════════ */}
-        <div style={{ position:"fixed",bottom:0,left:0,right:0,background:dark?"rgba(3,7,18,0.92)":"rgba(255,255,255,0.92)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:`1px solid ${border}`,display:"flex",alignItems:"stretch",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
+        <div style={{ position:"fixed",bottom:0,left:0,right:0,background:isRetro?"rgba(244,241,230,0.96)":dark?"rgba(3,7,18,0.92)":"rgba(255,255,255,0.92)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:isRetro?`3px solid ${RETRO_THEME.border}`:`1px solid ${border}`,boxShadow:isRetro?"0 -3px 0px 0px rgba(14,28,84,0.06)":"none",display:"flex",alignItems:"stretch",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
           {[
             { id:"home",      label:"Home",    icon:<HomeIcon size={22}/> },
             { id:"expenses",  label:"Expenses",icon:<ListIcon size={22}/> },
-            { id:"scanvoice", label:"Add",     icon:<div style={{ width:52,height:52,borderRadius:"50%",background:`linear-gradient(135deg,${accentObj.light},${accentObj.dark})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(79,70,229,0.4)",marginTop:-20,border:`3px solid ${dark?"#030712":"#fff"}` }}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div> },
+            { id:"scanvoice", label:"Add",     icon:<div style={{ width:52,height:52,borderRadius:isRetro?0:"50%",background:isRetro?RETRO_THEME.orange:`linear-gradient(135deg,${accentObj.light},${accentObj.dark})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:isRetro?"3px 3px 0px 0px rgba(14,28,84,1)":"0 4px 16px rgba(79,70,229,0.4)",marginTop:-20,border:isRetro?`2.5px solid ${RETRO_THEME.border}`:`3px solid ${dark?"#030712":"#fff"}` }}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={isRetro?RETRO_THEME.border:"white"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div> },
             { id:"bills",       label:"Bills & Loans",   icon:<EmiIcon size={22}/> },
             { id:"pot",       label:"My Pot",  icon:<WalletIcon size={22}/> },
-            { id:"split",     label:"Split",   icon:<UsersIcon size={22}/> },
           ].map(({ id, label, icon }) => {
             const active = tab===id;
             const isScan = id==="scanvoice";
             return (
               <button key={id} onClick={() => { haptic(6); setTab(id); }}
-                style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:isScan?0:3,padding:isScan?"0 0 4px":"10px 0 8px",background:"none",border:"none",cursor:"pointer",color:active&&!isScan?accent:textMute,transition:"color 0.15s",minWidth:0,position:"relative" }}>
+                style={{ flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:isScan?0:3,
+                  padding:isScan?"0 0 4px":"8px 4px 8px",
+                  margin:isRetro&&!isScan?"6px 3px":0,
+                  background:isRetro&&active&&!isScan?"rgba(242,162,94,0.28)":"none",
+                  border:isRetro&&active&&!isScan?`2px solid ${RETRO_THEME.border}`:"none",
+                  cursor:"pointer",color:active&&!isScan?accent:(isRetro?RETRO_THEME.textMute:textMute),
+                  transition:"color 0.15s, background 0.15s",minWidth:0,position:"relative" }}>
                 {icon}
-                {!isScan && <span style={{ fontSize:10,fontWeight:active?700:500,whiteSpace:"nowrap" }}>{label}</span>}
-                {active&&!isScan && <div style={{ position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",width:20,height:2,borderRadius:99,background:accent }}/>}
+                {!isScan && <span style={{ fontSize:10,fontWeight:active?800:isRetro?600:500,whiteSpace:"nowrap",letterSpacing:isRetro?"0.02em":0 }}>{label}</span>}
+                {active&&!isScan && (isRetro
+                  ? null
+                  : <div style={{ position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",width:20,height:2,borderRadius:99,background:accent }}/>
+                )}
               </button>
             );
           })}
