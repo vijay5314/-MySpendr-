@@ -28,6 +28,7 @@ const KEYS = {
   SPLITS:     "myspendr_splits_v1",
   THEME_STYLE:"myspendr_theme_style_v1",
   SIMPLE:     "myspendr_simple_v1",
+  PRIVACY:    "myspendr_privacy_v1",
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -3493,6 +3494,8 @@ const Icon = ({ d, size = 16, stroke = "currentColor", sw = 2, fill = "none", ..
 );
 const SunIcon    = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>;
 const MoonIcon   = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
+const EyeIcon    = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+const EyeOffIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.62 21.62 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.94 4.24M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
 const FlameIcon  = ({ size=16 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.17 2 7 4.17 7 7c0 1.57.68 2.97 1.76 3.95C7.65 12.07 7 13.46 7 15c0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.54-.65-2.93-1.76-4.05C16.32 9.97 17 8.57 17 7c0-2.83-2.17-5-5-5zm0 16c-1.65 0-3-1.35-3-3 0-.93.42-1.76 1.08-2.33C10.66 13.16 11.31 14 12 14s1.34-.84 1.92-1.33C14.58 13.24 15 14.07 15 15c0 1.65-1.35 3-3 3z"/></svg>;
 const ShieldIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
 const TrophyIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="8 17 12 21 16 17"/><path d="M17 3H7a2 2 0 0 0-2 2v6a7 7 0 0 0 14 0V5a2 2 0 0 0-2-2z"/><path d="M5 7H2a1 1 0 0 0-1 1v3a4 4 0 0 0 4 4"/><path d="M19 7h3a1 1 0 0 1 1 1v3a4 4 0 0 1-4 4"/></svg>;
@@ -3802,8 +3805,8 @@ function PinLock({ onUnlock, dark, accent, isRetro, userName }) {
 
   if (offerBioSetup) return (
     <div className={isRetro?"retro-sharp":undefined} style={{ minHeight:"100vh",background:bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24 }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&display=swap" rel="stylesheet"/>
-      {isRetro && <style>{`.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; } .retro-sharp { font-family:'Racing Sans One','DM Sans',sans-serif !important; }`}</style>}
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+      {isRetro && <style>{`.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; } .retro-sharp { font-family:'Space Grotesk','DM Sans',sans-serif !important; } .retro-sharp [style*="monospace"] { font-family:'Space Mono',monospace !important; }`}</style>}
       <div style={{ width:"100%",maxWidth:320,display:"flex",flexDirection:"column",alignItems:"center",gap:12 }}>
         <div style={{ fontSize:56 }}>🔑</div>
         <h1 style={{ margin:0,fontSize:22,fontWeight:isRetro?800:700,color:textMain,textAlign:"center",letterSpacing:"-0.5px" }}>Enable Face ID / Fingerprint?</h1>
@@ -3826,10 +3829,10 @@ function PinLock({ onUnlock, dark, accent, isRetro, userName }) {
 
   return (
     <div className={isRetro?"retro-sharp":undefined} style={{ minHeight:"100vh",background:bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24 }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&display=swap" rel="stylesheet"/>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
       <style>{`
         @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
-        ${isRetro ? `.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; } .retro-sharp { font-family:'Racing Sans One','DM Sans',sans-serif !important; }` : ``}
+        ${isRetro ? `.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; } .retro-sharp { font-family:'Space Grotesk','DM Sans',sans-serif !important; } .retro-sharp [style*="monospace"] { font-family:'Space Mono',monospace !important; }` : ``}
       `}</style>
       <div style={{ width:"100%",maxWidth:320,display:"flex",flexDirection:"column",alignItems:"center",gap:8 }}>
         <div style={{ fontSize:48,marginBottom:4 }}>🔐</div>
@@ -4341,7 +4344,7 @@ function ReceiptScanner({ categories, onAdd, dark, cardBg, border, textMute, tex
 // ════════════════════════════════════════════════════════════════════════════
 // EMI TAB
 // ════════════════════════════════════════════════════════════════════════════
-function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inputBorder, setExpenses, setPot, showToast, today, logDay, accent, emis: emisProp, setEmis: setEmisProp, banks, setBanks }) {
+function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inputBorder, setExpenses, setPot, showToast, today, logDay, accent, emis: emisProp, setEmis: setEmisProp, banks, setBanks, mny }) {
   const safeAccent = accent || "#4f46e5";
   const [emisLocal, setEmisLocal] = useState(() => storageGet(KEYS.EMI, []));
   // Use externally-provided state if available, otherwise fall back to local
@@ -4398,7 +4401,7 @@ function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inpu
         <div style={{ background:dark?"linear-gradient(135deg,#172554,#1e1b4b)":"linear-gradient(135deg,#eff6ff,#eef2ff)",border:dark?"1px solid #1e3a8a":"1px solid #bfdbfe",borderRadius:16,padding:16,marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
           <div>
             <p style={{ margin:0,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",color:dark?"#93c5fd":"#2563eb" }}>Total EMI / Month</p>
-            <p style={{ margin:"4px 0 0",fontSize:28,fontWeight:800,fontFamily:"monospace",color:dark?"#93c5fd":"#1d4ed8",letterSpacing:"-1px" }}>₹{totalEmi.toLocaleString()}</p>
+            <p className={mny} style={{ margin:"4px 0 0",fontSize:28,fontWeight:800,fontFamily:"monospace",color:dark?"#93c5fd":"#1d4ed8",letterSpacing:"-1px" }}>₹{totalEmi.toLocaleString()}</p>
           </div>
           <div style={{ fontSize:36 }}>🏦</div>
         </div>
@@ -4454,10 +4457,10 @@ function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inpu
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8 }}>
                 <div>
                   <p style={{ margin:0,fontSize:15,fontWeight:700,color:textMain }}>{loan.name}</p>
-                  <p style={{ margin:"2px 0 0",fontSize:12,color:textMute }}>₹{loan.principal.toLocaleString()} · {loan.rate}% · {loan.tenure}mo</p>
+                  <p className={mny} style={{ margin:"2px 0 0",fontSize:12,color:textMute }}>₹{loan.principal.toLocaleString()} · {loan.rate}% · {loan.tenure}mo</p>
                 </div>
                 <div style={{ textAlign:"right" }}>
-                  <p style={{ margin:0,fontSize:20,fontWeight:800,color:safeAccent,fontFamily:"monospace" }}>₹{loan.emi.toLocaleString()}<span style={{ fontSize:11,color:textMute,fontWeight:400 }}>/mo</span></p>
+                  <p className={mny} style={{ margin:0,fontSize:20,fontWeight:800,color:safeAccent,fontFamily:"monospace" }}>₹{loan.emi.toLocaleString()}<span style={{ fontSize:11,color:textMute,fontWeight:400 }}>/mo</span></p>
                   {paidThisMonth && <span style={{ fontSize:11,color:"#16a34a",fontWeight:600 }}>✓ Paid this month</span>}
                 </div>
               </div>
@@ -4468,7 +4471,7 @@ function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inpu
                 <div style={{ height:6,borderRadius:99,background:dark?"#1f2937":"#f3f4f6",overflow:"hidden" }}>
                   <div style={{ height:6,borderRadius:99,width:`${paidPct}%`,background:"linear-gradient(to right,#6366f1,#8b5cf6)",transition:"width 0.5s" }}/>
                 </div>
-                <p style={{ margin:"3px 0 0",fontSize:11,color:textMute }}>{paidPct}% complete · ₹{Math.round(loan.emi*remaining).toLocaleString()} outstanding</p>
+                <p className={mny} style={{ margin:"3px 0 0",fontSize:11,color:textMute }}>{paidPct}% complete · ₹{Math.round(loan.emi*remaining).toLocaleString()} outstanding</p>
               </div>
               <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                 {!paidThisMonth && <button onClick={() => payEmi(loan)} style={{ ...btnPrimary,fontSize:12,padding:"6px 14px",background:"#16a34a" }}>Pay ₹{loan.emi.toLocaleString()} Now</button>}
@@ -4657,6 +4660,11 @@ export default function App() {
   const [simpleMode, setSimpleMode] = useState(() => storageGet(KEYS.SIMPLE, false));
   useEffect(() => { storageSet(KEYS.SIMPLE, simpleMode); }, [simpleMode]);
   useEffect(() => { if (simpleMode) setPotSection("usable"); }, [simpleMode]);
+
+  // ── Privacy mode (hide balance/net worth/cash figures) ─────────────────────
+  const [hideAmounts, setHideAmounts] = useState(() => storageGet(KEYS.PRIVACY, false));
+  useEffect(() => { storageSet(KEYS.PRIVACY, hideAmounts); }, [hideAmounts]);
+  const mny = hideAmounts ? "mny-mask" : undefined;
 
   // ── Core data ─────────────────────────────────────────────────────────────
   const [expenses, setExpenses] = useState(() => storageGet(KEYS.EXPENSES, []));
@@ -5406,8 +5414,8 @@ export default function App() {
     return (
       <ErrorBoundary dark={dark}>
         <div className={isRetro?"retro-sharp":undefined} style={{ minHeight:"100vh", background:bg, color:textMain, fontFamily:"'DM Sans',sans-serif" }}>
-          <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&display=swap" rel="stylesheet"/>
-          <style>{`@keyframes tabFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.tabContent{animation:tabFade 0.15s ease}${isRetro ? `.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; } .retro-sharp { font-family:'Racing Sans One','DM Sans',sans-serif !important; }` : ``}`}</style>
+          <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+          <style>{`@keyframes tabFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.tabContent{animation:tabFade 0.15s ease}.mny-mask{filter:blur(7px);user-select:none;}${isRetro ? `.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; } .retro-sharp { font-family:'Space Grotesk','DM Sans',sans-serif !important; } .retro-sharp [style*="monospace"] { font-family:'Space Mono',monospace !important; }` : ``}`}</style>
           <div style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }} className="tabContent">
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
               <button onClick={() => setDrillCat(null)} style={{ ...btnSecondary, display:"flex", alignItems:"center", padding:"6px 10px" }}><ChevronL/></button>
@@ -5454,7 +5462,7 @@ export default function App() {
   return (
     <ErrorBoundary dark={dark}>
       <div className={isRetro?"retro-sharp":undefined} style={{ minHeight:"100vh", background:bg, color:textMain, fontFamily:"'DM Sans',sans-serif", transition:"background 0.3s" }}>
-        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&display=swap" rel="stylesheet"/>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@500&family=Racing+Sans+One&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
         <style>{`
           @keyframes tabFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
           @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
@@ -5462,7 +5470,10 @@ export default function App() {
           .tabContent{animation:tabFade 0.15s ease}
           input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{opacity:1}
           input[type=number]{-moz-appearance:textfield}
-          ${isRetro ? `.retro-sharp { font-family:'Racing Sans One','DM Sans',sans-serif !important; }` : ``}
+          .mny-mask{filter:blur(7px);user-select:none;transition:filter 0.15s ease;}
+          ${isRetro ? `.retro-sharp { font-family:'Space Grotesk','DM Sans',sans-serif !important; }` : ``}
+          ${isRetro ? `.retro-sharp [style*="monospace"]{ font-family:'Space Mono',monospace !important; }` : ``}
+          ${isRetro ? `.retro-display{ font-family:'Racing Sans One',cursive !important; }` : ``}
           ${isRetro ? `.retro-sharp, .retro-sharp *, .retro-sharp *::before, .retro-sharp *::after { border-radius:0 !important; }` : ``}
         `}</style>
 
@@ -5481,7 +5492,7 @@ export default function App() {
                 }
               </button>
               <div>
-                <h1 style={{ margin:0,fontSize:18,fontWeight:700,letterSpacing:"-0.3px",color:textMain }}>{tab==="home"?getGreeting(userName):"mySpendr"}</h1>
+                <h1 className={isRetro?"retro-display":undefined} style={{ margin:0,fontSize:isRetro?21:18,fontWeight:700,letterSpacing:"-0.3px",color:textMain }}>{tab==="home"?getGreeting(userName):"mySpendr"}</h1>
                 <p style={{ margin:0,fontSize:11,color:textMute,marginTop:1 }}>{tab==="home"?(userName?"":"Tap avatar to set your name"):"Track. Save. Streak."}</p>
               </div>
             </div>
@@ -5498,6 +5509,10 @@ export default function App() {
               <button onClick={() => { if (isRetro) return; haptic(8); setDark(d => !d); }}
                 style={{ ...btnSecondary, padding:"8px 10px", display:"flex", alignItems:"center", opacity:isRetro?0.5:1, cursor:isRetro?"not-allowed":"pointer" }}>
                 {dark?<SunIcon/>:<MoonIcon/>}
+              </button>
+              <button onClick={() => { haptic(8); setHideAmounts(h => !h); }} title={hideAmounts?"Show amounts":"Hide amounts"}
+                style={{ ...btnSecondary, padding:"8px 10px", display:"flex", alignItems:"center", color:hideAmounts?accent:btnSecondary.color, border:hideAmounts&&isRetro?`2.5px solid ${accent}`:btnSecondary.border }}>
+                {hideAmounts?<EyeOffIcon/>:<EyeIcon/>}
               </button>
             </div>
           </div>
@@ -5533,13 +5548,13 @@ export default function App() {
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
                 <div style={{ background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:"14px 16px" }}>
                   <p style={{ margin:0,fontSize:11,color:textMute,fontWeight:500,marginBottom:4 }}>Spent this month</p>
-                  <p style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:percentUsed>=90?"#ef4444":textMain,letterSpacing:"-0.5px" }}>₹{monthlyTotal.toLocaleString()}</p>
+                  <p className={mny} style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:percentUsed>=90?"#ef4444":textMain,letterSpacing:"-0.5px" }}>₹{monthlyTotal.toLocaleString()}</p>
                   <p style={{ margin:"3px 0 0",fontSize:11,color:textMute }}>{daysElapsed} days so far</p>
                 </div>
                 <div style={{ background:cardBg,border:`1px solid ${border}`,borderRadius:16,padding:"14px 16px" }}>
                   {/* FIX: shows budget remaining (monthly) or net income-expenses */}
                   <p style={{ margin:0,fontSize:11,color:textMute,fontWeight:500,marginBottom:4 }}>{budget>0?"Budget left":"Net this month"}</p>
-                  <p style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:(budget>0?remaining:totalIn-monthlyTotal)<0?"#ef4444":"#16a34a",letterSpacing:"-0.5px" }}>
+                  <p className={mny} style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:(budget>0?remaining:totalIn-monthlyTotal)<0?"#ef4444":"#16a34a",letterSpacing:"-0.5px" }}>
                     {budget>0
                       ? (remaining>=0?"+":"")+"₹"+Math.abs(remaining).toLocaleString()
                       : ((totalIn-monthlyTotal)>=0?"+":"")+"₹"+Math.abs(totalIn-monthlyTotal).toLocaleString()
@@ -5767,7 +5782,7 @@ export default function App() {
                 <>
                   <div style={{ ...cardStyle,background:dark?"linear-gradient(135deg,#111827,#1c1410)":"linear-gradient(135deg,#fffbeb,#fef3c7)",border:dark?"1px solid #292117":"1px solid #fde68a",display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 16px 16px",gap:10 }}>
                     <MoneyBag fillPercent={usableFillPct} size="lg"/>
-                    <p className="mpulse" style={{ fontSize:26,fontWeight:800,fontFamily:"'DM Mono',monospace",color:usableTotal<=0?"#ef4444":"#f59e0b",letterSpacing:"-1.5px",margin:0 }}>
+                    <p className={`mpulse${mny?" "+mny:""}`} style={{ fontSize:26,fontWeight:800,fontFamily:"'DM Mono',monospace",color:usableTotal<=0?"#ef4444":"#f59e0b",letterSpacing:"-1.5px",margin:0 }}>
                       ₹{usableTotal.toLocaleString()}
                     </p>
                     <div style={{ width:"100%",maxWidth:280 }}><div style={{ width:"100%",height:8,borderRadius:99,overflow:"hidden",background:dark?"#1f2937":"#fde68a" }}><div style={{ height:8,borderRadius:99,width:`${usableFillPct}%`,background:"linear-gradient(to right,#f97316,#fbbf24)",transition:"width 0.7s ease" }}/></div></div>
@@ -5777,7 +5792,7 @@ export default function App() {
                     <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:cashMode?10:0 }}>
                       <div style={{ width:10,height:10,borderRadius:"50%",background:"#16a34a" }}/>
                       <span style={{ flex:1,fontSize:14,fontWeight:600 }}>Cash in Hand</span>
-                      <span style={{ fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#16a34a" }}>₹{(Number(pot.usableCash)||0).toLocaleString()}</span>
+                      <span className={mny} style={{ fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#16a34a" }}>₹{(Number(pot.usableCash)||0).toLocaleString()}</span>
                       <div style={{ display:"flex",gap:4 }}>
                         <button onClick={() => setCashMode(cashMode==="add"?null:"add")} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:cashMode==="add"?"#16a34a":(dark?"#1f2937":"#f0fdf4"),color:cashMode==="add"?"#fff":(dark?"#34d399":"#16a34a"),lineHeight:1 }}>+</button>
                         <button onClick={() => setCashMode(cashMode==="minus"?null:"minus")} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:cashMode==="minus"?"#dc2626":(dark?"#1f2937":"#fff1f2"),color:cashMode==="minus"?"#fff":(dark?"#f87171":"#dc2626"),lineHeight:1 }}>-</button>
@@ -5803,7 +5818,7 @@ export default function App() {
                             <span style={{ fontSize:14,fontWeight:700,color:dark?"#f9fafb":"#111827" }}>{bk.name}</span>
                             {bk.isDefault && <span style={{ marginLeft:6,fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background:dark?"#172554":"#dbeafe",color:dark?"#93c5fd":"#1d4ed8" }}>DEFAULT</span>}
                           </div>
-                          <span style={{ fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#2563eb" }}>₹{(Number(bk.balance)||0).toLocaleString()}</span>
+                          <span className={mny} style={{ fontSize:18,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#2563eb" }}>₹{(Number(bk.balance)||0).toLocaleString()}</span>
                           <div style={{ display:"flex",gap:4 }}>
                             <button onClick={() => setBankMode(bkMode==="add"?null:{id:bk.id,dir:"add"})} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:bkMode==="add"?"#16a34a":(dark?"#1f2937":"#f0fdf4"),color:bkMode==="add"?"#fff":(dark?"#34d399":"#16a34a"),lineHeight:1 }}>+</button>
                             <button onClick={() => setBankMode(bkMode==="minus"?null:{id:bk.id,dir:"minus"})} style={{ width:30,height:30,borderRadius:8,border:"none",cursor:"pointer",fontSize:18,fontWeight:700,background:bkMode==="minus"?"#dc2626":(dark?"#1f2937":"#fff1f2"),color:bkMode==="minus"?"#fff":(dark?"#f87171":"#dc2626"),lineHeight:1 }}>-</button>
@@ -5847,7 +5862,7 @@ export default function App() {
                         <div style={{ flex:1,minWidth:0 }}>
                           <span style={{ fontSize:13,fontWeight:600,color:textMain }}>{bk.name}</span>
                           {bk.isDefault && <span style={{ marginLeft:6,fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background:dark?"#172554":"#dbeafe",color:dark?"#93c5fd":"#1d4ed8" }}>DEFAULT</span>}
-                          <p style={{ margin:"2px 0 0",fontSize:12,fontFamily:"'DM Mono',monospace",color:"#2563eb" }}>₹{(Number(bk.balance)||0).toLocaleString()}</p>
+                          <p className={mny} style={{ margin:"2px 0 0",fontSize:12,fontFamily:"'DM Mono',monospace",color:"#2563eb" }}>₹{(Number(bk.balance)||0).toLocaleString()}</p>
                         </div>
                         <div style={{ display:"flex",gap:5,flexShrink:0 }}>
                           {!bk.isDefault && (
@@ -5860,10 +5875,10 @@ export default function App() {
                       </div>
                     ))}
                   </div>
-                  <div style={{ ...cardStyle,display:"flex",justifyContent:"space-between",alignItems:"center" }}><span style={{ fontSize:13,color:textMute }}>Total Usable</span><span style={{ fontSize:20,fontWeight:800,color:"#f59e0b",fontFamily:"'DM Mono',monospace" }}>₹{usableTotal.toLocaleString()}</span></div>
+                  <div style={{ ...cardStyle,display:"flex",justifyContent:"space-between",alignItems:"center" }}><span style={{ fontSize:13,color:textMute }}>Total Usable</span><span className={mny} style={{ fontSize:20,fontWeight:800,color:"#f59e0b",fontFamily:"'DM Mono',monospace" }}>₹{usableTotal.toLocaleString()}</span></div>
                   <div style={{ ...cardStyle,background:dark?"#0a1628":"#f0fdf4",border:dark?"1px solid #1e3a5f":"1px solid #bbf7d0" }}>
                     <p style={{ margin:"0 0 4px",fontSize:12,color:textMute }}>After all expenses this month</p>
-                    <p style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:usableTotal-monthlyTotal>=0?"#16a34a":"#ef4444" }}>₹{(usableTotal-monthlyTotal).toLocaleString()}</p>
+                    <p className={mny} style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:usableTotal-monthlyTotal>=0?"#16a34a":"#ef4444" }}>₹{(usableTotal-monthlyTotal).toLocaleString()}</p>
                     <p style={{ margin:"4px 0 0",fontSize:11,color:textMute }}>Spent ₹{monthlyTotal.toLocaleString()} this month</p>
                   </div>
                 </>
@@ -5873,7 +5888,7 @@ export default function App() {
                 <>
                   <div style={{ ...cardStyle,background:dark?"linear-gradient(135deg,#111827,#1a1028)":"linear-gradient(135deg,#faf5ff,#ede9fe)",border:dark?"1px solid #2e1065":"1px solid #ddd6fe",display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 16px 16px",gap:10 }}>
                     <MoneyBag fillPercent={nwFillActual} size="lg"/>
-                    <p className="mpulse" style={{ fontSize:30,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#7c3aed",letterSpacing:"-1.5px",margin:0 }}>₹{Math.abs(netWorthTotal).toLocaleString()}</p>
+                    <p className={`mpulse${mny?" "+mny:""}`} style={{ fontSize:30,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#7c3aed",letterSpacing:"-1.5px",margin:0 }}>₹{Math.abs(netWorthTotal).toLocaleString()}</p>
                     <div style={{ width:"100%",maxWidth:280 }}><div style={{ width:"100%",height:8,borderRadius:99,overflow:"hidden",background:dark?"#1f2937":"#ddd6fe" }}><div style={{ height:8,borderRadius:99,width:`${nwFillActual}%`,background:"linear-gradient(to right,#7c3aed,#a78bfa)",transition:"width 0.7s ease" }}/></div></div>
                   </div>
                   <div style={cardStyle}>
@@ -5882,20 +5897,20 @@ export default function App() {
                       <div key={field} style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}>
                         <div style={{ width:10,height:10,borderRadius:"50%",background:color,flexShrink:0 }}/>
                         <span style={{ flex:1,fontSize:13 }}>{label}</span>
-                        <span style={{ fontSize:13,fontWeight:700,color,minWidth:90,textAlign:"right" }}>₹{(Number(pot[field])||0).toLocaleString()}</span>
+                        <span className={mny} style={{ fontSize:13,fontWeight:700,color,minWidth:90,textAlign:"right" }}>₹{(Number(pot[field])||0).toLocaleString()}</span>
                       </div>
                     ))}
                     <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}>
                       <div style={{ width:10,height:10,borderRadius:"50%",background:"#2563eb",flexShrink:0 }}/>
                       <span style={{ flex:1,fontSize:13 }}>Bank Balance</span>
-                      <span style={{ fontSize:13,fontWeight:700,color:"#2563eb",minWidth:90,textAlign:"right" }}>₹{totalBankBalance.toLocaleString()}</span>
+                      <span className={mny} style={{ fontSize:13,fontWeight:700,color:"#2563eb",minWidth:90,textAlign:"right" }}>₹{totalBankBalance.toLocaleString()}</span>
                     </div>
                     <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}>
                       <div style={{ width:10,height:10,borderRadius:"50%",background:"#d97706",flexShrink:0 }}/>
-                      <div style={{ flex:1 }}><span style={{ fontSize:13 }}>Gold</span>{pot.goldGrams>0&&pot.goldRate>0&&<span style={{ fontSize:11,color:textMute,marginLeft:6 }}>{pot.goldGrams}g × ₹{Number(pot.goldRate).toLocaleString()}/g</span>}</div>
-                      <span style={{ fontSize:13,fontWeight:700,color:"#d97706",minWidth:90,textAlign:"right" }}>₹{goldValue.toLocaleString()}</span>
+                      <div style={{ flex:1 }}><span style={{ fontSize:13 }}>Gold</span>{pot.goldGrams>0&&pot.goldRate>0&&<span className={mny} style={{ fontSize:11,color:textMute,marginLeft:6 }}>{pot.goldGrams}g × ₹{Number(pot.goldRate).toLocaleString()}/g</span>}</div>
+                      <span className={mny} style={{ fontSize:13,fontWeight:700,color:"#d97706",minWidth:90,textAlign:"right" }}>₹{goldValue.toLocaleString()}</span>
                     </div>
-                    <div style={{ display:"flex",justifyContent:"space-between",paddingTop:10,marginTop:4,borderTop:`1px solid ${border}` }}><span style={{ fontSize:13,color:textMute,fontWeight:600 }}>Total Net Worth</span><span style={{ fontSize:20,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Mono',monospace" }}>₹{netWorthTotal.toLocaleString()}</span></div>
+                    <div style={{ display:"flex",justifyContent:"space-between",paddingTop:10,marginTop:4,borderTop:`1px solid ${border}` }}><span style={{ fontSize:13,color:textMute,fontWeight:600 }}>Total Net Worth</span><span className={mny} style={{ fontSize:20,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Mono',monospace" }}>₹{netWorthTotal.toLocaleString()}</span></div>
                   </div>
                   <div style={cardStyle}>
                     <p style={{ margin:"0 0 4px",fontSize:13,fontWeight:700 }}>Update Savings / Investments / Gold</p>
@@ -5919,8 +5934,8 @@ export default function App() {
                       </div>
                       {pot.goldGrams>0&&pot.goldRate>0&&(
                         <div style={{ background:dark?"#422006":"#fffbeb",borderRadius:10,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                          <span style={{ fontSize:12,color:dark?"#d97706":"#92400e" }}>{pot.goldGrams}g × ₹{Number(pot.goldRate).toLocaleString()}</span>
-                          <span style={{ fontSize:14,fontWeight:800,color:"#d97706",fontFamily:"'DM Mono',monospace" }}>= ₹{goldValue.toLocaleString()}</span>
+                          <span className={mny} style={{ fontSize:12,color:dark?"#d97706":"#92400e" }}>{pot.goldGrams}g × ₹{Number(pot.goldRate).toLocaleString()}</span>
+                          <span className={mny} style={{ fontSize:14,fontWeight:800,color:"#d97706",fontFamily:"'DM Mono',monospace" }}>= ₹{goldValue.toLocaleString()}</span>
                         </div>
                       )}
                     </div>
@@ -5935,7 +5950,7 @@ export default function App() {
               {potSection==="income" && (
                 <>
                   <div style={cardStyle}>
-                    <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:12 }}><RepeatIcon/><span style={{ fontSize:14,fontWeight:700 }}>Recurring Income</span><span style={{ fontSize:16,fontWeight:700,color:"#16a34a",marginLeft:"auto",fontFamily:"'DM Mono',monospace" }}>₹{monthlyIncome.toLocaleString()}<span style={{ fontSize:11,color:textMute,fontWeight:400 }}>/mo</span></span></div>
+                    <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:12 }}><RepeatIcon/><span style={{ fontSize:14,fontWeight:700 }}>Recurring Income</span><span className={mny} style={{ fontSize:16,fontWeight:700,color:"#16a34a",marginLeft:"auto",fontFamily:"'DM Mono',monospace" }}>₹{monthlyIncome.toLocaleString()}<span style={{ fontSize:11,color:textMute,fontWeight:400 }}>/mo</span></span></div>
                     {(pot.incomes||[]).map(inc => (
                       <div key={inc.id} style={{ display:"flex",alignItems:"center",gap:8,marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${border}` }}>
                         <div style={{ flex:1 }}><p style={{ margin:0,fontSize:14,fontWeight:600 }}>{inc.label}</p><p style={{ margin:0,fontSize:12,color:textMute }}>₹{inc.amount.toLocaleString()} / {inc.frequency}</p></div>
@@ -6225,7 +6240,7 @@ export default function App() {
               {billsSubTab==="loans" && tab==="bills" && (
                 <EmiTab dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain} subbg={subbg} inputBg={inputBg} inputBorder={inputBorder}
                   setExpenses={setExpenses} setPot={setPot} showToast={showToast} today={today} logDay={logDay} accent={accent}
-                  emis={emis} setEmis={setEmis} banks={banks} setBanks={setBanks}/>
+                  emis={emis} setEmis={setEmis} banks={banks} setBanks={setBanks} mny={mny}/>
               )}
             </>
           )}
