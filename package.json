@@ -9,11 +9,5 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build"
-  },
-  "overrides": {
-    "ajv": "^6.12.6"
-  },
-  "engines": {
-    "node": "22.x"
   }
 }
