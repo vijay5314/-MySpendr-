@@ -29,6 +29,7 @@ const KEYS = {
   THEME_STYLE:"myspendr_theme_style_v1",
   SIMPLE:     "myspendr_simple_v1",
   PRIVACY:    "myspendr_privacy_v1",
+  TRAVEL_MODE:"myspendr_travel_mode_v1",
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1548,7 +1549,7 @@ function ExpenseDateList({ grouped, dailyTotal, today, dark, cardBg, border, sub
             </div>
             {isOpen && items.map((item, i) => (
               <SwipeableRow key={item.id} onDelete={() => deleteExpense(item.id)} border={border} dark={dark} cardBg={cardBg}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 16px",borderBottom:i<items.length-1?`1px solid ${border}`:"none" }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 16px",borderBottom:i<items.length-1?`1px solid ${border}`:"none",borderLeft:item.trip?"3px solid #f97316":"3px solid transparent",background:item.trip?(dark?"rgba(249,115,22,0.06)":"rgba(249,115,22,0.04)"):"transparent" }}>
                   <div style={{ display:"flex",alignItems:"center",gap:10 }}>
                     <span style={{ ...getCatStyle(item.category),padding:"3px 9px",borderRadius:99,fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap" }}
                       onClick={() => setDrillCat(item.category)}>{item.category}</span>
@@ -1561,6 +1562,11 @@ function ExpenseDateList({ grouped, dailyTotal, today, dark, cardBg, border, sub
                           {item.paySource==="cash"?<CashIcon/>:<BankIcon/>}
                           {item.paySource==="cash"?"Cash":"Bank"}
                         </span>
+                        {item.trip && (
+                          <span style={{ display:"flex",alignItems:"center",gap:2,fontSize:10,fontWeight:600,padding:"1px 5px",borderRadius:6,background:dark?"rgba(249,115,22,0.15)":"#fff7ed",color:"#f97316" }}>
+                            ✈️ {item.trip}
+                          </span>
+                        )}
                       </div>
                       {item.note && <p style={{ margin:0,fontSize:12,color:textMute }}>{item.note}</p>}
                     </div>
@@ -2286,6 +2292,14 @@ export default function App() {
   const [selCat, setSelCat] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(() => getTodayIST());
+  // Travel mode: a global on/off switch (not tied to the form) — while active,
+  // every expense saved gets tagged with the trip name, until turned off.
+  // Persists across refreshes since it's just another localStorage key.
+  const [travelMode, setTravelMode] = useState(() => {
+    const saved = storageGet(KEYS.TRAVEL_MODE, { active:false, tripName:"" });
+    return (saved && typeof saved === "object") ? { active:!!saved.active, tripName:String(saved.tripName||"") } : { active:false, tripName:"" };
+  });
+  useEffect(() => { storageSetDebounced(KEYS.TRAVEL_MODE, travelMode); }, [travelMode]);
   const [editingId, setEditingId] = useState(null);
   // FIX: `date` was seeded once at mount and never refreshed, so if the app was
   // left open across midnight every new expense silently got yesterday's date.
@@ -2710,7 +2724,7 @@ export default function App() {
       else setBanks(b => refundBank(b, old.paySource||"bank", old.amount));
       if (paySource === "cash") setPot(p => deductPot(p, "cash", num));
       else setBanks(b => deductBank(b, paySource, num));
-      setExpenses(p => p.map(e => e.id===editingId ? { ...e, amount:num, category:selCat, note, date, paySource } : e));
+      setExpenses(p => p.map(e => e.id===editingId ? { ...e, amount:num, category:selCat, note, date, paySource, trip: old.trip||null } : e));
       showToast("Updated!");
       // FIX: editing used to call logDay(date), which meant changing an old
       // expense's date silently credited a brand-new streak day.
@@ -2721,7 +2735,7 @@ export default function App() {
         : (Number(resolveBank(paySource, banks)?.balance)||0);
       if (paySource === "cash") setPot(p => deductPot(p,"cash",num));
       else setBanks(b => deductBank(b, paySource, num));
-      setExpenses(p => [...p, { id:uid(), amount:num, category:selCat, note, date, paySource }]);
+      setExpenses(p => [...p, { id:uid(), amount:num, category:selCat, note, date, paySource, trip: travelMode.active ? (travelMode.tripName.trim()||"Trip") : null }]);
       // FIX: the low-balance warning used to be its own showToast() call
       // immediately overwritten by the success toast, so it was never visible.
       showToast(num > currentBal
@@ -2756,7 +2770,7 @@ export default function App() {
     const cat = categories.find(c => c.name===category)?.name || categories[0]?.name || "Others";
     const num = Number(amount);
     const src = paySource || (banks.find(b=>b.isDefault) || banks[0] ? `bank:${(banks.find(b=>b.isDefault)||banks[0]).id}` : "cash");
-    setExpenses(p => [...p, { id:uid(), amount:num, category:cat, note:note||"", date:today, paySource:src }]);
+    setExpenses(p => [...p, { id:uid(), amount:num, category:cat, note:note||"", date:today, paySource:src, trip: travelMode.active ? (travelMode.tripName.trim()||"Trip") : null }]);
     if (src === "cash") setPot(p => deductPot(p, "cash", num));
     else setBanks(b => deductBank(b, src, num));
     logDay(today); showToast(`${label} expense added!`); setTab("expenses");
@@ -2946,6 +2960,12 @@ export default function App() {
     }
     return { total, share: equalShare, totalShares, perShare, mode, balances, transactions };
   }
+  function toggleTransactionPaid(splitId, txIndex) {
+    setSplits(prev => prev.map(s => s.id!==splitId ? s : {
+      ...s,
+      transactions: s.transactions.map((t,i) => i===txIndex ? { ...t, paid: !t.paid } : t)
+    }));
+  }
   function previewSplit() {
     const entries = buildSplitEntries();
     if (entries.length < 2) { showToast("Pick at least 2 people to split between."); return; }
@@ -2955,7 +2975,7 @@ export default function App() {
     const entries = buildSplitEntries();
     if (entries.length < 2) { showToast("Pick at least 2 people to split between."); return; }
     const result = computeSettlement(entries, splitMode);
-    const record = { id:uid(), title: splitTitle.trim() || "Split", date: today, entries, includeMe: splitIncludeMe, mode: splitMode, total: result.total, transactions: result.transactions };
+    const record = { id:uid(), title: splitTitle.trim() || "Split", date: today, entries, includeMe: splitIncludeMe, mode: splitMode, total: result.total, transactions: result.transactions.map(t => ({ ...t, paid:false })) };
     setSplits(prev => [record, ...prev]);
     setSplitResult(result);
     showToast("Split saved!");
@@ -3316,8 +3336,8 @@ export default function App() {
         <div style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }} key={tab} className="tabContent">
 
           {/* ── HEADER ── */}
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, flexWrap:"wrap", gap:8 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:"1 1 160px" }}>
               <button onClick={() => { haptic(8); setShowSettings(true); }}
                 style={{ width:40,height:40,borderRadius:isRetro?0:"50%",background:avatarColor(userName,isRetro),border:isRetro?`2px solid ${RETRO_THEME.border}`:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:isRetro?"none":"0 2px 8px rgba(0,0,0,0.15)" }}>
                 {avatarId && avatarId !== "initials"
@@ -3325,12 +3345,12 @@ export default function App() {
                   : <span style={{ fontSize:15,fontWeight:800,color:isRetro?RETRO_THEME.border:"#fff",letterSpacing:"-0.5px" }}>{getInitials(userName)}</span>
                 }
               </button>
-              <div>
-                <h1 className={isRetro?"retro-display":undefined} style={{ margin:0,fontSize:isRetro?21:18,fontWeight:700,letterSpacing:"-0.3px",color:textMain }}>{tab==="home"?getGreeting(userName):"mySpendr"}</h1>
-                <p style={{ margin:0,fontSize:11,color:textMute,marginTop:1 }}>{simpleMode?"Simple mode · tap avatar for settings":tab==="home"?(userName?"":"Tap avatar to set your name"):"Track. Save. Streak."}</p>
+              <div style={{ minWidth:0, flex:"1 1 auto" }}>
+                <h1 className={isRetro?"retro-display":undefined} style={{ margin:0,fontSize:isRetro?"clamp(16px, 5vw, 21px)":"clamp(15px, 4vw, 18px)",fontWeight:700,letterSpacing:"-0.3px",color:textMain,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{tab==="home"?getGreeting(userName):"mySpendr"}</h1>
+                <p style={{ margin:0,fontSize:11,color:textMute,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{simpleMode?"Simple mode · tap avatar for settings":tab==="home"?(userName?"":"Tap avatar to set your name"):"Track. Save. Streak."}</p>
               </div>
             </div>
-            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+            <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0 }}>
               {!simpleMode && (
               <button onClick={() => { haptic(8); setTab("split"); }} title="Split"
                 style={{ ...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center",position:"relative",color:tab==="split"?accent:btnSecondary.color,border:tab==="split"&&isRetro?`2.5px solid ${accent}`:btnSecondary.border }}>
@@ -3998,7 +4018,25 @@ export default function App() {
           {!simpleMode && tab==="scanvoice" && (
             <>
               <div style={cardStyle}>
-                <h2 style={{ margin:"0 0 12px",fontSize:14,fontWeight:600 }}>{editingId?"Edit Expense":"Add Expense"}</h2>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:travelMode.active?10:12,gap:8,flexWrap:"wrap" }}>
+                  <h2 style={{ margin:0,fontSize:14,fontWeight:600 }}>{editingId?"Edit Expense":"Add Expense"}</h2>
+                  <div style={{ display:"flex",alignItems:"center",gap:6 }}>
+                    <span style={{ fontSize:11,fontWeight:600,color:travelMode.active?"#f97316":textMute }}>✈️ Travel mode</span>
+                    <button type="button" onClick={() => { haptic(8); setTravelMode(tm => ({ ...tm, active: !tm.active })); }}
+                      aria-label="Toggle travel mode" title={travelMode.active?"Travel mode is ON — turn off to add normal expenses":"Travel mode is OFF — turn on to tag new expenses as trip"}
+                      style={{ position:"relative",width:40,height:22,borderRadius:99,border:travelMode.active?"1.5px solid #f97316":cardBorder,background:travelMode.active?"#f97316":(dark?"#374151":"#e5e7eb"),cursor:"pointer",flexShrink:0,padding:0 }}>
+                      <span style={{ position:"absolute",top:2,left:travelMode.active?19:2,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left 0.15s ease",boxShadow:"0 1px 3px rgba(0,0,0,0.25)" }}/>
+                    </button>
+                  </div>
+                </div>
+                {travelMode.active && (
+                  <div style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:10,background:dark?"rgba(249,115,22,0.12)":"#fff7ed",border:`1px solid ${dark?"rgba(249,115,22,0.3)":"#fed7aa"}`,marginBottom:12 }}>
+                    <span style={{ fontSize:16,flexShrink:0 }}>✈️</span>
+                    <input value={travelMode.tripName} onChange={e => setTravelMode(tm => ({ ...tm, tripName:e.target.value }))} placeholder="Trip name (e.g. Goa)"
+                      style={{ flex:1,minWidth:0,background:"none",border:"none",outline:"none",fontSize:12,fontWeight:600,color:"#f97316" }}/>
+                    <span style={{ fontSize:10,color:"#f97316",fontWeight:600,flexShrink:0,whiteSpace:"nowrap" }}>ON</span>
+                  </div>
+                )}
                 <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
                   <div>
                     <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Amount (₹)</label>
@@ -4391,6 +4429,9 @@ export default function App() {
                         <div key={s.id} style={{ padding:"10px 12px",background:subbg,borderRadius:12,border:cardBorder }}>
                           <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
                             <span style={{ flex:1,fontSize:13,fontWeight:700,color:textMain }}>{s.title}</span>
+                            {s.transactions.length>0 && s.transactions.every(t=>t.paid) && (
+                              <span style={{ fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99,background:dark?"rgba(22,163,74,0.15)":"#dcfce7",color:"#16a34a" }}>✓ Settled</span>
+                            )}
                             <span style={{ fontSize:11,color:textMute }}>{formatDate(s.date)}</span>
                             {confirming
                               ? <button onClick={() => deleteSplit(s.id)} style={{ background:"#ef4444",color:"#fff",border:"none",borderRadius:8,padding:"3px 8px",fontSize:10,fontWeight:700,cursor:"pointer" }}>Confirm?</button>
@@ -4401,7 +4442,13 @@ export default function App() {
                           {s.transactions.length===0
                             ? <p style={{ margin:0,fontSize:12,color:textMain }}>Settled — nobody owed anything.</p>
                             : s.transactions.map((t,i) => (
-                              <p key={i} style={{ margin:0,fontSize:12,color:textMain }}>{t.from} → {t.to}: <strong>₹{t.amount.toLocaleString()}</strong></p>
+                              <div key={i} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"3px 0" }}>
+                                <p style={{ margin:0,fontSize:12,color:t.paid?textMute:textMain,textDecoration:t.paid?"line-through":"none" }}>{t.from} → {t.to}: <strong>₹{t.amount.toLocaleString()}</strong></p>
+                                <button onClick={() => { haptic(8); toggleTransactionPaid(s.id, i); }}
+                                  style={{ fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:99,border:t.paid?"1px solid #16a34a":cardBorder,background:t.paid?(dark?"rgba(22,163,74,0.15)":"#dcfce7"):"none",color:t.paid?"#16a34a":textMute,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0 }}>
+                                  {t.paid ? "✓ Paid" : "Mark paid"}
+                                </button>
+                              </div>
                             ))
                           }
                         </div>
