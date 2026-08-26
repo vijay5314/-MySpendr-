@@ -4029,15 +4029,15 @@ export default function App() {
 
               {/* Stats grid */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
-                <div style={{ background:cardBg,border:cardBorder,borderRadius:R.card,padding:"14px 16px",boxShadow:cardShadow }}>
+                <div style={{ background:cardBg,border:cardBorder,borderRadius:R.card,padding:"14px 16px",boxShadow:cardShadow,minWidth:0,overflow:"hidden" }}>
                   <p style={{ margin:0,fontSize:11,color:textMute,fontWeight:500,marginBottom:4 }}>Spent this month</p>
-                  <p className={mny} style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:percentUsed>=90?"#ef4444":textMain,letterSpacing:"-0.5px" }}>₹{monthlyTotal.toLocaleString()}</p>
+                  <p className={mny} style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:percentUsed>=90?"#ef4444":textMain,letterSpacing:"-0.5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>₹{monthlyTotal.toLocaleString()}</p>
                   <p style={{ margin:"3px 0 0",fontSize:11,color:textMute }}>{daysElapsed} days so far</p>
                 </div>
-                <div style={{ background:cardBg,border:cardBorder,borderRadius:R.card,padding:"14px 16px",boxShadow:cardShadow }}>
+                <div style={{ background:cardBg,border:cardBorder,borderRadius:R.card,padding:"14px 16px",boxShadow:cardShadow,minWidth:0,overflow:"hidden" }}>
                   {/* FIX: shows budget remaining (monthly) or net income-expenses */}
                   <p style={{ margin:0,fontSize:11,color:textMute,fontWeight:500,marginBottom:4 }}>{budget>0?"Budget left":"Net this month"}</p>
-                  <p className={mny} style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:(budget>0?remaining:totalIn-monthlyTotal)<0?"#ef4444":"#16a34a",letterSpacing:"-0.5px" }}>
+                  <p className={mny} style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:(budget>0?remaining:totalIn-monthlyTotal)<0?"#ef4444":"#16a34a",letterSpacing:"-0.5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
                     {budget>0
                       ? (remaining>=0?"+":"")+"₹"+Math.abs(remaining).toLocaleString()
                       : ((totalIn-monthlyTotal)>=0?"+":"")+"₹"+Math.abs(totalIn-monthlyTotal).toLocaleString()
@@ -4047,22 +4047,22 @@ export default function App() {
                 </div>
                 {!simpleMode && (
                 <div onClick={() => { if(topCategory){haptic(8);setDrillCat(topCategory);} }}
-                  style={{ background:cardBg,border:tintBorder(topCategory?(dark?"#374151":"#e0e7ff"):border),borderRadius:16,padding:"14px 16px",cursor:topCategory?"pointer":"default" }}>
+                  style={{ background:cardBg,border:tintBorder(topCategory?(dark?"#374151":"#e0e7ff"):border),borderRadius:16,padding:"14px 16px",cursor:topCategory?"pointer":"default",minWidth:0,overflow:"hidden" }}>
                   <p style={{ margin:0,fontSize:11,color:textMute,fontWeight:500,marginBottom:4 }}>Top category</p>
                   {topCategory
-                    ? <><p style={{ margin:0,fontSize:16,fontWeight:700,color:textMain,display:"flex",alignItems:"center",gap:4 }}>
-                          <span style={{ ...getCatStyle(topCategory),padding:"2px 8px",borderRadius:99,fontSize:12 }}>{topCategory}</span>
+                    ? <><p style={{ margin:0,fontSize:16,fontWeight:700,color:textMain,display:"flex",alignItems:"center",gap:4,minWidth:0 }}>
+                          <span style={{ ...getCatStyle(topCategory),padding:"2px 8px",borderRadius:99,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%" }}>{topCategory}</span>
                         </p>
-                        <p style={{ margin:"5px 0 0",fontSize:11,color:textMute }}>₹{(allTimeCatTotals[topCategory]||0).toLocaleString()} · tap →</p>
+                        <p style={{ margin:"5px 0 0",fontSize:11,color:textMute,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>₹{(allTimeCatTotals[topCategory]||0).toLocaleString()} · tap →</p>
                       </>
                     : <p style={{ margin:0,fontSize:16,fontWeight:700,color:textMute }}>-</p>
                   }
                 </div>
                 )}
                 {!simpleMode && (
-                <div style={{ background:cardBg,border:cardBorder,borderRadius:R.card,padding:"14px 16px",boxShadow:cardShadow }}>
+                <div style={{ background:cardBg,border:cardBorder,borderRadius:R.card,padding:"14px 16px",boxShadow:cardShadow,minWidth:0,overflow:"hidden" }}>
                   <p style={{ margin:0,fontSize:11,color:textMute,fontWeight:500,marginBottom:4 }}>Daily avg</p>
-                  <p style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:textMain }}>₹{dailyAvg.toLocaleString()}</p>
+                  <p style={{ margin:0,fontSize:22,fontWeight:800,fontFamily:"'DM Mono',monospace",color:textMain,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>₹{dailyAvg.toLocaleString()}</p>
                   <p style={{ margin:"3px 0 0",fontSize:11,color:textMute }}>this month</p>
                 </div>
                 )}
@@ -5196,7 +5196,12 @@ export default function App() {
                   background:isRetro&&active&&!isScan?"rgba(242,162,94,0.28)":"none",
                   border:isRetro&&active&&!isScan?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none",
                   cursor:"pointer",color:active&&!isScan?accent:(isRetro?(dark?RETRO_THEME_DARK.textMute:RETRO_THEME.textMute):textMute),
-                  transition:"color 0.15s, background 0.15s",minWidth:0,overflow:"hidden",position:"relative" }}>
+                  transition:"color 0.15s, background 0.15s",minWidth:0,
+                  // FIX: overflow:hidden is only a safety net for the text label (below) so it can't
+                  // spill into the next tab. The Add button has no label — it's a circle that
+                  // deliberately pokes above the bar via marginTop:-20 — so hidden here was clipping
+                  // off its top edge. Keep it visible just for that one button.
+                  overflow:isScan?"visible":"hidden",position:"relative" }}>
                 {icon}
                 {/* FIX (mobile icon fit): overflow:hidden + ellipsis on the button/label
                     is a safety net — a nowrap label can never again spill outside its
