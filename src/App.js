@@ -114,6 +114,12 @@ function sanitizeExpenses(raw) {
       category: typeof e.category === "string" ? e.category : "Others",
       note: typeof e.note === "string" ? e.note : "",
       paySource: typeof e.paySource === "string" ? e.paySource : "bank",
+      // Travel mode foreign-currency fields - only meaningful when trip is set.
+      // amount above always stays the INR-converted value so budgets/streaks/
+      // charts never need to know about currencies.
+      fxCurrency: typeof e.fxCurrency === "string" && e.fxCurrency ? e.fxCurrency : null,
+      fxAmount: e.fxCurrency ? Math.max(0, asNumber(e.fxAmount, 0)) : null,
+      fxRate: e.fxCurrency ? Math.max(0, asNumber(e.fxRate, 0)) : null,
     }));
 }
 function sanitizeBanks(raw) {
@@ -464,10 +470,10 @@ function StreakCard({ streak, todayLogged, last14, freezeData, dark, isRetro, ac
           <span style={{
             display: "inline-block", marginTop: 8, padding: "3px 10px",
             borderRadius: isRetro ? 0 : 999,
-            border: isRetro ? `2px solid ${RETRO_THEME.border}` : `1px solid ${rank.color}55`,
-            background: isRetro ? RETRO_THEME.subbg : `${rank.color}18`,
+            border: isRetro ? `2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}` : `1px solid ${rank.color}55`,
+            background: isRetro ? (dark?RETRO_THEME_DARK.subbg:RETRO_THEME.subbg) : `${rank.color}18`,
             fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
-            color: isRetro ? RETRO_THEME.textMain : rank.color,
+            color: isRetro ? (dark?RETRO_THEME_DARK.textMain:RETRO_THEME.textMain) : rank.color,
           }}>
             {rank.title}
           </span>
@@ -493,9 +499,9 @@ function StreakCard({ streak, todayLogged, last14, freezeData, dark, isRetro, ac
                 <div style={{
                   width: "100%", aspectRatio: "1 / 1",
                   borderRadius: isRetro ? 0 : 5,
-                  background: on ? accent : (isRetro ? "#ffffff" : subbg),
+                  background: on ? accent : (isRetro ? cardBg : subbg),
                   border: isRetro
-                    ? `2px solid ${RETRO_THEME.border}`
+                    ? `2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`
                     : isToday ? `1.5px solid ${accent}` : `1px solid ${border}`,
                 }}/>
                 <span style={{ fontSize: 8, color: textMute, lineHeight: 1 }}>{dayLabels[dow]}</span>
@@ -511,9 +517,9 @@ function StreakCard({ streak, todayLogged, last14, freezeData, dark, isRetro, ac
           style={{
             flex: 1, padding: "11px 14px",
             borderRadius: isRetro ? 0 : 12,
-            border: isRetro ? `2.5px solid ${RETRO_THEME.border}` : "none",
-            background: todayLogged ? (isRetro ? RETRO_THEME.subbg : subbg) : accent,
-            color: todayLogged ? textMute : (isRetro ? RETRO_THEME.border : "#fff"),
+            border: isRetro ? `2.5px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}` : "none",
+            background: todayLogged ? (isRetro ? (dark?RETRO_THEME_DARK.subbg:RETRO_THEME.subbg) : subbg) : accent,
+            color: todayLogged ? textMute : (isRetro ? (dark?RETRO_THEME_DARK.border:RETRO_THEME.border) : "#fff"),
             fontSize: 14, fontWeight: isRetro ? 800 : 700,
             cursor: todayLogged ? "default" : "pointer",
             boxShadow: isRetro && !todayLogged ? "3px 3px 0px 0px rgba(14,28,84,1)" : "none",
@@ -525,8 +531,8 @@ function StreakCard({ streak, todayLogged, last14, freezeData, dark, isRetro, ac
           style={{
             padding: "11px 14px",
             borderRadius: isRetro ? 0 : 12,
-            border: isRetro ? `2.5px solid ${RETRO_THEME.border}` : `1px solid ${border}`,
-            background: isRetro ? "#ffffff" : subbg,
+            border: isRetro ? `2.5px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}` : `1px solid ${border}`,
+            background: isRetro ? cardBg : subbg,
             color: freezeData.available > 0 && !todayLogged ? textMain : textMute,
             fontSize: 13, fontWeight: isRetro ? 800 : 600,
             cursor: freezeData.available > 0 && !todayLogged ? "pointer" : "default",
@@ -678,6 +684,51 @@ function buildTrendData(expenses) {
 // toggle alone - "Sky" was the app's default hue, so it stays as the classic
 // accent.
 const ACCENT_CLASSIC = { light: "#0369a1", dark: "#38bdf8" };
+// Travel mode currencies - foreign currency support is scoped to Travel mode
+// only. Every other part of the app (budgets, streaks, charts, splits, EMI)
+// keeps working in INR because trip expenses are still stored with an INR
+// `amount`, converted at the rate the user sets for the trip; the original
+// foreign amount + currency are kept alongside just for display.
+const CURRENCIES = [
+  { code:"USD", symbol:"$",  name:"US Dollar" },
+  { code:"EUR", symbol:"€",  name:"Euro" },
+  { code:"GBP", symbol:"£",  name:"British Pound" },
+  { code:"AED", symbol:"AED", name:"UAE Dirham" },
+  { code:"SGD", symbol:"S$", name:"Singapore Dollar" },
+  { code:"THB", symbol:"฿",  name:"Thai Baht" },
+  { code:"JPY", symbol:"¥",  name:"Japanese Yen" },
+  { code:"AUD", symbol:"A$", name:"Australian Dollar" },
+  { code:"MYR", symbol:"RM", name:"Malaysian Ringgit" },
+  { code:"LKR", symbol:"Rs", name:"Sri Lankan Rupee" },
+  { code:"NPR", symbol:"Rs", name:"Nepalese Rupee" },
+  { code:"CHF", symbol:"CHF", name:"Swiss Franc" },
+];
+function getCurrency(code) { return CURRENCIES.find(c => c.code === code) || CURRENCIES[0]; }
+
+// ── LIVE EXCHANGE RATES ──────────────────────────────────────────────────────
+// Frankfurter (api.frankfurter.app) mirrors the European Central Bank's daily
+// reference rates: free, no API key, CORS-enabled for direct browser fetches,
+// and it supports historical lookups back to 1999 - exactly what "fetch the
+// rate for the date of entry" needs. It only carries ECB-tracked currencies
+// though, so 3 of our 12 (AED, LKR, NPR) have no live source and always fall
+// back to manual entry.
+const FRANKFURTER_SUPPORTED = new Set([
+  "USD","EUR","GBP","SGD","THB","JPY","AUD","MYR","CHF",
+]);
+// The ECB only publishes on business days; requesting a weekend/holiday date
+// from the historical endpoint still resolves (Frankfurter returns the most
+// recent prior rate), so no special-casing is needed there. A date in the
+// future has no rate yet, so those route to /latest instead.
+async function fetchLiveFxRate(currency, dateStr, todayStr) {
+  const endpoint = dateStr && dateStr > todayStr ? "latest" : (dateStr || "latest");
+  const url = `https://api.frankfurter.app/${endpoint}?from=${encodeURIComponent(currency)}&to=INR`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`fx http ${res.status}`);
+  const data = await res.json();
+  const rate = data && data.rates && Number(data.rates.INR);
+  if (!Number.isFinite(rate) || rate <= 0) throw new Error("fx: no INR rate in response");
+  return rate;
+}
 // Optional full theme (background + surfaces + accent) — matches the reference
 // icon: white/cream base, bold
 // retro-ink outlines, teal chrome bars, orange as the primary accent, yellow
@@ -691,6 +742,23 @@ const RETRO_THEME = {
   inputBg:     "#ffffff",
   inputBorder: "#0e1c54",
   subbg:       "#eef0fa",
+  teal:        "#5cc9c6",
+  orange:      "#f2a25e",
+  yellow:      "#f6da6e",
+};
+// Dark counterpart of RETRO_THEME - same bold-outline retro language, inverted
+// onto a deep navy base so the teal/orange/yellow accents still pop. Every
+// place that reads RETRO_THEME.<key> now reads (dark?RETRO_THEME_DARK:RETRO_THEME).<key>
+// instead, so "Retro theme" and "Dark mode" can be combined.
+const RETRO_THEME_DARK = {
+  bg:          "#12172e",
+  cardBg:      "#1a2044",
+  border:      "#f4f1e6",
+  textMain:    "#f4f1e6",
+  textMute:    "#9aa3c9",
+  inputBg:     "#1a2044",
+  inputBorder: "#f4f1e6",
+  subbg:       "#232a52",
   teal:        "#5cc9c6",
   orange:      "#f2a25e",
   yellow:      "#f6da6e",
@@ -905,35 +973,42 @@ async function requestNotifPermission() {
 // ════════════════════════════════════════════════════════════════════════════
 // ICONS
 // ════════════════════════════════════════════════════════════════════════════
-const SunIcon    = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>;
-const MoonIcon   = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
-const EyeIcon    = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
-const EyeOffIcon = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.62 21.62 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.94 4.24M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
-const FlameIcon  = ({ size=16 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.17 2 7 4.17 7 7c0 1.57.68 2.97 1.76 3.95C7.65 12.07 7 13.46 7 15c0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.54-.65-2.93-1.76-4.05C16.32 9.97 17 8.57 17 7c0-2.83-2.17-5-5-5zm0 16c-1.65 0-3-1.35-3-3 0-.93.42-1.76 1.08-2.33C10.66 13.16 11.31 14 12 14s1.34-.84 1.92-1.33C14.58 13.24 15 14.07 15 15c0 1.65-1.35 3-3 3z"/></svg>;
-const ShieldIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
-const TrophyIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="8 17 12 21 16 17"/><path d="M17 3H7a2 2 0 0 0-2 2v6a7 7 0 0 0 14 0V5a2 2 0 0 0-2-2z"/><path d="M5 7H2a1 1 0 0 0-1 1v3a4 4 0 0 0 4 4"/><path d="M19 7h3a1 1 0 0 1 1 1v3a4 4 0 0 1-4 4"/></svg>;
-const EditIcon   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
-const TrashIcon  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>;
-const RepeatIcon = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>;
-const PlusIcon   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
-const CheckIcon  = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
-const TrendIcon  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>;
-const PiggyIcon  = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 8a7 7 0 0 0-14 0c0 2.5 1.3 4.7 3.3 6L8 20h8l-.3-6A7 7 0 0 0 19 8z"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/></svg>;
-const ZapIcon    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
-const BankIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>;
-const CashIcon   = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>;
-const ChevronL   = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>;
-const GridIcon   = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>;
-const BellIcon   = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
-const XIcon      = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-const HomeIcon   = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
-const ListIcon   = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
-const WalletIcon = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h2v-4z"/></svg>;
-const EmiIcon    = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="7" y2="15"/><line x1="12" y1="15" x2="12" y2="15"/></svg>;
-const MicIcon    = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
-const CameraIcon = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
-const UsersIcon  = ({ size=22 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
-const ChevDown   = ({ color }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>;
+// FIX (mobile icon fit): every icon now renders with display:"block" (kills the
+// few px of inline/baseline whitespace that made icons sit off-center inside
+// buttons and rows) and flexShrink:0 (stops icons from getting squashed
+// narrower-than-tall when a flex row runs out of horizontal space on small
+// screens). Both merge with any style passed in via props so call sites can
+// still override/extend if needed.
+const ICON_SAFE_STYLE = { display:"block", flexShrink:0 };
+const SunIcon    = ({ style }) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>;
+const MoonIcon   = ({ style }) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
+const EyeIcon    = ({ style }) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+const EyeOffIcon = ({ style }) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.62 21.62 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.94 4.24M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
+const FlameIcon  = ({ size=16, style }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M12 2C9.17 2 7 4.17 7 7c0 1.57.68 2.97 1.76 3.95C7.65 12.07 7 13.46 7 15c0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.54-.65-2.93-1.76-4.05C16.32 9.97 17 8.57 17 7c0-2.83-2.17-5-5-5zm0 16c-1.65 0-3-1.35-3-3 0-.93.42-1.76 1.08-2.33C10.66 13.16 11.31 14 12 14s1.34-.84 1.92-1.33C14.58 13.24 15 14.07 15 15c0 1.65-1.35 3-3 3z"/></svg>;
+const ShieldIcon = ({ style }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
+const TrophyIcon = ({ style }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><polyline points="8 17 12 21 16 17"/><path d="M17 3H7a2 2 0 0 0-2 2v6a7 7 0 0 0 14 0V5a2 2 0 0 0-2-2z"/><path d="M5 7H2a1 1 0 0 0-1 1v3a4 4 0 0 0 4 4"/><path d="M19 7h3a1 1 0 0 1 1 1v3a4 4 0 0 1-4 4"/></svg>;
+const EditIcon   = ({ style }) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const TrashIcon  = ({ style }) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>;
+const RepeatIcon = ({ style }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>;
+const PlusIcon   = ({ style }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const CheckIcon  = ({ style }) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><polyline points="20 6 9 17 4 12"/></svg>;
+const TrendIcon  = ({ style }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>;
+const PiggyIcon  = ({ style }) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M19 8a7 7 0 0 0-14 0c0 2.5 1.3 4.7 3.3 6L8 20h8l-.3-6A7 7 0 0 0 19 8z"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/></svg>;
+const ZapIcon    = ({ style }) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+const BankIcon   = ({ style }) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/><line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/><line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>;
+const CashIcon   = ({ style }) => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>;
+const ChevronL   = ({ style }) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><polyline points="15 18 9 12 15 6"/></svg>;
+const GridIcon   = ({ style }) => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>;
+const BellIcon   = ({ size=15, style }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
+const XIcon      = ({ size=14, style }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const HomeIcon   = ({ size=22, style }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
+const ListIcon   = ({ size=22, style }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+const WalletIcon = ({ size=22, style }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h2v-4z"/></svg>;
+const EmiIcon    = ({ size=22, style }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="7" y2="15"/><line x1="12" y1="15" x2="12" y2="15"/></svg>;
+const MicIcon    = ({ size=22, style }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
+const CameraIcon = ({ size=22, style }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
+const UsersIcon  = ({ size=22, style }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+const ChevDown   = ({ color, style }) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ ...ICON_SAFE_STYLE, ...style }}><polyline points="6 9 12 15 18 9"/></svg>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // ERROR BOUNDARY
@@ -1014,15 +1089,23 @@ function ConfettiBurst({ active, onDone }) {
   return <canvas ref={canvasRef} style={{ position:"fixed",inset:0,zIndex:9999,pointerEvents:"none" }}/>;
 }
 
-function MoneyBag({ fillPercent, size = "md" }) {
+function MoneyBag({ fillPercent, amount = 0, size = "md" }) {
   const clamp = Math.max(0, Math.min(100, fillPercent));
-  const fontSize = size === "sm" ? 52 : size === "lg" ? 96 : 72;
   const barColor = clamp <= 20 ? "#ef4444" : clamp <= 40 ? "#f97316" : clamp <= 60 ? "#f59e0b" : "#fbbf24";
   const barW = size === "sm" ? 60 : size === "lg" ? 100 : 80;
+  // Rupee-symbol tier by total money: 1x under ₹1L, 2x ₹1L–5L, 3x ₹5L+
+  const absAmount = Math.abs(Number(amount) || 0);
+  const tier = absAmount >= 500000 ? 3 : absAmount >= 100000 ? 2 : 1;
+  const baseFontSize = size === "sm" ? 52 : size === "lg" ? 96 : 72;
+  // Scale down as symbols stack up so 2-3 ₹s don't overflow the card.
+  const fontSize = baseFontSize * (tier === 3 ? 0.62 : tier === 2 ? 0.78 : 1);
   return (
     <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:6 }}>
       <style>{`@keyframes _bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}@keyframes _pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}.mbob{animation:_bob 2s ease-in-out infinite}.mpulse{animation:_pulse 2s ease-in-out infinite}`}</style>
-      <div className="mbob" style={{ fontSize, lineHeight:1, userSelect:"none" }}>💰</div>
+      <div className="mbob" title={`₹${absAmount.toLocaleString()}`}
+        style={{ fontSize, lineHeight:1, userSelect:"none", fontWeight:800, fontFamily:"'DM Mono',monospace", color:barColor, display:"flex", gap:tier>1?"0.04em":0 }}>
+        {Array.from({ length: tier }, (_, i) => <span key={i}>₹</span>)}
+      </div>
       <div style={{ width:barW,height:5,borderRadius:99,background:"rgba(0,0,0,0.08)",overflow:"hidden" }}>
         <div style={{ height:5,borderRadius:99,width:`${clamp}%`,background:barColor,transition:"width 0.6s ease" }} />
       </div>
@@ -1116,7 +1199,7 @@ function ReminderBanner({ item, onDismiss, onPay, dark }) {
         </div>
         <div style={{ display:"flex",gap:6,flexShrink:0 }}>
           <button onClick={() => onPay(item,"bank")} style={{ background:dark?"#064e3b":"#d1fae5",color:dark?"#34d399":"#065f46",border:"none",borderRadius:9,padding:"5px 9px",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:3 }}><BankIcon/>Pay</button>
-          <button onClick={() => onDismiss(item.id)} style={{ background:"none",border:`1px solid ${borderC}`,borderRadius:9,padding:"5px 8px",cursor:"pointer",color:dark?"#6b7280":"#9ca3af",display:"flex",alignItems:"center" }}><XIcon/></button>
+          <button onClick={() => onDismiss(item.id)} style={{ background:"none",border:`1px solid ${borderC}`,borderRadius:9,padding:0,width:32,height:32,minWidth:32,minHeight:32,cursor:"pointer",color:dark?"#6b7280":"#9ca3af",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><XIcon/></button>
         </div>
       </div>
       <div style={{ textAlign:"center",fontSize:10,color:dark?"#4b5563":"#d1d5db",marginTop:3 }}>← swipe to dismiss</div>
@@ -1153,7 +1236,7 @@ function useCategoryHelpers(categories, dark, retro) {
 // PIN LOCK
 // ════════════════════════════════════════════════════════════════════════════
 function PinLock({ onUnlock, dark, accent, isRetro, userName }) {
-  const safeAccent = accent || (isRetro ? RETRO_THEME.orange : "#4f46e5");
+  const safeAccent = accent || (isRetro ? (dark?RETRO_THEME_DARK.orange:RETRO_THEME.orange) : "#4f46e5");
   const hasPin = hasStoredPin();
   const hasCred = !!loadBioCred();
   const [mode, setMode] = useState(hasPin ? "enter" : "setup");
@@ -1251,11 +1334,11 @@ function PinLock({ onUnlock, dark, accent, isRetro, userName }) {
     reject();
   }
 
-  const bg       = isRetro ? RETRO_THEME.bg       : dark ? "#030712" : "#f8fafc";
-  const card     = isRetro ? RETRO_THEME.cardBg   : dark ? "#111827" : "#ffffff";
-  const textMain = isRetro ? RETRO_THEME.textMain : dark ? "#f9fafb" : "#111827";
-  const textMute = isRetro ? RETRO_THEME.textMute : dark ? "#6b7280" : "#9ca3af";
-  const inkBorder = isRetro ? RETRO_THEME.border : (dark ? "#1f2937" : "#e5e7eb");
+  const bg       = isRetro ? (dark?RETRO_THEME_DARK.bg:RETRO_THEME.bg)       : dark ? "#030712" : "#f8fafc";
+  const card     = isRetro ? (dark?RETRO_THEME_DARK.cardBg:RETRO_THEME.cardBg)   : dark ? "#111827" : "#ffffff";
+  const textMain = isRetro ? (dark?RETRO_THEME_DARK.textMain:RETRO_THEME.textMain) : dark ? "#f9fafb" : "#111827";
+  const textMute = isRetro ? (dark?RETRO_THEME_DARK.textMute:RETRO_THEME.textMute) : dark ? "#6b7280" : "#9ca3af";
+  const inkBorder = isRetro ? (dark?RETRO_THEME_DARK.border:RETRO_THEME.border) : (dark ? "#1f2937" : "#e5e7eb");
 
   if (offerBioSetup) return (
     <div className={isRetro?"retro-sharp":undefined} style={{ minHeight:"100vh",background:bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24 }}>
@@ -1266,7 +1349,7 @@ function PinLock({ onUnlock, dark, accent, isRetro, userName }) {
         <h1 style={{ margin:0,fontSize:22,fontWeight:isRetro?800:700,color:textMain,textAlign:"center",letterSpacing:"-0.5px" }}>Enable Face ID / Fingerprint?</h1>
         <p style={{ margin:"0 0 24px",fontSize:13,color:textMute,textAlign:"center",lineHeight:1.6 }}>Skip the PIN next time and unlock instantly with your device biometrics.</p>
         {bioError && <p style={{ margin:"0 0 8px",fontSize:12,color:"#ef4444",textAlign:"center" }}>{bioError}</p>}
-        <button onClick={tryRegister} disabled={bioLoading} style={{ width:"100%",padding:14,border:isRetro?`2.5px solid ${RETRO_THEME.border}`:"none",background:safeAccent,color:isRetro?RETRO_THEME.border:"#fff",fontSize:15,fontWeight:isRetro?800:700,cursor:"pointer",opacity:bioLoading?0.7:1,boxShadow:isRetro?"3px 3px 0px 0px rgba(14,28,84,1)":"none" }}>
+        <button onClick={tryRegister} disabled={bioLoading} style={{ width:"100%",padding:14,border:isRetro?`2.5px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none",background:safeAccent,color:isRetro?(dark?RETRO_THEME_DARK.border:RETRO_THEME.border):"#fff",fontSize:15,fontWeight:isRetro?800:700,cursor:"pointer",opacity:bioLoading?0.7:1,boxShadow:isRetro?"3px 3px 0px 0px rgba(14,28,84,1)":"none" }}>
           {bioLoading ? "Setting up…" : "Enable Biometrics"}
         </button>
         <button onClick={() => { setOfferBioSetup(false); onUnlock(); }} style={{ background:"none",border:"none",cursor:"pointer",color:textMute,fontSize:13,textDecoration:"underline" }}>Skip for now</button>
@@ -1300,22 +1383,22 @@ function PinLock({ onUnlock, dark, accent, isRetro, userName }) {
         )}
         <div style={{ display:"flex",gap:14,marginBottom:32,animation:shake?"shake 0.4s ease":"none" }}>
           {[0,1,2,3].map(i => (
-            <div key={i} style={{ width:14,height:14,background:digits.length>i?safeAccent:(isRetro?RETRO_THEME.cardBg:dark?"#1f2937":"#e5e7eb"),border:isRetro?`2px solid ${RETRO_THEME.border}`:`2px solid ${digits.length>i?safeAccent:(dark?"#374151":"#d1d5db")}`,transition:"background 0.15s" }} />
+            <div key={i} style={{ width:14,height:14,background:digits.length>i?safeAccent:(isRetro?(dark?RETRO_THEME_DARK.cardBg:RETRO_THEME.cardBg):dark?"#1f2937":"#e5e7eb"),border:isRetro?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:`2px solid ${digits.length>i?safeAccent:(dark?"#374151":"#d1d5db")}`,transition:"background 0.15s" }} />
           ))}
         </div>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,width:"100%",maxWidth:280 }}>
           {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k,i) => (
             k === "" ? <div key={i}/> :
             <button key={i} onClick={() => k==="⌫" ? del() : press(k)} disabled={padDisabled}
-              style={{ height:64,opacity:padDisabled?0.4:1,border:isRetro?`2px solid ${RETRO_THEME.border}`:`1px solid ${inkBorder}`,background:k==="⌫"?(isRetro?RETRO_THEME.subbg:dark?"#1f2937":"#f3f4f6"):card,color:textMain,fontSize:k==="⌫"?20:22,fontWeight:isRetro?800:600,cursor:"pointer",fontFamily:"'DM Mono',monospace",boxShadow:isRetro?"2px 2px 0px 0px rgba(14,28,84,0.35)":"none" }}>
+              style={{ height:64,opacity:padDisabled?0.4:1,border:isRetro?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:`1px solid ${inkBorder}`,background:k==="⌫"?(isRetro?(dark?RETRO_THEME_DARK.subbg:RETRO_THEME.subbg):dark?"#1f2937":"#f3f4f6"):card,color:textMain,fontSize:k==="⌫"?20:22,fontWeight:isRetro?800:600,cursor:"pointer",fontFamily:"'DM Mono',monospace",boxShadow:isRetro?"2px 2px 0px 0px rgba(14,28,84,0.35)":"none" }}>
               {k}
             </button>
           ))}
         </div>
         {mode === "enter" && bioAvail && (
           <button onClick={tryVerify} disabled={bioLoading}
-            style={{ marginTop:20,display:"flex",alignItems:"center",gap:8,background:isRetro?"#ffffff":"none",border:isRetro?`2px solid ${RETRO_THEME.border}`:`1px solid ${dark?"#374151":"#e5e7eb"}`,padding:"10px 20px",cursor:"pointer",color:isRetro?RETRO_THEME.textMain:dark?"#9ca3af":"#6b7280",fontSize:13,fontWeight:isRetro?700:500,opacity:bioLoading?0.6:1 }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            style={{ marginTop:20,display:"flex",alignItems:"center",gap:8,background:isRetro?card:"none",border:isRetro?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:`1px solid ${dark?"#374151":"#e5e7eb"}`,padding:"10px 20px",cursor:"pointer",color:isRetro?(dark?RETRO_THEME_DARK.textMain:RETRO_THEME.textMain):dark?"#9ca3af":"#6b7280",fontSize:13,fontWeight:isRetro?700:500,opacity:bioLoading?0.6:1 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}>
               <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839-1.132c.09-.52.138-1.05.138-1.587 0-3.038-1.362-5.762-3.509-7.6"/>
             </svg>
             {bioLoading ? "Verifying…" : hasCred ? "Use Face ID / Fingerprint" : "Set up Biometrics"}
@@ -1466,7 +1549,7 @@ function SpendingTrendChart({ data, dark, cardBg, border, textMute, textMain, is
           <p style={{ margin:"4px 0 0",fontSize:11,color:textMute }}>Avg ₹{avg6.toLocaleString()}/mo</p>
         </div>
       </div>
-      <svg width="100%" viewBox={`0 0 ${(BAR_W+GAP)*6-GAP+40} ${H+28}`} style={{ overflow:"visible" }}>
+      <svg width="100%" viewBox={`0 0 ${(BAR_W+GAP)*6-GAP+40} ${H+30}`} style={{ overflow:"visible" }}>
         {data.map((d,i) => {
           const x = i*(BAR_W+GAP);
           const barH = max>0?Math.max(4,Math.round((d.total/max)*(H-10))):4;
@@ -1476,9 +1559,9 @@ function SpendingTrendChart({ data, dark, cardBg, border, textMute, textMain, is
           return (
             <g key={d.label}>
               <rect x={x} y={y} width={BAR_W} height={barH} rx={6} fill={col} style={{ transition:"height 0.5s,y 0.5s" }}/>
-              {isActive && d.total>0 && (
-                <text x={x+BAR_W/2} y={y-5} textAnchor="middle" style={{ fontSize:9,fill:dark?"#818cf8":"#4f46e5",fontFamily:"DM Mono,monospace",fontWeight:700 }}>
-                  ₹{d.total>=1000?Math.round(d.total/1000)+"k":d.total}
+              {d.total>0 && (
+                <text x={x+BAR_W/2} y={y-5} textAnchor="middle" style={{ fontSize:9,fill:isActive?(dark?"#818cf8":"#4f46e5"):textMute,fontFamily:"DM Mono,monospace",fontWeight:isActive?700:500 }}>
+                  {d.total>=1000?(d.total/1000).toFixed(d.total%1000===0?0:1)+"k":d.total}
                 </text>
               )}
               <text x={x+BAR_W/2} y={H+14} textAnchor="middle" style={{ fontSize:10,fill:isActive?(dark?"#f9fafb":"#111827"):textMute,fontWeight:isActive?700:400,fontFamily:"DM Sans,sans-serif" }}>
@@ -1495,6 +1578,21 @@ function SpendingTrendChart({ data, dark, cardBg, border, textMute, textMain, is
 // ════════════════════════════════════════════════════════════════════════════
 // EXPENSE DATE LIST
 // ════════════════════════════════════════════════════════════════════════════
+// Collapsible group used in the Settings sheet (Modes / Themes / Security),
+// so related toggles sit under one header instead of each being its own
+// full-width row — keeps the sheet scannable as more toggles get added.
+function SettingsSection({ title, icon, open, onToggle, border, textMain, textMute, children }) {
+  return (
+    <div style={{ borderBottom:`1px solid ${border}` }}>
+      <button onClick={onToggle} style={{ width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",background:"none",border:"none",cursor:"pointer" }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>{icon}<span style={{ fontSize:14,fontWeight:600,color:textMain }}>{title}</span></div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform:open?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0 }}><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      {open && <div style={{ paddingBottom:4 }}>{children}</div>}
+    </div>
+  );
+}
+
 function ExpenseDateList({ grouped, dailyTotal, today, dark, cardBg, border, subbg, textMute, getCatStyle, editExpense, deleteExpense, setDrillCat, isRetro }) {
   const { border: cardBorder, shadow: cardShadow, radius: R_card } = cardChrome(isRetro, border);
   const sortedDates = useMemo(() => Object.keys(grouped).sort((a,b) => new Date(b)-new Date(a)), [grouped]);
@@ -1516,7 +1614,10 @@ function ExpenseDateList({ grouped, dailyTotal, today, dark, cardBg, border, sub
 
   function toggle(dk) { if (dk === today) return; setOpenDates(p => ({ ...p, [dk]: !p[dk] })); }
 
-  const btnDanger = { background:"none",border:"none",cursor:"pointer",color:textMute,padding:4 };
+  // FIX (mobile icon fit): 4px padding around a 14px icon gave a ~22px tap
+  // target, well under the ~32-36px minimum for reliable mobile tapping. Now a
+  // fixed 32x32 flex-centered hit area so Edit/Trash icons sit dead-center.
+  const btnDanger = { background:"none",border:"none",cursor:"pointer",color:textMute,padding:0,width:32,height:32,minWidth:32,minHeight:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 };
 
   return (
     <div style={{ background:cardBg,border:cardBorder,borderRadius:R_card,overflow:"hidden",boxShadow:cardShadow }}>
@@ -1555,7 +1656,11 @@ function ExpenseDateList({ grouped, dailyTotal, today, dark, cardBg, border, sub
                       onClick={() => setDrillCat(item.category)}>{item.category}</span>
                     <div>
                       <div style={{ display:"flex",alignItems:"center",gap:6 }}>
-                        <p style={{ margin:0,fontSize:14,fontWeight:700 }}>₹{item.amount.toLocaleString()}</p>
+                        <p style={{ margin:0,fontSize:14,fontWeight:700 }}>
+                          {item.fxCurrency
+                            ? <>{getCurrency(item.fxCurrency).symbol}{Number(item.fxAmount).toLocaleString()} <span style={{ fontSize:11,fontWeight:500,color:textMute }}>(₹{item.amount.toLocaleString()})</span></>
+                            : <>₹{item.amount.toLocaleString()}</>}
+                        </p>
                         <span style={{ display:"flex",alignItems:"center",gap:2,fontSize:10,fontWeight:600,padding:"1px 5px",borderRadius:6,
                           background:item.paySource==="cash"?(dark?"#052e16":"#dcfce7"):(dark?"#172554":"#dbeafe"),
                           color:item.paySource==="cash"?(dark?"#86efac":"#16a34a"):(dark?"#93c5fd":"#2563eb") }}>
@@ -1838,7 +1943,10 @@ function EmiTab({ dark, cardBg, border, textMute, textMain, subbg, inputBg, inpu
   const inputStyle = { background:inputBg,border:`1px solid ${inputBorder}`,color:textMain,borderRadius:12,padding:"8px 12px",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" };
   const btnPrimary = { background:safeAccent,color:"#fff",border:"none",borderRadius:12,padding:"10px 16px",fontSize:14,fontWeight:600,cursor:"pointer" };
   const btnSecondary = { background:dark?"#374151":"#f3f4f6",color:dark?"#d1d5db":"#374151",border:"none",borderRadius:12,padding:"8px 12px",fontSize:13,fontWeight:500,cursor:"pointer" };
-  const btnDanger = { background:"none",border:"none",cursor:"pointer",color:textMute,padding:4 };
+  // FIX (mobile icon fit): 4px padding around a 14px icon gave a ~22px tap
+  // target, well under the ~32-36px minimum for reliable mobile tapping. Now a
+  // fixed 32x32 flex-centered hit area so Edit/Trash icons sit dead-center.
+  const btnDanger = { background:"none",border:"none",cursor:"pointer",color:textMute,padding:0,width:32,height:32,minWidth:32,minHeight:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 };
 
   function resetForm() { setLoanName(""); setPrincipal(""); setRate(""); setTenure(""); setStartDate(today); setDueDay("5"); setEditId(null); setShowForm(false); }
 
@@ -2017,8 +2125,8 @@ function SavingsGoals({ goals, dark, cardBg, border, textMute, textMain, subbg, 
   const { border: cardBorder, shadow: cardShadow, radius: R_card } = cardChrome(isRetro, border);
   const safeAccent = accent || "#4f46e5";
   const inputStyle = { background:inputBg,border:isRetro?`2.5px solid ${inputBorder}`:`1px solid ${inputBorder}`,color:textMain,borderRadius:isRetro?0:12,padding:"8px 12px",fontSize:14,outline:"none",width:"100%",boxSizing:"border-box" };
-  const btnPrimary = { background:safeAccent,color:isRetro?RETRO_THEME.border:"#fff",border:isRetro?`2.5px solid ${RETRO_THEME.border}`:"none",borderRadius:isRetro?0:12,padding:"10px 16px",fontSize:14,fontWeight:isRetro?800:600,cursor:"pointer" };
-  const btnSecondary = { background:isRetro?"#ffffff":(dark?"#374151":"#f3f4f6"),color:isRetro?RETRO_THEME.textMain:(dark?"#d1d5db":"#374151"),border:isRetro?`2px solid ${RETRO_THEME.border}`:"none",borderRadius:isRetro?0:12,padding:"8px 12px",fontSize:13,fontWeight:isRetro?700:500,cursor:"pointer" };
+  const btnPrimary = { background:safeAccent,color:isRetro?(dark?RETRO_THEME_DARK.border:RETRO_THEME.border):"#fff",border:isRetro?`2.5px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none",borderRadius:isRetro?0:12,padding:"10px 16px",fontSize:14,fontWeight:isRetro?800:600,cursor:"pointer" };
+  const btnSecondary = { background:isRetro?cardBg:(dark?"#374151":"#f3f4f6"),color:isRetro?(dark?RETRO_THEME_DARK.textMain:RETRO_THEME.textMain):(dark?"#d1d5db":"#374151"),border:isRetro?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none",borderRadius:isRetro?0:12,padding:"8px 12px",fontSize:13,fontWeight:isRetro?700:500,cursor:"pointer" };
 
   const cash = Number(usableCash) || 0;
   const sources = [
@@ -2089,7 +2197,7 @@ function SavingsGoals({ goals, dark, cardBg, border, textMute, textMain, subbg, 
               </div>
             </div>
 
-            <div style={{ width:"100%",height:8,borderRadius:isRetro?0:99,background:isRetro?"#ffffff":(dark?"#1f2937":"#f3f4f6"),overflow:"hidden",marginBottom:6,border:isRetro?`2px solid ${RETRO_THEME.border}`:"none" }}>
+            <div style={{ width:"100%",height:8,borderRadius:isRetro?0:99,background:isRetro?cardBg:(dark?"#1f2937":"#f3f4f6"),overflow:"hidden",marginBottom:6,border:isRetro?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none" }}>
               <div style={{ height:"100%",borderRadius:isRetro?0:99,width:`${pct}%`,background:reached?"linear-gradient(to right,#059669,#34d399)":safeAccent,transition:"width 0.6s ease" }}/>
             </div>
             <div style={{ display:"flex",justifyContent:"space-between",gap:8,fontSize:11,color:textMute,flexWrap:"wrap" }}>
@@ -2104,7 +2212,7 @@ function SavingsGoals({ goals, dark, cardBg, border, textMute, textMain, subbg, 
 
             {/* Pacing hint - the point of a dated short-term goal */}
             {pace && !reached && !pace.overdue && (
-              <p className={mny} style={{ margin:"8px 0 0",fontSize:11,color:textMute,background:subbg,borderRadius:isRetro?0:8,padding:"6px 9px",border:isRetro?`2px solid ${RETRO_THEME.border}`:"none" }}>
+              <p className={mny} style={{ margin:"8px 0 0",fontSize:11,color:textMute,background:subbg,borderRadius:isRetro?0:8,padding:"6px 9px",border:isRetro?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none" }}>
                 Put aside <strong style={{ color:textMain }}>₹{pace.perWeek.toLocaleString()}/week</strong>
                 {pace.days >= 45 ? <> or <strong style={{ color:textMain }}>₹{pace.perMonth.toLocaleString()}/month</strong></> : null} to make it.
               </p>
@@ -2134,9 +2242,9 @@ function SavingsGoals({ goals, dark, cardBg, border, textMute, textMain, subbg, 
                     return (
                       <button key={src.id} onClick={() => setGoalFundSource(src.id)}
                         style={{ padding:"6px 10px",borderRadius:isRetro?0:99,fontSize:12,fontWeight:active?700:500,cursor:"pointer",
-                          background:active?safeAccent:(isRetro?"#ffffff":subbg),
-                          color:active?(isRetro?RETRO_THEME.border:"#fff"):textMute,
-                          border:isRetro?`2px solid ${RETRO_THEME.border}`:`1px solid ${active?safeAccent:border}` }}>
+                          background:active?safeAccent:(isRetro?cardBg:subbg),
+                          color:active?(isRetro?(dark?RETRO_THEME_DARK.border:RETRO_THEME.border):"#fff"):textMute,
+                          border:isRetro?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:`1px solid ${active?safeAccent:border}` }}>
                         {src.label}
                         {adding && <span className={mny} style={{ opacity:0.75,marginLeft:5 }}>₹{src.balance.toLocaleString()}</span>}
                       </button>
@@ -2220,11 +2328,12 @@ export default function App() {
   const [dark, setDark] = useState(() => storageGet(KEYS.THEME, "light") === "dark");
   const [themeStyle, setThemeStyle] = useState(() => storageGet(KEYS.THEME_STYLE, "classic")); // "classic" | "retro"
   const isRetro = themeStyle === "retro";
-  const accent = isRetro ? RETRO_THEME.orange : (dark ? ACCENT_CLASSIC.dark : ACCENT_CLASSIC.light);
+  const accent = isRetro ? (dark?RETRO_THEME_DARK.orange:RETRO_THEME.orange) : (dark ? ACCENT_CLASSIC.dark : ACCENT_CLASSIC.light);
 
   useEffect(() => { storageSetDebounced(KEYS.THEME, dark?"dark":"light"); }, [dark]);
   useEffect(() => { storageSet(KEYS.THEME_STYLE, themeStyle); }, [themeStyle]);
-  useEffect(() => { if (isRetro && dark) setDark(false); }, [isRetro, dark]);
+  // Dark mode and Retro theme are independent toggles now - Retro no longer
+  // forces itself back to light when Dark mode is on.
 
   // ── Simple mode ───────────────────────────────────────────────────────────
   const [simpleMode, setSimpleMode] = useState(() => storageGet(KEYS.SIMPLE, false));
@@ -2296,10 +2405,56 @@ export default function App() {
   // every expense saved gets tagged with the trip name, until turned off.
   // Persists across refreshes since it's just another localStorage key.
   const [travelMode, setTravelMode] = useState(() => {
-    const saved = storageGet(KEYS.TRAVEL_MODE, { active:false, tripName:"" });
-    return (saved && typeof saved === "object") ? { active:!!saved.active, tripName:String(saved.tripName||"") } : { active:false, tripName:"" };
+    const saved = storageGet(KEYS.TRAVEL_MODE, { active:false, tripName:"", currency:"USD", rate:83, fxAuto:true });
+    return (saved && typeof saved === "object")
+      ? { active:!!saved.active, tripName:String(saved.tripName||""), currency:CURRENCIES.some(c=>c.code===saved.currency)?saved.currency:"USD", rate:Math.max(0, Number(saved.rate)||83), fxAuto: saved.fxAuto !== false }
+      : { active:false, tripName:"", currency:"USD", rate:83, fxAuto:true };
   });
   useEffect(() => { storageSetDebounced(KEYS.TRAVEL_MODE, travelMode); }, [travelMode]);
+  // ── Live FX rate fetch (Travel mode) ─────────────────────────────────────
+  // Auto-fetches the official rate for the trip currency ON THE DATE the
+  // expense is being entered for (not always "today"), so backdated trip
+  // expenses get the rate that actually applied that day. Result is written
+  // into travelMode.rate, which is what saveExpense()/quickAddExpense()
+  // already read - so the rest of the FX pipeline needed no changes.
+  const [fxStatus, setFxStatus] = useState({ state:"idle", currency:null, date:null, error:null });
+  const fxCacheRef = useRef({}); // "CUR_YYYY-MM-DD" -> rate, avoids refetching on every keystroke elsewhere
+  const [fxRefreshNonce, setFxRefreshNonce] = useState(0); // bump to force a refetch (cache already cleared by caller)
+  useEffect(() => {
+    if (!travelMode.active || !travelMode.fxAuto) return;
+    const currency = travelMode.currency;
+    if (!FRANKFURTER_SUPPORTED.has(currency)) {
+      setFxStatus({ state:"unsupported", currency, date, error:`No live rate source for ${currency} — enter it manually.` });
+      // Switch the field back to manual so it isn't stuck disabled/empty.
+      setTravelMode(tm => (tm.currency===currency && tm.fxAuto) ? { ...tm, fxAuto:false } : tm);
+      return;
+    }
+    const cacheKey = `${currency}_${date}`;
+    const cached = fxCacheRef.current[cacheKey];
+    if (cached != null) {
+      setFxStatus({ state:"ok", currency, date, error:null });
+      setTravelMode(tm => (tm.currency===currency && tm.fxAuto) ? { ...tm, rate: cached } : tm);
+      return;
+    }
+    let cancelled = false;
+    setFxStatus({ state:"loading", currency, date, error:null });
+    fetchLiveFxRate(currency, date, today)
+      .then(rate => {
+        if (cancelled) return;
+        const rounded = Math.round(rate * 10000) / 10000;
+        fxCacheRef.current[cacheKey] = rounded;
+        setFxStatus({ state:"ok", currency, date, error:null });
+        // Re-check fxAuto/currency at write time - the effect can resolve after
+        // the user has already switched currency or flipped back to manual.
+        setTravelMode(tm => (tm.currency===currency && tm.fxAuto) ? { ...tm, rate: rounded } : tm);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFxStatus({ state:"error", currency, date, error:"Couldn't fetch a live rate — using the last known rate. You can edit it manually." });
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [travelMode.active, travelMode.fxAuto, travelMode.currency, date, today, fxRefreshNonce]);
   const [editingId, setEditingId] = useState(null);
   // FIX: `date` was seeded once at mount and never refreshed, so if the app was
   // left open across midnight every new expense silently got yesterday's date.
@@ -2345,11 +2500,17 @@ export default function App() {
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [toast, setToast] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null); // { item } — undo-delete window
+  const [dupWarning, setDupWarning] = useState(false); // true when a same-day/category/amount duplicate was found
   const [tab, setTab] = useState("home");
   const [billsSubTab, setBillsSubTab] = useState("recurring"); // "recurring" | "loans"
   const [drillCat, setDrillCat] = useState(null);
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [modesOpen, setModesOpen] = useState(false);
+  const [themesOpen, setThemesOpen] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [dataOpen, setDataOpen] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState("");
@@ -2468,13 +2629,63 @@ export default function App() {
     return [...set].sort((a,b) => b.localeCompare(a));
   }, [monthExpenses]);
 
+  // ── Search / filter (Expenses tab) ──────────────────────────────────────────
+  const [expenseQuery, setExpenseQuery] = useState("");
+  const [filterCat, setFilterCat] = useState("all");
+  const [filterMin, setFilterMin] = useState("");
+  const [filterMax, setFilterMax] = useState("");
+  const [showExpenseFilters, setShowExpenseFilters] = useState(false);
+  const expenseFiltersActive = expenseQuery.trim()!=="" || filterCat!=="all" || filterMin!=="" || filterMax!=="";
+  function clearExpenseFilters() { setExpenseQuery(""); setFilterCat("all"); setFilterMin(""); setFilterMax(""); }
+
+  // Search + filter applied on top of the month/day period, so the summary
+  // strip, category donut, and list all stay in sync with each other.
+  const searchedExpenses = useMemo(() => {
+    const q = expenseQuery.trim().toLowerCase();
+    const min = filterMin!=="" ? Number(filterMin) : null;
+    const max = filterMax!=="" ? Number(filterMax) : null;
+    return periodExpenses.filter(e => {
+      if (q && !((e.note||"").toLowerCase().includes(q) || (e.category||"").toLowerCase().includes(q) || (e.trip||"").toLowerCase().includes(q))) return false;
+      if (filterCat!=="all" && e.category!==filterCat) return false;
+      if (min!=null && e.amount<min) return false;
+      if (max!=null && e.amount>max) return false;
+      return true;
+    });
+  }, [periodExpenses, expenseQuery, filterCat, filterMin, filterMax]);
+
   // ── Derived / memoised ────────────────────────────────────────────────────
   // catTotals scoped to the selected period
   const catTotals = useMemo(() =>
     periodExpenses.reduce((acc,e) => { acc[e.category]=(acc[e.category]||0)+e.amount; return acc; }, {}),
   [periodExpenses]);
 
-  const { grouped, dailyTotal } = useMemo(() => groupByDate(periodExpenses), [periodExpenses]);
+  const { grouped, dailyTotal } = useMemo(() => groupByDate(searchedExpenses), [searchedExpenses]);
+
+  // ── Trips ─────────────────────────────────────────────────────────────────
+  // Totals across ALL expenses (not just the selected month) since a trip can
+  // span a date range unrelated to the calendar month currently being viewed.
+  const tripTotals = useMemo(() => {
+    const map = {};
+    expenses.forEach(e => { if (e.trip) map[e.trip] = (map[e.trip]||0) + (Number(e.amount)||0); });
+    return map;
+  }, [expenses]);
+  const tripNames = useMemo(() => Object.keys(tripTotals).sort((a,b) => tripTotals[b]-tripTotals[a]), [tripTotals]);
+  // The trip currently active in the header toggle (even if switched off, this
+  // is still used to filter the decluttered travel view while it's on).
+  const activeTripLabel = travelMode.tripName.trim() || "Trip";
+  const activeTripExpenses = useMemo(() =>
+    expenses.filter(e => e.trip === activeTripLabel),
+  [expenses, activeTripLabel]);
+  const activeTripTotal = useMemo(() =>
+    activeTripExpenses.reduce((s,e) => s + (Number(e.amount)||0), 0),
+  [activeTripExpenses]);
+  // Foreign-currency total for the trip card - only sums entries tagged with
+  // the trip's current currency, so switching currency mid-trip doesn't mix
+  // e.g. USD and EUR into one misleading number.
+  const activeTripFxTotal = useMemo(() =>
+    activeTripExpenses.filter(e => e.fxCurrency === travelMode.currency).reduce((s,e) => s + (Number(e.fxAmount)||0), 0),
+  [activeTripExpenses, travelMode.currency]);
+  const { grouped: tripGrouped, dailyTotal: tripDailyTotal } = useMemo(() => groupByDate(activeTripExpenses), [activeTripExpenses]);
 
   // FIX: monthly total now uses only current-month expenses, excluding gift/transfer categories
   const excludedCats = useMemo(() => categories.filter(c => c.excludeFromBudget).map(c => c.name), [categories]);
@@ -2636,7 +2847,7 @@ export default function App() {
 
   // ── Expense CRUD ──────────────────────────────────────────────────────────
   function resetExpenseForm() {
-    setAmount(""); setNote(""); setDate(today); setEditingId(null);
+    setAmount(""); setNote(""); setDate(today); setEditingId(null); setDupWarning(false);
     const def = banks.find(b=>b.isDefault) || banks[0];
     setPaySource(def ? `bank:${def.id}` : "bank:1");
   }
@@ -2710,56 +2921,79 @@ export default function App() {
   }
   // Total bank balance = sum of all bank accounts (declared above near usableTotal)
 
-  function saveExpense() {
+  function saveExpense(force) {
     if (!isValidAmount(amount)) {
       setAmountShake(true); setTimeout(() => setAmountShake(false), 500); return;
     }
     const num = Number(amount);
+    if (!editingId && !force) {
+      const dup = expenses.find(e => e.date===date && e.category===selCat && Number(e.amount)===num);
+      if (dup) { setDupWarning(true); return; }
+    }
+    setDupWarning(false);
     if (editingId) {
       // FIX: `old` was dereferenced without a null check, unlike deleteExpense.
       const old = expenses.find(e => e.id===editingId);
       if (!old) { showToast("That expense no longer exists."); resetExpenseForm(); return; }
+      // Foreign-currency expenses keep the rate they were created at, even if
+      // the trip's current rate has since been edited in Settings.
+      const isFx = !!old.fxCurrency;
+      const rate = isFx ? old.fxRate : null;
+      const inrNum = isFx ? Math.round(num * rate) : num;
       // Refund old source, then deduct the new one (exactly once each)
       if (old.paySource === "cash") setPot(p => refundPot(p, "cash", old.amount));
       else setBanks(b => refundBank(b, old.paySource||"bank", old.amount));
-      if (paySource === "cash") setPot(p => deductPot(p, "cash", num));
-      else setBanks(b => deductBank(b, paySource, num));
-      setExpenses(p => p.map(e => e.id===editingId ? { ...e, amount:num, category:selCat, note, date, paySource, trip: old.trip||null } : e));
+      if (paySource === "cash") setPot(p => deductPot(p, "cash", inrNum));
+      else setBanks(b => deductBank(b, paySource, inrNum));
+      setExpenses(p => p.map(e => e.id===editingId ? { ...e, amount:inrNum, category:selCat, note, date, paySource, trip: old.trip||null, fxCurrency: isFx?old.fxCurrency:null, fxAmount: isFx?num:null, fxRate: isFx?rate:null } : e));
       showToast("Updated!");
       // FIX: editing used to call logDay(date), which meant changing an old
       // expense's date silently credited a brand-new streak day.
     } else {
+      const isFx = travelMode.active;
+      const inrNum = isFx ? Math.round(num * travelMode.rate) : num;
       const srcName = paySource === "cash" ? "cash" : (resolveBank(paySource, banks)?.name || "bank");
       const currentBal = paySource === "cash"
         ? (Number(pot.usableCash)||0)
         : (Number(resolveBank(paySource, banks)?.balance)||0);
-      if (paySource === "cash") setPot(p => deductPot(p,"cash",num));
-      else setBanks(b => deductBank(b, paySource, num));
-      setExpenses(p => [...p, { id:uid(), amount:num, category:selCat, note, date, paySource, trip: travelMode.active ? (travelMode.tripName.trim()||"Trip") : null }]);
+      if (paySource === "cash") setPot(p => deductPot(p,"cash",inrNum));
+      else setBanks(b => deductBank(b, paySource, inrNum));
+      setExpenses(p => [...p, { id:uid(), amount:inrNum, category:selCat, note, date, paySource, trip: isFx ? (travelMode.tripName.trim()||"Trip") : null, fxCurrency: isFx?travelMode.currency:null, fxAmount: isFx?num:null, fxRate: isFx?travelMode.rate:null }]);
       // FIX: the low-balance warning used to be its own showToast() call
       // immediately overwritten by the success toast, so it was never visible.
-      showToast(num > currentBal
-        ? `Added · ⚠️ only ₹${currentBal.toLocaleString()} was in ${srcName}`
-        : `Added · deducted from ${srcName}`);
+      showToast(isFx
+        ? `Added · ${getCurrency(travelMode.currency).symbol}${num.toLocaleString()} ≈ ₹${inrNum.toLocaleString()}`
+        : num > currentBal
+          ? `Added · ⚠️ only ₹${currentBal.toLocaleString()} was in ${srcName}`
+          : `Added · deducted from ${srcName}`);
       logDay(date);
     }
     setTab("home");
     resetExpenseForm();
   }
 
-  function editExpense(item) { setEditingId(item.id); setAmount(String(item.amount)); setSelCat(item.category); setNote(item.note); setDate(item.date); setPaySource(item.paySource||"bank"); }
+  function editExpense(item) { setEditingId(item.id); setAmount(String(item.fxCurrency ? item.fxAmount : item.amount)); setSelCat(item.category); setNote(item.note); setDate(item.date); setPaySource(item.paySource||"bank"); }
 
+  const undoTimer = useRef(null);
   function deleteExpense(id) {
     const exp = expenses.find(e => e.id===id);
-    if (exp) {
-      if (exp.paySource === "cash") {
-        setPot(p => refundPot(p, "cash", exp.amount));
-      } else {
-        setBanks(b => refundBank(b, exp.paySource||"bank", exp.amount));
-      }
-    }
+    if (!exp) return;
+    if (exp.paySource === "cash") setPot(p => refundPot(p, "cash", exp.amount));
+    else setBanks(b => refundBank(b, exp.paySource||"bank", exp.amount));
     setExpenses(p => p.filter(e => e.id!==id));
-    showToast("Deleted & refunded.");
+    clearTimeout(undoTimer.current);
+    setPendingDelete({ item: exp });
+    undoTimer.current = setTimeout(() => setPendingDelete(null), 5000);
+  }
+  function undoDeleteExpense() {
+    if (!pendingDelete) return;
+    clearTimeout(undoTimer.current);
+    const exp = pendingDelete.item;
+    if (exp.paySource === "cash") setPot(p => deductPot(p, "cash", exp.amount));
+    else setBanks(b => deductBank(b, exp.paySource||"bank", exp.amount));
+    setExpenses(p => [...p, exp]);
+    setPendingDelete(null);
+    showToast("Restored.");
   }
 
   // FIX: both of these skipped isValidAmount, so a mis-parsed voice/OCR figure
@@ -2769,10 +3003,12 @@ export default function App() {
     if (!isValidAmount(amount)) { showToast("Couldn't read a valid amount."); return; }
     const cat = categories.find(c => c.name===category)?.name || categories[0]?.name || "Others";
     const num = Number(amount);
+    const isFx = travelMode.active;
+    const inrNum = isFx ? Math.round(num * travelMode.rate) : num;
     const src = paySource || (banks.find(b=>b.isDefault) || banks[0] ? `bank:${(banks.find(b=>b.isDefault)||banks[0]).id}` : "cash");
-    setExpenses(p => [...p, { id:uid(), amount:num, category:cat, note:note||"", date:today, paySource:src, trip: travelMode.active ? (travelMode.tripName.trim()||"Trip") : null }]);
-    if (src === "cash") setPot(p => deductPot(p, "cash", num));
-    else setBanks(b => deductBank(b, src, num));
+    setExpenses(p => [...p, { id:uid(), amount:inrNum, category:cat, note:note||"", date:today, paySource:src, trip: isFx ? (travelMode.tripName.trim()||"Trip") : null, fxCurrency: isFx?travelMode.currency:null, fxAmount: isFx?num:null, fxRate: isFx?travelMode.rate:null }]);
+    if (src === "cash") setPot(p => deductPot(p, "cash", inrNum));
+    else setBanks(b => deductBank(b, src, inrNum));
     logDay(today); showToast(`${label} expense added!`); setTab("expenses");
   }
   function handleVoiceAdd(payload)   { quickAddExpense(payload, "Voice"); }
@@ -3220,18 +3456,71 @@ export default function App() {
   function resetPin() { storageRemove(KEYS.PIN); storageRemove(KEYS.BIO_CRED); setUnlocked(false); showToast("PIN cleared - set a new one on next open"); }
   function resetBiometric() { storageRemove(KEYS.BIO_CRED); showToast("Biometrics removed"); }
 
+  // ── Backup & restore ─────────────────────────────────────────────────────
+  // Everything lives in localStorage under the keys in KEYS, so a backup is
+  // just every one of those raw JSON strings bundled into a single file the
+  // person can keep or move to a new device. Import writes them straight
+  // back to localStorage and reloads so every useState(() => storageGet(...))
+  // initializer picks up the restored data fresh.
+  function exportData() {
+    try {
+      const data = {};
+      Object.values(KEYS).forEach(k => {
+        const raw = localStorage.getItem(k);
+        if (raw !== null) data[k] = raw;
+      });
+      const payload = { app:"mySpendr", version:3, exportedAt:new Date().toISOString(), data };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type:"application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `myspendr-backup-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("Backup downloaded!");
+    } catch (e) {
+      console.warn("[backup] export failed:", e.message);
+      showToast("Couldn't create backup.");
+    }
+  }
+  const importInputRef = useRef(null);
+  function triggerImport() { importInputRef.current?.click(); }
+  function handleImportFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ""; // reset so picking the same file again still fires onChange
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        const data = parsed && typeof parsed === "object" ? parsed.data : null;
+        if (!data || typeof data !== "object") { showToast("That doesn't look like a mySpendr backup."); return; }
+        Object.values(KEYS).forEach(k => {
+          if (Object.prototype.hasOwnProperty.call(data, k)) {
+            try { localStorage.setItem(k, data[k]); } catch { /* ignore single-key failure */ }
+          }
+        });
+        showToast("Restored! Reloading…");
+        setTimeout(() => window.location.reload(), 700);
+      } catch (err) {
+        showToast("Couldn't read that file.");
+      }
+    };
+    reader.onerror = () => showToast("Couldn't read that file.");
+    reader.readAsText(file);
+  }
+
   // ── Name ──────────────────────────────────────────────────────────────────
   function saveName() { const n = nameInput.trim(); if (!n) return; setUserName(n); setEditingName(false); setNameInput(""); showToast("Name saved!"); }
 
   // ── Theme ─────────────────────────────────────────────────────────────────
-  const bg       = isRetro ? RETRO_THEME.bg       : dark ? "#030712" : "#f8fafc";
-  const cardBg   = isRetro ? RETRO_THEME.cardBg   : dark ? "#111827" : "#ffffff";
-  const border   = isRetro ? RETRO_THEME.border   : dark ? "#1f2937" : "#f1f5f9";
-  const textMain = isRetro ? RETRO_THEME.textMain : dark ? "#f9fafb" : "#111827";
-  const textMute = isRetro ? RETRO_THEME.textMute : dark ? "#6b7280" : "#6b7280";
-  const inputBg  = isRetro ? RETRO_THEME.inputBg  : dark ? "#1f2937" : "#ffffff";
-  const inputBorder = isRetro ? RETRO_THEME.inputBorder : dark ? "#374151" : "#e5e7eb";
-  const subbg    = isRetro ? RETRO_THEME.subbg    : dark ? "#1f2937" : "#f8fafc";
+  const bg       = isRetro ? (dark?RETRO_THEME_DARK.bg:RETRO_THEME.bg)       : dark ? "#030712" : "#f8fafc";
+  const cardBg   = isRetro ? (dark?RETRO_THEME_DARK.cardBg:RETRO_THEME.cardBg)   : dark ? "#111827" : "#ffffff";
+  const border   = isRetro ? (dark?RETRO_THEME_DARK.border:RETRO_THEME.border)   : dark ? "#1f2937" : "#f1f5f9";
+  const textMain = isRetro ? (dark?RETRO_THEME_DARK.textMain:RETRO_THEME.textMain) : dark ? "#f9fafb" : "#111827";
+  const textMute = isRetro ? (dark?RETRO_THEME_DARK.textMute:RETRO_THEME.textMute) : dark ? "#6b7280" : "#6b7280";
+  const inputBg  = isRetro ? (dark?RETRO_THEME_DARK.inputBg:RETRO_THEME.inputBg)  : dark ? "#1f2937" : "#ffffff";
+  const inputBorder = isRetro ? (dark?RETRO_THEME_DARK.inputBorder:RETRO_THEME.inputBorder) : dark ? "#374151" : "#e5e7eb";
+  const subbg    = isRetro ? (dark?RETRO_THEME_DARK.subbg:RETRO_THEME.subbg)    : dark ? "#1f2937" : "#f8fafc";
   const R = isRetro ? { card:0, input:0, btn:0 } : { card:16, input:12, btn:12 }; // true sharp rectangles in Retro theme
 
   // Retro cards are a single visual language: thick ink outline + hard offset
@@ -3245,10 +3534,25 @@ export default function App() {
   const tintBorder  = (c) => `${cardBorderW} solid ${c}`;
   const cardStyle  = { background:cardBg, border:cardBorder, borderRadius:R.card, padding:16, marginBottom:12, boxShadow:cardShadow };
   const inputStyle = { background:inputBg, border:isRetro?`2.5px solid ${inputBorder}`:`1px solid ${inputBorder}`, color:textMain, borderRadius:R.input, padding:"10px 12px", fontSize:15, outline:"none", width:"100%", boxSizing:"border-box" };
-  const btnPrimary   = { background:accent, color:isRetro?RETRO_THEME.border:"#fff", border:isRetro?`2.5px solid ${RETRO_THEME.border}`:"none", borderRadius:R.btn, padding:"10px 16px", fontSize:14, fontWeight:800, cursor:"pointer" };
-  const btnSecondary = { background:isRetro?"#ffffff":(dark?"#374151":"#f3f4f6"), color:isRetro?RETRO_THEME.textMain:(dark?"#d1d5db":"#374151"), border:isRetro?`2.5px solid ${RETRO_THEME.border}`:"none", borderRadius:R.btn, padding:"8px 12px", fontSize:13, fontWeight:isRetro?700:500, cursor:"pointer" };
+  const btnPrimary   = { background:accent, color:isRetro?(dark?RETRO_THEME_DARK.border:RETRO_THEME.border):"#fff", border:isRetro?`2.5px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none", borderRadius:R.btn, padding:"10px 16px", fontSize:14, fontWeight:800, cursor:"pointer" };
+  const btnSecondary = { background:isRetro?cardBg:(dark?"#374151":"#f3f4f6"), color:isRetro?(dark?RETRO_THEME_DARK.textMain:RETRO_THEME.textMain):(dark?"#d1d5db":"#374151"), border:isRetro?`2.5px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none", borderRadius:R.btn, padding:"8px 12px", fontSize:13, fontWeight:isRetro?700:500, cursor:"pointer" };
   const btnGreen  = { background:isRetro?"#e1f7ea":(dark?"#064e3b":"#d1fae5"), color:isRetro?"#0f7a4a":(dark?"#34d399":"#065f46"), border:isRetro?"2.5px solid #0f7a4a":"none", borderRadius:R.btn, padding:"6px 12px", fontSize:12, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:4 };
-  const btnDanger = { background:"none", border:"none", cursor:"pointer", color:textMute, padding:4 };
+  // FIX (mobile icon fit): 4px padding around a 14px icon gave a ~22px tap
+  // target, well under the ~32-36px minimum for reliable mobile tapping. Now a
+  // fixed 32x32 flex-centered hit area so Edit/Trash icons sit dead-center.
+  const btnDanger = { background:"none",border:"none",cursor:"pointer",color:textMute,padding:0,width:32,height:32,minWidth:32,minHeight:32,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 };
+
+  // Shown above the submit button in every Add Expense form instance (normal,
+  // simple mode, travel mode) when saveExpense() detects a same-day/category/
+  // amount duplicate. "Add anyway" calls saveExpense(true) to bypass the check.
+  const dupWarningBanner = dupWarning && (
+    <div style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:10,background:dark?"rgba(245,158,11,0.12)":"#fffbeb",border:`1px solid ${dark?"rgba(245,158,11,0.3)":"#fde68a"}`,marginBottom:10 }}>
+      <span style={{ fontSize:16,flexShrink:0 }}>⚠️</span>
+      <span style={{ flex:1,fontSize:12,color:dark?"#fbbf24":"#92400e" }}>Already logged ₹{Number(amount).toLocaleString()} for {selCat} on this date. Add anyway?</span>
+      <button onClick={() => { haptic(8); saveExpense(true); }} style={{ ...btnSecondary,padding:"4px 8px",fontSize:11,flexShrink:0 }}>Add anyway</button>
+      <button onClick={() => setDupWarning(false)} style={{ background:"none",border:"none",cursor:"pointer",color:textMute,padding:0,width:32,height:32,minWidth:32,minHeight:32,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><XIcon/></button>
+    </div>
+  );
 
   // ── Inject CSS custom property for accent ─────────────────────────────────
   useEffect(() => {
@@ -3332,6 +3636,15 @@ export default function App() {
         `}</style>
 
         <Toast msg={toast}/>
+        {pendingDelete && (
+          <div style={{ position:"fixed",bottom:"calc(env(safe-area-inset-bottom,0px) + 84px)",left:"50%",transform:"translateX(-50%)",zIndex:998,background:dark?"#1f2937":"#111827",color:"#fff",padding:"10px 10px 10px 16px",borderRadius:12,fontSize:13,fontWeight:500,boxShadow:"0 4px 20px rgba(0,0,0,0.25)",display:"flex",alignItems:"center",gap:10,whiteSpace:"nowrap" }}>
+            <span>Deleted ₹{pendingDelete.item.amount.toLocaleString()} · {pendingDelete.item.category}</span>
+            <button onClick={() => { haptic(8); undoDeleteExpense(); }}
+              style={{ background:"none",border:"none",color:"#818cf8",fontWeight:700,fontSize:13,cursor:"pointer",padding:"4px 6px" }}>
+              Undo
+            </button>
+          </div>
+        )}
 
         <div style={{ maxWidth:640, margin:"0 auto", padding:"24px 16px" }} key={tab} className="tabContent">
 
@@ -3339,36 +3652,38 @@ export default function App() {
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, flexWrap:"wrap", gap:8 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0, flex:"1 1 160px" }}>
               <button onClick={() => { haptic(8); setShowSettings(true); }}
-                style={{ width:40,height:40,borderRadius:isRetro?0:"50%",background:avatarColor(userName,isRetro),border:isRetro?`2px solid ${RETRO_THEME.border}`:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:isRetro?"none":"0 2px 8px rgba(0,0,0,0.15)" }}>
+                style={{ width:40,height:40,borderRadius:isRetro?0:"50%",background:avatarColor(userName,isRetro),border:isRetro?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:isRetro?"none":"0 2px 8px rgba(0,0,0,0.15)" }}>
                 {avatarId && avatarId !== "initials"
                   ? <span style={{ fontSize:22,lineHeight:1 }}>{avatarId}</span>
-                  : <span style={{ fontSize:15,fontWeight:800,color:isRetro?RETRO_THEME.border:"#fff",letterSpacing:"-0.5px" }}>{getInitials(userName)}</span>
+                  : <span style={{ fontSize:15,fontWeight:800,color:isRetro?(dark?RETRO_THEME_DARK.border:RETRO_THEME.border):"#fff",letterSpacing:"-0.5px" }}>{getInitials(userName)}</span>
                 }
               </button>
               <div style={{ minWidth:0, flex:"1 1 auto" }}>
                 <h1 className={isRetro?"retro-display":undefined} style={{ margin:0,fontSize:isRetro?"clamp(16px, 5vw, 21px)":"clamp(15px, 4vw, 18px)",fontWeight:700,letterSpacing:"-0.3px",color:textMain,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{tab==="home"?getGreeting(userName):"mySpendr"}</h1>
-                <p style={{ margin:0,fontSize:11,color:textMute,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{simpleMode?"Simple mode · tap avatar for settings":tab==="home"?(userName?"":"Tap avatar to set your name"):"Track. Save. Streak."}</p>
+                <p style={{ margin:0,fontSize:11,color:travelMode.active?"#f97316":textMute,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{travelMode.active?`✈️ Travel mode · ${activeTripLabel}`:simpleMode?"Simple mode · tap avatar for settings":tab==="home"?(userName?"":"Tap avatar to set your name"):"Track. Save. Streak."}</p>
               </div>
             </div>
             <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0 }}>
-              {!simpleMode && (
+              {/* Order: Notifications → Split → Visibility → Dark mode */}
+              <button onClick={() => { haptic(8); setShowNotifPanel(true); }} title="Notifications"
+                style={{ ...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center",position:"relative" }}>
+                <BellIcon size={18}/>
+                {reminders.length>0 && <span style={{ position:"absolute",top:5,right:5,width:8,height:8,borderRadius:"50%",background:"#ef4444",border:`2px solid ${cardBg}` }}/>}
+              </button>
+              {!simpleMode && !travelMode.active && (
               <button onClick={() => { haptic(8); setTab("split"); }} title="Split"
                 style={{ ...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center",position:"relative",color:tab==="split"?accent:btnSecondary.color,border:tab==="split"&&isRetro?`2.5px solid ${accent}`:btnSecondary.border }}>
                 <UsersIcon size={18}/>
               </button>
               )}
-              <button onClick={() => { haptic(8); setShowNotifPanel(true); }} title="Notifications"
-                style={{ ...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center",position:"relative" }}>
-                <BellIcon/>
-                {reminders.length>0 && <span style={{ position:"absolute",top:5,right:5,width:8,height:8,borderRadius:"50%",background:"#ef4444",border:`2px solid ${cardBg}` }}/>}
-              </button>
-              <button onClick={() => { if (isRetro) return; haptic(8); setDark(d => !d); }}
-                style={{ ...btnSecondary, padding:"8px 10px", display:"flex", alignItems:"center", opacity:isRetro?0.5:1, cursor:isRetro?"not-allowed":"pointer" }}>
-                {dark?<SunIcon/>:<MoonIcon/>}
-              </button>
               <button onClick={() => { haptic(8); setHideAmounts(h => !h); }} title={hideAmounts?"Show amounts":"Hide amounts"}
                 style={{ ...btnSecondary, padding:"8px 10px", display:"flex", alignItems:"center", color:hideAmounts?accent:btnSecondary.color, border:hideAmounts&&isRetro?`2.5px solid ${accent}`:btnSecondary.border }}>
                 {hideAmounts?<EyeOffIcon/>:<EyeIcon/>}
+              </button>
+              {/* Dark mode now works together with Retro theme instead of being disabled by it */}
+              <button onClick={() => { haptic(8); setDark(d => !d); }} title={dark?"Switch to light":"Switch to dark"}
+                style={{ ...btnSecondary, padding:"8px 10px", display:"flex", alignItems:"center" }}>
+                {dark?<SunIcon/>:<MoonIcon/>}
               </button>
             </div>
           </div>
@@ -3379,7 +3694,161 @@ export default function App() {
               no charts, no net worth. Settings stays reachable via the avatar
               so simple mode can always be switched back off.
           ════════════════════════════════════════════════════════════════ */}
-          {simpleMode && (
+          {/* ════════════════════════════════════════════════════════════════
+              TRAVEL MODE - like Simple Mode, one page, but scoped to only the
+              active trip: trip total, an add-expense form (auto-tagged), and
+              only this trip's expenses. Everything else (other tabs, nav,
+              other categories) is hidden while it's on.
+          ════════════════════════════════════════════════════════════════ */}
+          {travelMode.active && (
+            <>
+              {/* Trip total + name + currency */}
+              <div style={{ ...cardStyle, border:tintBorder("#f97316"), background:dark?"rgba(249,115,22,0.06)":"#fff7ed" }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
+                  <span style={{ fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em",color:"#f97316" }}>✈️ Trip total</span>
+                  <button onClick={() => { haptic(8); setTravelMode(tm => ({ ...tm, active:false })); }}
+                    style={{ ...btnSecondary,padding:"5px 10px",fontSize:12 }}>Turn off</button>
+                </div>
+                <p className={mny} style={{ margin:0,fontSize:34,fontWeight:800,fontFamily:"'DM Mono',monospace",letterSpacing:"-1px",color:textMain }}>
+                  {getCurrency(travelMode.currency).symbol}{activeTripFxTotal.toLocaleString()}
+                </p>
+                <p className={mny} style={{ margin:"2px 0 0",fontSize:12,color:textMute }}>≈ ₹{activeTripTotal.toLocaleString()} total (all currencies)</p>
+                <input value={travelMode.tripName} onChange={e => setTravelMode(tm => ({ ...tm, tripName:e.target.value }))} placeholder="Trip name (e.g. Goa)"
+                  style={{ ...inputStyle,marginTop:10,fontSize:13,fontWeight:600,color:"#f97316",borderColor:dark?"rgba(249,115,22,0.3)":"#fed7aa" }}/>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8 }}>
+                  <div>
+                    <label style={{ display:"block",fontSize:10,fontWeight:600,color:textMute,marginBottom:4 }}>Currency</label>
+                    <select value={travelMode.currency} onChange={e => setTravelMode(tm => ({ ...tm, currency:e.target.value }))}
+                      style={{ ...inputStyle,fontSize:13,borderColor:dark?"rgba(249,115,22,0.3)":"#fed7aa" }}>
+                      {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code} · {c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4 }}>
+                      <label style={{ fontSize:10,fontWeight:600,color:textMute }}>1 {travelMode.currency} = ₹</label>
+                      {FRANKFURTER_SUPPORTED.has(travelMode.currency) && (
+                        <button onClick={() => { haptic(6); setTravelMode(tm => ({ ...tm, fxAuto: !tm.fxAuto })); }}
+                          style={{ fontSize:9,fontWeight:800,letterSpacing:"0.04em",padding:"2px 7px",borderRadius:99,cursor:"pointer",
+                            border:`1px solid ${travelMode.fxAuto?"#f97316":border}`,
+                            background:travelMode.fxAuto?"#f97316":"transparent",
+                            color:travelMode.fxAuto?"#fff":textMute }}>
+                          {travelMode.fxAuto ? "LIVE" : "MANUAL"}
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ position:"relative" }}>
+                      <input type="number" inputMode="decimal" value={travelMode.rate}
+                        readOnly={travelMode.fxAuto && fxStatus.state==="loading"}
+                        onChange={e => { const v=e.target.value; if(v===""||Number(v)>=0) setTravelMode(tm => ({ ...tm, rate:v===""?0:Number(v), fxAuto:false })); }}
+                        placeholder="83" min="0"
+                        style={{ ...inputStyle,fontSize:13,fontFamily:"'DM Mono',monospace",borderColor:dark?"rgba(249,115,22,0.3)":"#fed7aa",
+                          paddingRight:travelMode.fxAuto?28:undefined,
+                          opacity:travelMode.fxAuto && fxStatus.state==="loading"?0.6:1 }}/>
+                      {travelMode.fxAuto && fxStatus.state==="ok" && fxStatus.currency===travelMode.currency && fxStatus.date===date && (
+                        <button title="Refresh live rate" onClick={() => { haptic(6); delete fxCacheRef.current[`${travelMode.currency}_${date}`]; setFxRefreshNonce(n => n+1); }}
+                          style={{ position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#f97316",padding:2,lineHeight:1 }}>⟳</button>
+                      )}
+                    </div>
+                    {travelMode.fxAuto && fxStatus.state==="loading" && (
+                      <p style={{ margin:"3px 0 0",fontSize:10,color:textMute }}>Fetching {travelMode.currency}→INR rate for {formatDate(date)}…</p>
+                    )}
+                    {travelMode.fxAuto && fxStatus.state==="ok" && fxStatus.date===date && (
+                      <p style={{ margin:"3px 0 0",fontSize:10,color:"#16a34a" }}>Live rate for {formatDate(date)}</p>
+                    )}
+                    {travelMode.fxAuto && fxStatus.state==="error" && (
+                      <p style={{ margin:"3px 0 0",fontSize:10,color:"#ef4444" }}>{fxStatus.error}</p>
+                    )}
+                    {!FRANKFURTER_SUPPORTED.has(travelMode.currency) && (
+                      <p style={{ margin:"3px 0 0",fontSize:10,color:textMute }}>No live source for {travelMode.currency} — enter rate manually.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Add an expense — same form/state as the normal Add Expense card,
+                  saveExpense() auto-tags it with activeTripLabel since travelMode.active is true.
+                  Amount here is entered in the trip currency and converted to
+                  INR under the hood for budgets/streaks/charts. */}
+              <div style={cardStyle}>
+                <h2 style={{ margin:"0 0 12px",fontSize:14,fontWeight:600,color:textMain }}>
+                  {editingId ? "Edit expense" : "Add trip expense"}
+                </h2>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
+                  <div>
+                    <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Amount ({getCurrency(travelMode.currency).symbol})</label>
+                    <input type="number" inputMode="decimal" value={amount}
+                      onChange={e => { const v=e.target.value; if(v===""||Number(v)>=0&&Number(v)<=MAX_AMOUNT) setAmount(v); }}
+                      onKeyDown={e => { if(e.key==="Enter") saveExpense(); }}
+                      placeholder="0" min="0" max={MAX_AMOUNT}
+                      style={{ ...inputStyle,animation:amountShake?"shake 0.4s ease":"none",
+                        outline:amountShake?"2px solid #ef4444":"none",fontSize:18,fontWeight:700,fontFamily:"'DM Mono',monospace" }}/>
+                    {isValidAmount(amount) && <p style={{ margin:"4px 0 0",fontSize:11,color:textMute }}>≈ ₹{Math.round(Number(amount)*travelMode.rate).toLocaleString()}</p>}
+                  </div>
+                  <div>
+                    <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Category</label>
+                    <select value={selCat} onChange={e => setSelCat(e.target.value)} style={inputStyle}>
+                      {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ marginBottom:8 }}>
+                  {/* Drives the live-rate fetch above: backdate this to the day the
+                      spend actually happened and, in Live mode, the rate updates to
+                      that date's official rate rather than staying pinned to today's. */}
+                  <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Date</label>
+                  <input type="date" value={date} max={today} onChange={e => setDate(e.target.value)} style={inputStyle}/>
+                </div>
+                <div style={{ marginBottom:8 }}>
+                  <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Note (optional)</label>
+                  <input value={note} onChange={e => setNote(e.target.value)} placeholder="What was this for?"
+                    onKeyDown={e => { if(e.key==="Enter") saveExpense(); }} style={inputStyle}/>
+                </div>
+                <div style={{ marginBottom:12 }}>
+                  <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:6 }}>Pay from</label>
+                  <SourcePill value={paySource} onChange={setPaySource} dark={dark} subbg={subbg} border={border} textMute={textMute} banks={banks} isRetro={isRetro}/>
+                </div>
+                {dupWarningBanner}
+                <div style={{ display:"flex",gap:8 }}>
+                  <button onClick={() => { haptic([10,20,10]); saveExpense(); }} style={{ ...btnPrimary,flex:1,padding:"12px 16px",fontSize:15 }}>
+                    {editingId ? "Update" : "Add expense"}
+                  </button>
+                  {editingId && <button onClick={resetExpenseForm} style={btnSecondary}>Cancel</button>}
+                </div>
+              </div>
+
+              {/* This trip's expenses only */}
+              {activeTripExpenses.length===0 ? (
+                <div style={cardStyle}>
+                  <p style={{ margin:0,fontSize:13,color:textMute,textAlign:"center",padding:"18px 0" }}>
+                    No expenses logged for {activeTripLabel} yet.
+                  </p>
+                </div>
+              ) : (
+                <ExpenseDateList grouped={tripGrouped} dailyTotal={tripDailyTotal} today={today} dark={dark} cardBg={cardBg} border={border} subbg={subbg} textMute={textMute} getCatStyle={getCatStyle}
+                  editExpense={editExpense} deleteExpense={deleteExpense} setDrillCat={setDrillCat} isRetro={isRetro}/>
+              )}
+
+              {/* ── Other trips — kept last since Trip total, the add-expense
+                  form, and this trip's own list are what you actually come to
+                  Travel Mode for. This is a secondary "switch trip" action, so
+                  it sits at the bottom rather than pushing the main content
+                  down. Excludes the trip that's currently active. ── */}
+              {tripNames.filter(name => name !== activeTripLabel).length > 0 && (
+                <div style={{ ...cardStyle, marginTop:12 }}>
+                  <h2 style={{ margin:"0 0 10px",fontSize:14,fontWeight:600,color:textMain }}>✈️ Other trips</h2>
+                  {tripNames.filter(name => name !== activeTripLabel).map((name,i) => (
+                    <button key={name} onClick={() => { haptic(8); setTravelMode(tm => ({ ...tm, tripName:name })); }}
+                      style={{ width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderTop:i===0?"none":`1px solid ${border}`,background:"none",border:"none",cursor:"pointer",textAlign:"left" }}>
+                      <span style={{ fontSize:13,color:textMain,fontWeight:600 }}>{name}</span>
+                      <span className={mny} style={{ fontSize:13,fontWeight:700,fontFamily:"'DM Mono',monospace",color:"#f97316" }}>₹{tripTotals[name].toLocaleString()}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {!travelMode.active && simpleMode && (
             <>
               {/* Budget left */}
               <div style={cardStyle}>
@@ -3455,6 +3924,7 @@ export default function App() {
                   <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:6 }}>Pay from</label>
                   <SourcePill value={paySource} onChange={setPaySource} dark={dark} subbg={subbg} border={border} textMute={textMute} banks={banks} isRetro={isRetro}/>
                 </div>
+                {dupWarningBanner}
                 <div style={{ display:"flex",gap:8 }}>
                   <button onClick={() => { haptic([10,20,10]); saveExpense(); }} style={{ ...btnPrimary,flex:1,padding:"12px 16px",fontSize:15 }}>
                     {editingId ? "Update" : "Add expense"}
@@ -3502,7 +3972,7 @@ export default function App() {
           {/* ════════════════════════════════════════════════════════════════
               HOME TAB
           ════════════════════════════════════════════════════════════════ */}
-          {!simpleMode && tab==="home" && (
+          {!travelMode.active && !simpleMode && tab==="home" && (
             <>
               {/* ── STREAK CARD ── */}
               {!simpleMode && (
@@ -3526,6 +3996,36 @@ export default function App() {
               )}
 
               <div style={{ height:12 }}/>
+
+              {/* Budget bar */}
+              {budget>0 && (
+                <div style={{ ...cardStyle, marginBottom:12 }}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
+                    <span style={{ fontSize:13,fontWeight:600,color:textMain }}>Monthly Budget</span>
+                    <button onClick={() => { setEditingBudget(e => !e); setBudgetInput(budget||""); }} style={btnSecondary}>{editingBudget?"Cancel":"Edit"}</button>
+                  </div>
+                  {editingBudget && (
+                    <div style={{ display:"flex",gap:8,marginBottom:10 }}>
+                      <input type="number" inputMode="decimal" value={budgetInput} onChange={e => setBudgetInput(e.target.value)} placeholder="Enter budget" style={inputStyle}/>
+                      <button onClick={saveBudget} style={btnPrimary}>Save</button>
+                    </div>
+                  )}
+                  <div style={{ width:"100%",height:10,borderRadius:99,overflow:"hidden",background:dark?"#1f2937":"#f3f4f6" }}>
+                    <div style={{ height:10,borderRadius:99,width:`${percentUsed}%`,background:percentUsed>=90?"linear-gradient(to right,#ef4444,#f97316)":"linear-gradient(to right,#6366f1,#8b5cf6)",transition:"width 0.5s" }}/>
+                  </div>
+                  <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:textMute,marginTop:5 }}>
+                    {/* FIX: label now clearly says "this month" */}
+                    <span>₹{spent.toLocaleString()} this month{excludedCats.length>0?" (excl. "+excludedCats.join(", ")+")":""}</span>
+                    <span style={{ color:percentUsed>=100?"#ef4444":textMute,fontWeight:percentUsed>=100?600:400 }}>{percentUsed.toFixed(0)}%</span>
+                  </div>
+                </div>
+              )}
+              {!budget && (
+                <button onClick={() => { setEditingBudget(true); setBudgetInput(""); }}
+                  style={{ ...cardStyle,width:"100%",border:`1px dashed ${border}`,background:"none",cursor:"pointer",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6,color:textMute,fontSize:13,padding:"14px 16px" }}>
+                  <PlusIcon/>Set a monthly budget
+                </button>
+              )}
 
               {/* Stats grid */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
@@ -3567,38 +4067,6 @@ export default function App() {
                 </div>
                 )}
               </div>
-
-              {!simpleMode && expenses.length>0 && <SpendingTrendChart data={trendData} dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain} isRetro={isRetro}/>}
-
-              {/* Budget bar */}
-              {budget>0 && (
-                <div style={{ ...cardStyle, marginBottom:12 }}>
-                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
-                    <span style={{ fontSize:13,fontWeight:600,color:textMain }}>Monthly Budget</span>
-                    <button onClick={() => { setEditingBudget(e => !e); setBudgetInput(budget||""); }} style={btnSecondary}>{editingBudget?"Cancel":"Edit"}</button>
-                  </div>
-                  {editingBudget && (
-                    <div style={{ display:"flex",gap:8,marginBottom:10 }}>
-                      <input type="number" inputMode="decimal" value={budgetInput} onChange={e => setBudgetInput(e.target.value)} placeholder="Enter budget" style={inputStyle}/>
-                      <button onClick={saveBudget} style={btnPrimary}>Save</button>
-                    </div>
-                  )}
-                  <div style={{ width:"100%",height:10,borderRadius:99,overflow:"hidden",background:dark?"#1f2937":"#f3f4f6" }}>
-                    <div style={{ height:10,borderRadius:99,width:`${percentUsed}%`,background:percentUsed>=90?"linear-gradient(to right,#ef4444,#f97316)":"linear-gradient(to right,#6366f1,#8b5cf6)",transition:"width 0.5s" }}/>
-                  </div>
-                  <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:textMute,marginTop:5 }}>
-                    {/* FIX: label now clearly says "this month" */}
-                    <span>₹{spent.toLocaleString()} this month{excludedCats.length>0?" (excl. "+excludedCats.join(", ")+")":""}</span>
-                    <span style={{ color:percentUsed>=100?"#ef4444":textMute,fontWeight:percentUsed>=100?600:400 }}>{percentUsed.toFixed(0)}%</span>
-                  </div>
-                </div>
-              )}
-              {!budget && (
-                <button onClick={() => { setEditingBudget(true); setBudgetInput(""); }}
-                  style={{ ...cardStyle,width:"100%",border:`1px dashed ${border}`,background:"none",cursor:"pointer",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"center",gap:6,color:textMute,fontSize:13,padding:"14px 16px" }}>
-                  <PlusIcon/>Set a monthly budget
-                </button>
-              )}
 
               {/* Today's spends */}
               {(() => {
@@ -3648,6 +4116,9 @@ export default function App() {
                 </div>
               )}
 
+              {/* 6-month trend - moved to the end of the page */}
+              {!simpleMode && expenses.length>0 && <SpendingTrendChart data={trendData} dark={dark} cardBg={cardBg} border={border} textMute={textMute} textMain={textMain} isRetro={isRetro}/>}
+
               <p style={{ textAlign:"center",fontSize:11,color:textMute,marginTop:12,marginBottom:4 }}>mySpendr · your money, your streak</p>
             </>
           )}
@@ -3655,8 +4126,49 @@ export default function App() {
           {/* ════════════════════════════════════════════════════════════════
               EXPENSES TAB
           ════════════════════════════════════════════════════════════════ */}
-          {!simpleMode && tab==="expenses" && (
+          {!travelMode.active && !simpleMode && tab==="expenses" && (
             <>
+              {/* Search & filter */}
+              <div style={{ ...cardStyle, marginBottom:12, padding:"10px 14px" }}>
+                <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                  <div style={{ position:"relative",flex:1 }}>
+                    <span style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:textMute,pointerEvents:"none" }}>🔍</span>
+                    <input value={expenseQuery} onChange={e => setExpenseQuery(e.target.value)} placeholder="Search note, category, trip…"
+                      style={{ ...inputStyle,paddingLeft:28,fontSize:13 }}/>
+                  </div>
+                  <button onClick={() => setShowExpenseFilters(o => !o)}
+                    style={{ ...btnSecondary,padding:"8px 10px",display:"flex",alignItems:"center",gap:4,
+                      color:(filterCat!=="all"||filterMin!==""||filterMax!=="")?accent:btnSecondary.color,
+                      border:(filterCat!=="all"||filterMin!==""||filterMax!=="")&&isRetro?`2.5px solid ${accent}`:btnSecondary.border }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                  </button>
+                  {expenseFiltersActive && (
+                    <button onClick={clearExpenseFilters} style={{ ...btnSecondary,padding:"8px 10px",fontSize:12 }}>Clear</button>
+                  )}
+                </div>
+                {showExpenseFilters && (
+                  <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:10 }}>
+                    <div>
+                      <label style={{ display:"block",fontSize:10,fontWeight:600,color:textMute,marginBottom:4 }}>Category</label>
+                      <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ ...inputStyle,fontSize:12,padding:"7px 8px" }}>
+                        <option value="all">All</option>
+                        {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display:"block",fontSize:10,fontWeight:600,color:textMute,marginBottom:4 }}>Min ₹</label>
+                      <input type="number" inputMode="decimal" value={filterMin} onChange={e => setFilterMin(e.target.value)} placeholder="0" min="0"
+                        style={{ ...inputStyle,fontSize:12,padding:"7px 8px" }}/>
+                    </div>
+                    <div>
+                      <label style={{ display:"block",fontSize:10,fontWeight:600,color:textMute,marginBottom:4 }}>Max ₹</label>
+                      <input type="number" inputMode="decimal" value={filterMax} onChange={e => setFilterMax(e.target.value)} placeholder="Any" min="0"
+                        style={{ ...inputStyle,fontSize:12,padding:"7px 8px" }}/>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* ── Period selector card ── */}
               <div style={{ background:cardBg,border:cardBorder,borderRadius:16,padding:"12px 14px",marginBottom:12 }}>
                 {/* Row 1: Month + Day dropdowns */}
@@ -3706,7 +4218,7 @@ export default function App() {
                   )}
                 </div>
                 {/* Row 2: Summary strip */}
-                {periodExpenses.length > 0 && (
+                {searchedExpenses.length > 0 && (
                   <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",background:dark?"rgba(239,68,68,0.06)":"rgba(239,68,68,0.04)",border:`1px solid ${dark?"rgba(239,68,68,0.15)":"rgba(239,68,68,0.1)"}`,borderRadius:8,padding:"7px 12px" }}>
                     <div style={{ display:"flex",alignItems:"center",gap:6 }}>
                       <span style={{ fontSize:12,fontWeight:700,color:dark?"#f9fafb":"#111827" }}>
@@ -3715,10 +4227,10 @@ export default function App() {
                           : (() => { const [yr,mo] = viewMonth.split("-"); return `${MONTH_LABELS[Number(mo)-1]} ${yr}`; })()
                         }
                       </span>
-                      <span style={{ fontSize:11,color:textMute }}>· {periodExpenses.length} item{periodExpenses.length!==1?"s":""}</span>
+                      <span style={{ fontSize:11,color:textMute }}>· {searchedExpenses.length} item{searchedExpenses.length!==1?"s":""}{expenseFiltersActive?` of ${periodExpenses.length}`:""}</span>
                     </div>
                     <span style={{ fontSize:14,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#ef4444",letterSpacing:"-0.5px" }}>
-                      -₹{periodExpenses.reduce((s,e)=>s+e.amount,0).toLocaleString()}
+                      -₹{searchedExpenses.reduce((s,e)=>s+e.amount,0).toLocaleString()}
                     </span>
                   </div>
                 )}
@@ -3727,15 +4239,15 @@ export default function App() {
               {/* Category donut - scoped to selected period */}
               <CategoryBubbles categories={categories} catTotals={catTotals} getCatStyle={getCatStyle} getCatAccent={getCatAccent} onSelect={name => { setDrillCat(name); }} dark={dark} cardBg={cardBg} border={border} textMute={textMute} open={catDropdownOpen} setOpen={setCatDropdownOpen}/>
 
-              {/* Expense list - scoped to selected period */}
-              {periodExpenses.length===0
+              {/* Expense list - scoped to selected period + search/filter */}
+              {searchedExpenses.length===0
                 ? <div style={{ ...cardStyle,textAlign:"center",padding:40 }}>
                     <p style={{ fontSize:24,margin:"0 0 8px" }}>🧾</p>
                     <p style={{ color:textMain,margin:0,fontSize:14,fontWeight:600 }}>
-                      {expenses.length===0 ? "No expenses yet" : "No expenses for this period"}
+                      {expenses.length===0 ? "No expenses yet" : expenseFiltersActive ? "No expenses match your search" : "No expenses for this period"}
                     </p>
                     <p style={{ color:textMute,margin:"4px 0 0",fontSize:12 }}>
-                      {expenses.length===0 ? "Tap + to log your first expense" : "Try a different month or day above"}
+                      {expenses.length===0 ? "Tap + to log your first expense" : expenseFiltersActive ? "Try a different search or clear filters" : "Try a different month or day above"}
                     </p>
                   </div>
                 : <ExpenseDateList grouped={grouped} dailyTotal={dailyTotal} today={today} dark={dark} cardBg={cardBg} border={border} subbg={subbg} textMute={textMute} getCatStyle={getCatStyle}
@@ -3748,7 +4260,7 @@ export default function App() {
           {/* ════════════════════════════════════════════════════════════════
               POT TAB
           ════════════════════════════════════════════════════════════════ */}
-          {!simpleMode && tab==="pot" && (
+          {!travelMode.active && !simpleMode && tab==="pot" && (
             <>
               {!simpleMode && (
               <div style={{ display:"flex",gap:4,marginBottom:12,background:subbg,borderRadius:12,padding:4,border:cardBorder }}>
@@ -3764,7 +4276,7 @@ export default function App() {
               {potSection==="usable" && (
                 <>
                   <div style={{ ...cardStyle,background:dark?"linear-gradient(135deg,#111827,#1c1410)":"linear-gradient(135deg,#fffbeb,#fef3c7)",border:dark?"1px solid #292117":"1px solid #fde68a",display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 16px 16px",gap:10 }}>
-                    <MoneyBag fillPercent={usableFillPct} size="lg"/>
+                    <MoneyBag fillPercent={usableFillPct} amount={usableTotal} size="lg"/>
                     <p className={`mpulse${mny?" "+mny:""}`} style={{ fontSize:26,fontWeight:800,fontFamily:"'DM Mono',monospace",color:usableTotal<=0?"#ef4444":"#f59e0b",letterSpacing:"-1.5px",margin:0 }}>
                       ₹{usableTotal.toLocaleString()}
                     </p>
@@ -3852,8 +4364,8 @@ export default function App() {
                             <button onClick={() => { setDefaultBank(bk.id); }} title="Set as default"
                               style={{ padding:"4px 8px",borderRadius:8,border:`1px solid ${dark?"#374151":"#e5e7eb"}`,background:"none",cursor:"pointer",fontSize:11,color:textMute,fontWeight:600 }}>★ Default</button>
                           )}
-                          <button onClick={() => { setBankEditId(bk.id);setBankFormName(bk.name);setBankFormBalance(bk.balance||"");setShowBankManager(true); }} style={{ ...btnDanger,padding:4 }}><EditIcon/></button>
-                          <button onClick={() => deleteBank(bk.id)} style={{ ...btnDanger,padding:4 }}><TrashIcon/></button>
+                          <button onClick={() => { setBankEditId(bk.id);setBankFormName(bk.name);setBankFormBalance(bk.balance||"");setShowBankManager(true); }} style={btnDanger}><EditIcon/></button>
+                          <button onClick={() => deleteBank(bk.id)} style={btnDanger}><TrashIcon/></button>
                         </div>
                       </div>
                     ))}
@@ -3870,7 +4382,7 @@ export default function App() {
               {potSection==="networth" && (
                 <>
                   <div style={{ ...cardStyle,background:dark?"linear-gradient(135deg,#111827,#1a1028)":"linear-gradient(135deg,#faf5ff,#ede9fe)",border:tintBorder(dark?"#2e1065":"#ddd6fe"),display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 16px 16px",gap:10 }}>
-                    <MoneyBag fillPercent={nwFillActual} size="lg"/>
+                    <MoneyBag fillPercent={nwFillActual} amount={netWorthTotal} size="lg"/>
                     <p className={`mpulse${mny?" "+mny:""}`} style={{ fontSize:30,fontWeight:800,fontFamily:"'DM Mono',monospace",color:"#7c3aed",letterSpacing:"-1.5px",margin:0 }}>₹{Math.abs(netWorthTotal).toLocaleString()}</p>
                     <div style={{ width:"100%",maxWidth:280 }}><div style={{ width:"100%",height:8,borderRadius:99,overflow:"hidden",background:dark?"#1f2937":"#ddd6fe" }}><div style={{ height:8,borderRadius:99,width:`${nwFillActual}%`,background:"linear-gradient(to right,#7c3aed,#a78bfa)",transition:"width 0.7s ease" }}/></div></div>
                   </div>
@@ -4015,28 +4527,12 @@ export default function App() {
           {/* ════════════════════════════════════════════════════════════════
               ADD / SCAN / VOICE TAB
           ════════════════════════════════════════════════════════════════ */}
-          {!simpleMode && tab==="scanvoice" && (
+          {!travelMode.active && !simpleMode && tab==="scanvoice" && (
             <>
               <div style={cardStyle}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:travelMode.active?10:12,gap:8,flexWrap:"wrap" }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:8,flexWrap:"wrap" }}>
                   <h2 style={{ margin:0,fontSize:14,fontWeight:600 }}>{editingId?"Edit Expense":"Add Expense"}</h2>
-                  <div style={{ display:"flex",alignItems:"center",gap:6 }}>
-                    <span style={{ fontSize:11,fontWeight:600,color:travelMode.active?"#f97316":textMute }}>✈️ Travel mode</span>
-                    <button type="button" onClick={() => { haptic(8); setTravelMode(tm => ({ ...tm, active: !tm.active })); }}
-                      aria-label="Toggle travel mode" title={travelMode.active?"Travel mode is ON — turn off to add normal expenses":"Travel mode is OFF — turn on to tag new expenses as trip"}
-                      style={{ position:"relative",width:40,height:22,borderRadius:99,border:travelMode.active?"1.5px solid #f97316":cardBorder,background:travelMode.active?"#f97316":(dark?"#374151":"#e5e7eb"),cursor:"pointer",flexShrink:0,padding:0 }}>
-                      <span style={{ position:"absolute",top:2,left:travelMode.active?19:2,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left 0.15s ease",boxShadow:"0 1px 3px rgba(0,0,0,0.25)" }}/>
-                    </button>
-                  </div>
                 </div>
-                {travelMode.active && (
-                  <div style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:10,background:dark?"rgba(249,115,22,0.12)":"#fff7ed",border:`1px solid ${dark?"rgba(249,115,22,0.3)":"#fed7aa"}`,marginBottom:12 }}>
-                    <span style={{ fontSize:16,flexShrink:0 }}>✈️</span>
-                    <input value={travelMode.tripName} onChange={e => setTravelMode(tm => ({ ...tm, tripName:e.target.value }))} placeholder="Trip name (e.g. Goa)"
-                      style={{ flex:1,minWidth:0,background:"none",border:"none",outline:"none",fontSize:12,fontWeight:600,color:"#f97316" }}/>
-                    <span style={{ fontSize:10,color:"#f97316",fontWeight:600,flexShrink:0,whiteSpace:"nowrap" }}>ON</span>
-                  </div>
-                )}
                 <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8 }}>
                   <div>
                     <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Amount (₹)</label>
@@ -4067,6 +4563,7 @@ export default function App() {
                   <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:6 }}>Pay from</label>
                   <SourcePill value={paySource} onChange={setPaySource} dark={dark} subbg={subbg} border={border} textMute={textMute} banks={banks} isRetro={isRetro}/>
                 </div>
+                {dupWarningBanner}
                 <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
                   <button onClick={() => { haptic([10,20,10]); saveExpense(); }} style={{ ...btnPrimary,flex:1 }}>{editingId?"Update":"Add Expense"}</button>
                   {editingId && <button onClick={resetExpenseForm} style={btnSecondary}>Cancel</button>}
@@ -4173,7 +4670,7 @@ export default function App() {
           {/* ════════════════════════════════════════════════════════════════
               BILLS & LOANS TAB
           ════════════════════════════════════════════════════════════════ */}
-          {!simpleMode && tab==="bills" && (
+          {!travelMode.active && !simpleMode && tab==="bills" && (
             <>
               {/* Sub-tab switcher */}
               <div style={{ display:"flex",background:subbg,borderRadius:14,padding:4,marginBottom:16,border:cardBorder }}>
@@ -4280,7 +4777,7 @@ export default function App() {
           {/* ════════════════════════════════════════════════════════════════
               SPLIT WITH FRIENDS TAB — kept separate from Expenses
           ════════════════════════════════════════════════════════════════ */}
-          {!simpleMode && tab==="split" && (
+          {!travelMode.active && !simpleMode && tab==="split" && (
             <>
               <div style={cardStyle}>
                 <h2 style={{ margin:"0 0 12px",fontSize:14,fontWeight:600 }}>Friends</h2>
@@ -4297,7 +4794,7 @@ export default function App() {
                           <span style={{ fontSize:12,fontWeight:600,color:textMain }}>{f.name}</span>
                           {confirming
                             ? <button onClick={() => deleteFriend(f.id)} style={{ background:"#ef4444",color:"#fff",border:"none",borderRadius:8,padding:"2px 6px",fontSize:10,fontWeight:700,cursor:"pointer" }}>Confirm?</button>
-                            : <button onClick={() => setFriendDeleteConfirm(f.id)} style={{ background:"none",border:"none",cursor:"pointer",color:textMute,display:"flex",alignItems:"center",padding:0 }}><XIcon/></button>
+                            : <button onClick={() => setFriendDeleteConfirm(f.id)} style={{ background:"none",border:"none",cursor:"pointer",color:textMute,display:"flex",alignItems:"center",justifyContent:"center",padding:0,width:32,height:32,minWidth:32,minHeight:32,flexShrink:0 }}><XIcon/></button>
                           }
                         </div>
                       );
@@ -4491,7 +4988,7 @@ export default function App() {
                           <p style={{ margin:"1px 0 0",fontSize:11,color:textMute }}>₹{item.amount.toLocaleString()} · {item.daysUntil<0?`${Math.abs(item.daysUntil)}d overdue`:item.daysUntil===0?"due today":item.daysUntil===1?"due tomorrow":`due in ${item.daysUntil} days`}</p>
                         </div>
                         <button onClick={() => { haptic([10,30,10]); payFromReminder(item,"bank"); setShowNotifPanel(false); }} style={{ background:dark?"#064e3b":"#d1fae5",color:dark?"#34d399":"#065f46",border:"none",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer" }}>Pay</button>
-                        <button onClick={() => { haptic(5); dismissReminder(item.id); }} style={{ background:"none",border:cardBorder,borderRadius:8,padding:"5px 8px",cursor:"pointer",color:textMute,display:"flex",alignItems:"center" }}><XIcon/></button>
+                        <button onClick={() => { haptic(5); dismissReminder(item.id); }} style={{ background:"none",border:cardBorder,borderRadius:8,padding:0,width:32,height:32,minWidth:32,minHeight:32,cursor:"pointer",color:textMute,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}><XIcon/></button>
                       </div>
                     ))}
                   </div>
@@ -4522,37 +5019,14 @@ export default function App() {
               </div>
               <div style={{ padding:"0 20px 16px",overflowY:"auto",WebkitOverflowScrolling:"touch" }}>
 
-                {/* Dark mode toggle */}
-                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:`1px solid ${border}` }}>
-                  <div style={{ display:"flex",alignItems:"center",gap:10 }}>{dark?<MoonIcon/>:<SunIcon/>}<span style={{ fontSize:14,color:textMain }}>Dark mode</span></div>
-                  <button onClick={() => setDark(d => !d)} disabled={isRetro} style={{ width:44,height:24,borderRadius:99,border:"none",cursor:isRetro?"not-allowed":"pointer",position:"relative",background:dark?"#4f46e5":"#e5e7eb",transition:"background 0.2s",opacity:isRetro?0.5:1 }}>
-                    <div style={{ position:"absolute",top:2,left:dark?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
-                  </button>
-                </div>
-
-                {/* Retro theme toggle — optional full palette (white/retro-ink outline + teal/orange/yellow) */}
-                <div style={{ padding:"12px 0",borderBottom:`1px solid ${border}` }}>
-                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-                    <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                      <div style={{ width:18,height:18,borderRadius:0,background:"#ffffff",border:`2.5px solid ${RETRO_THEME.border}`,flexShrink:0 }}/>
-                      <span style={{ fontSize:14,color:textMain }}>Retro theme</span>
-                    </div>
-                    <button onClick={() => { const next = !isRetro; setThemeStyle(next?"retro":"classic"); if (next) setDark(false); haptic(6); }}
-                      style={{ width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:isRetro?RETRO_THEME.orange:(dark?"#374151":"#e5e7eb"),transition:"background 0.2s" }}>
-                      <div style={{ position:"absolute",top:2,left:isRetro?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
-                    </button>
-                  </div>
-                  <p style={{ margin:"6px 0 0",fontSize:11,color:textMute }}>A bold white &amp; retro-outline palette with teal, orange &amp; yellow accents — replaces your accent color choice while on.</p>
-                </div>
-
                 {/* Profile / Avatar */}
                 <div style={{ padding:"12px 0",borderBottom:`1px solid ${border}` }}>
                   <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:editingName?8:0 }}>
                     <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                      <div style={{ width:36,height:36,borderRadius:isRetro?0:"50%",background:avatarColor(userName,isRetro),border:isRetro?`2px solid ${RETRO_THEME.border}`:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                      <div style={{ width:36,height:36,borderRadius:isRetro?0:"50%",background:avatarColor(userName,isRetro),border:isRetro?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
                         {avatarId && avatarId !== "initials"
                           ? <span style={{ fontSize:20,lineHeight:1 }}>{avatarId}</span>
-                          : <span style={{ fontSize:13,fontWeight:800,color:isRetro?RETRO_THEME.border:"#fff" }}>{getInitials(userName)}</span>
+                          : <span style={{ fontSize:13,fontWeight:800,color:isRetro?(dark?RETRO_THEME_DARK.border:RETRO_THEME.border):"#fff" }}>{getInitials(userName)}</span>
                         }
                       </div>
                       <div><p style={{ margin:0,fontSize:14,color:textMain }}>{userName||"Set your name"}</p><p style={{ margin:0,fontSize:11,color:textMute }}>Tap to edit</p></div>
@@ -4575,7 +5049,7 @@ export default function App() {
                               style={{ height:44,borderRadius:12,border:isActive?`2px solid ${accent}`:`1px solid ${border}`,background:isActive?(dark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.04)"):"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s" }}>
                               {av.emoji
                                 ? <span style={{ fontSize:22,lineHeight:1 }}>{av.emoji}</span>
-                                : <div style={{ width:26,height:26,borderRadius:isRetro?0:"50%",background:avatarColor(userName,isRetro),border:isRetro?`2px solid ${RETRO_THEME.border}`:"none",display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ fontSize:10,fontWeight:800,color:isRetro?RETRO_THEME.border:"#fff" }}>{getInitials(userName)||"A"}</span></div>
+                                : <div style={{ width:26,height:26,borderRadius:isRetro?0:"50%",background:avatarColor(userName,isRetro),border:isRetro?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none",display:"flex",alignItems:"center",justifyContent:"center" }}><span style={{ fontSize:10,fontWeight:800,color:isRetro?(dark?RETRO_THEME_DARK.border:RETRO_THEME.border):"#fff" }}>{getInitials(userName)||"A"}</span></div>
                               }
                             </button>
                           );
@@ -4583,21 +5057,6 @@ export default function App() {
                       </div>
                     </>
                   )}
-                </div>
-
-{/* The Scene (F1 / DBZ) and Colour pickers lived here. Both were removed
-                    along with the canvas streak game - the Retro toggle above is
-                    now the only appearance option. */}
-
-                {/* Simple mode */}
-                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:`1px solid ${border}` }}>
-                  <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                    <div><span style={{ fontSize:14,color:textMain }}>Simple mode</span><p style={{ margin:0,fontSize:11,color:textMute }}>One page: budget left, add an expense, today\u2019s expenses. Nothing else essentials</p></div>
-                  </div>
-                  <button onClick={() => { haptic(6); setSimpleMode(s => !s); }} style={{ width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:simpleMode?"#4f46e5":"#e5e7eb",transition:"background 0.2s" }}>
-                    <div style={{ position:"absolute",top:2,left:simpleMode?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
-                  </button>
                 </div>
 
                 {/* Notifications */}
@@ -4611,21 +5070,100 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Change PIN */}
-                <button onClick={() => { resetPin(); setShowSettings(false); }}
-                  style={{ width:"100%",display:"flex",alignItems:"center",gap:10,padding:"12px 0",background:"none",border:"none",cursor:"pointer",borderBottom:`1px solid ${border}` }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  <div style={{ flex:1,textAlign:"left" }}><p style={{ margin:0,fontSize:14,color:textMain }}>Change PIN</p><p style={{ margin:0,fontSize:11,color:textMute }}>Clears current PIN and biometrics</p></div>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
+                {/* The Scene (F1 / DBZ) and Colour pickers lived here. Both were removed
+                    along with the canvas streak game - the Retro toggle below is
+                    now the only appearance option. */}
 
-                {/* Reset biometrics */}
-                <button onClick={() => { resetBiometric(); setShowSettings(false); }}
-                  style={{ width:"100%",display:"flex",alignItems:"center",gap:10,padding:"12px 0",background:"none",border:"none",cursor:"pointer",borderBottom:`1px solid ${border}` }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571"/><path d="M5.477 5.938A9 9 0 0 1 21 12"/><path d="M3 3l18 18"/></svg>
-                  <div style={{ flex:1,textAlign:"left" }}><p style={{ margin:0,fontSize:14,color:textMain }}>Reset biometrics</p><p style={{ margin:0,fontSize:11,color:textMute }}>Re-register Face ID / fingerprint</p></div>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
+                <SettingsSection title="Modes" open={modesOpen} onToggle={() => setModesOpen(o => !o)} border={border} textMain={textMain} textMute={textMute}
+                  icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>}>
+                  {/* Simple mode */}
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0" }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                      <div><span style={{ fontSize:14,color:textMain }}>Simple mode</span><p style={{ margin:0,fontSize:11,color:textMute }}>One page: budget left, add an expense, today's expenses.</p></div>
+                    </div>
+                    <button onClick={() => { haptic(6); setSimpleMode(s => !s); setShowSettings(false); }} style={{ width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:simpleMode?"#4f46e5":"#e5e7eb",transition:"background 0.2s",flexShrink:0 }}>
+                      <div style={{ position:"absolute",top:2,left:simpleMode?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
+                    </button>
+                  </div>
+
+                  {/* Travel mode */}
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0" }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                      <span style={{ fontSize:15,lineHeight:1 }}>✈️</span>
+                      <div><span style={{ fontSize:14,color:textMain }}>Travel mode</span><p style={{ margin:0,fontSize:11,color:textMute }}>One page for the active trip: total, add form in foreign currency, its expenses only.</p></div>
+                    </div>
+                    <button onClick={() => { haptic(6); setTravelMode(tm => ({ ...tm, active: !tm.active })); setShowSettings(false); }} style={{ width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:travelMode.active?"#f97316":"#e5e7eb",transition:"background 0.2s",flexShrink:0 }}>
+                      <div style={{ position:"absolute",top:2,left:travelMode.active?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
+                    </button>
+                  </div>
+                </SettingsSection>
+
+                <SettingsSection title="Themes" open={themesOpen} onToggle={() => setThemesOpen(o => !o)} border={border} textMain={textMain} textMute={textMute}
+                  icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>}>
+                  {/* Dark mode toggle */}
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0" }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:10 }}>{dark?<MoonIcon/>:<SunIcon/>}<span style={{ fontSize:14,color:textMain }}>Dark mode</span></div>
+                    <button onClick={() => { haptic(6); setDark(d => !d); }} style={{ width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:dark?"#4f46e5":"#e5e7eb",transition:"background 0.2s" }}>
+                      <div style={{ position:"absolute",top:2,left:dark?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
+                    </button>
+                  </div>
+
+                  {/* Retro theme toggle — optional full palette (retro-ink outline + teal/orange/yellow), now with its own dark mode variant */}
+                  <div style={{ padding:"10px 0" }}>
+                    <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                      <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                        <div style={{ width:18,height:18,borderRadius:0,background:dark?RETRO_THEME_DARK.cardBg:"#ffffff",border:`2.5px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`,flexShrink:0 }}/>
+                        <span style={{ fontSize:14,color:textMain }}>Retro theme</span>
+                      </div>
+                      <button onClick={() => { haptic(6); setThemeStyle(isRetro?"classic":"retro"); }}
+                        style={{ width:44,height:24,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:isRetro?(dark?RETRO_THEME_DARK.orange:RETRO_THEME.orange):(dark?"#374151":"#e5e7eb"),transition:"background 0.2s" }}>
+                        <div style={{ position:"absolute",top:2,left:isRetro?22:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left 0.2s",boxShadow:"0 1px 4px rgba(0,0,0,0.2)" }}/>
+                      </button>
+                    </div>
+                    <p style={{ margin:"6px 0 0",fontSize:11,color:textMute }}>A bold retro-outline palette with teal, orange &amp; yellow accents — replaces your accent color choice while on. Works with Dark mode too.</p>
+                  </div>
+                </SettingsSection>
+
+                <SettingsSection title="Data" open={dataOpen} onToggle={() => setDataOpen(o => !o)} border={border} textMain={textMain} textMute={textMute}
+                  icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}>
+                  {/* Export backup */}
+                  <button onClick={() => { haptic(6); exportData(); }}
+                    style={{ width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 0",background:"none",border:"none",cursor:"pointer" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <div style={{ flex:1,textAlign:"left" }}><p style={{ margin:0,fontSize:14,color:textMain }}>Export backup</p><p style={{ margin:0,fontSize:11,color:textMute }}>Download all your data as a file</p></div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+
+                  {/* Import / restore */}
+                  <button onClick={() => { haptic(6); triggerImport(); }}
+                    style={{ width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 0",background:"none",border:"none",cursor:"pointer" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <div style={{ flex:1,textAlign:"left" }}><p style={{ margin:0,fontSize:14,color:textMain }}>Import / restore</p><p style={{ margin:0,fontSize:11,color:textMute }}>Replace current data with a backup file</p></div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                  <input ref={importInputRef} type="file" accept="application/json,.json" onChange={handleImportFile} style={{ display:"none" }}/>
+                  <p style={{ margin:"2px 0 0",fontSize:11,color:textMute }}>Importing overwrites everything currently on this device with the backup file.</p>
+                </SettingsSection>
+
+                <SettingsSection title="Security" open={securityOpen} onToggle={() => setSecurityOpen(o => !o)} border={border} textMain={textMain} textMute={textMute}
+                  icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>}>
+                  {/* Change PIN */}
+                  <button onClick={() => { resetPin(); setShowSettings(false); }}
+                    style={{ width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 0",background:"none",border:"none",cursor:"pointer" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    <div style={{ flex:1,textAlign:"left" }}><p style={{ margin:0,fontSize:14,color:textMain }}>Change PIN</p><p style={{ margin:0,fontSize:11,color:textMute }}>Clears current PIN and biometrics</p></div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+
+                  {/* Reset biometrics */}
+                  <button onClick={() => { resetBiometric(); setShowSettings(false); }}
+                    style={{ width:"100%",display:"flex",alignItems:"center",gap:10,padding:"10px 0",background:"none",border:"none",cursor:"pointer" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><path d="M12 11c0 3.517-1.009 6.799-2.753 9.571"/><path d="M5.477 5.938A9 9 0 0 1 21 12"/><path d="M3 3l18 18"/></svg>
+                    <div style={{ flex:1,textAlign:"left" }}><p style={{ margin:0,fontSize:14,color:textMain }}>Reset biometrics</p><p style={{ margin:0,fontSize:11,color:textMute }}>Re-register Face ID / fingerprint</p></div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={textMute} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                </SettingsSection>
 
                 <p style={{ margin:"16px 0 0",fontSize:11,color:textMute,textAlign:"center" }}>mySpendr v3.0 · your money, your streak</p>
               </div>
@@ -4634,15 +5172,18 @@ export default function App() {
         )}
 
         {/* ════════════════════════════════════════════════════════════════
-            BOTTOM NAV - hidden in simple mode, which is a single page
+            BOTTOM NAV - hidden in simple mode and travel mode (both single-page)
         ════════════════════════════════════════════════════════════════ */}
-        {!simpleMode && (
-        <div style={{ position:"fixed",bottom:0,left:0,right:0,background:isRetro?"rgba(244,241,230,0.96)":dark?"rgba(3,7,18,0.92)":"rgba(255,255,255,0.92)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:isRetro?`3px solid ${RETRO_THEME.border}`:`1px solid ${border}`,boxShadow:isRetro?"0 -3px 0px 0px rgba(14,28,84,0.06)":"none",display:"flex",alignItems:"stretch",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
+        {!travelMode.active && !simpleMode && (
+        <div style={{ position:"fixed",bottom:0,left:0,right:0,background:isRetro?(dark?"rgba(18,23,46,0.96)":"rgba(244,241,230,0.96)"):dark?"rgba(3,7,18,0.92)":"rgba(255,255,255,0.92)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:isRetro?`3px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:`1px solid ${border}`,boxShadow:isRetro?"0 -3px 0px 0px rgba(14,28,84,0.06)":"none",display:"flex",alignItems:"stretch",zIndex:100,paddingBottom:"env(safe-area-inset-bottom,0px)" }}>
           {[
             { id:"home",      label:"Home",    icon:<HomeIcon size={22}/> },
             { id:"expenses",  label:"Expenses",icon:<ListIcon size={22}/> },
-            { id:"scanvoice", label:"Add",     icon:<div style={{ width:52,height:52,borderRadius:isRetro?0:"50%",background:isRetro?RETRO_THEME.orange:`linear-gradient(135deg,${ACCENT_CLASSIC.light},${ACCENT_CLASSIC.dark})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:isRetro?"3px 3px 0px 0px rgba(14,28,84,1)":"0 4px 16px rgba(79,70,229,0.4)",marginTop:-20,border:isRetro?`2.5px solid ${RETRO_THEME.border}`:`3px solid ${dark?"#030712":"#fff"}` }}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={isRetro?RETRO_THEME.border:"white"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div> },
-            { id:"bills",       label:"Bills & Loans",   icon:<EmiIcon size={22}/> },
+            { id:"scanvoice", label:"Add",     icon:<div style={{ width:52,height:52,flexShrink:0,borderRadius:isRetro?0:"50%",background:isRetro?(dark?RETRO_THEME_DARK.orange:RETRO_THEME.orange):`linear-gradient(135deg,${ACCENT_CLASSIC.light},${ACCENT_CLASSIC.dark})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:isRetro?"3px 3px 0px 0px rgba(14,28,84,1)":"0 4px 16px rgba(79,70,229,0.4)",marginTop:-20,border:isRetro?`2.5px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:`3px solid ${dark?"#030712":"#fff"}` }}><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={isRetro?(dark?RETRO_THEME_DARK.border:RETRO_THEME.border):"white"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display:"block",flexShrink:0 }}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div> },
+            // FIX (mobile icon fit): "Bills & Loans" at nowrap didn't fit a 1/5-width
+            // tab on narrow phones — it spilled past the button's edge and visually
+            // overlapped the "My Pot" icon next to it. Shortened to fit one line.
+            { id:"bills",       label:"Bills",   icon:<EmiIcon size={22}/> },
             { id:"pot",       label:"My Pot",  icon:<WalletIcon size={22}/> },
           ].map(({ id, label, icon }) => {
             const active = tab===id;
@@ -4653,11 +5194,14 @@ export default function App() {
                   padding:isScan?"0 0 4px":"8px 4px 8px",
                   margin:isRetro&&!isScan?"6px 3px":0,
                   background:isRetro&&active&&!isScan?"rgba(242,162,94,0.28)":"none",
-                  border:isRetro&&active&&!isScan?`2px solid ${RETRO_THEME.border}`:"none",
-                  cursor:"pointer",color:active&&!isScan?accent:(isRetro?RETRO_THEME.textMute:textMute),
-                  transition:"color 0.15s, background 0.15s",minWidth:0,position:"relative" }}>
+                  border:isRetro&&active&&!isScan?`2px solid ${(dark?RETRO_THEME_DARK.border:RETRO_THEME.border)}`:"none",
+                  cursor:"pointer",color:active&&!isScan?accent:(isRetro?(dark?RETRO_THEME_DARK.textMute:RETRO_THEME.textMute):textMute),
+                  transition:"color 0.15s, background 0.15s",minWidth:0,overflow:"hidden",position:"relative" }}>
                 {icon}
-                {!isScan && <span style={{ fontSize:10,fontWeight:active?800:isRetro?600:500,whiteSpace:"nowrap",letterSpacing:isRetro?"0.02em":0 }}>{label}</span>}
+                {/* FIX (mobile icon fit): overflow:hidden + ellipsis on the button/label
+                    is a safety net — a nowrap label can never again spill outside its
+                    tab and overlap the icon in the next one, no matter the screen width. */}
+                {!isScan && <span style={{ fontSize:10,fontWeight:active?800:isRetro?600:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%",letterSpacing:isRetro?"0.02em":0 }}>{label}</span>}
                 {active&&!isScan && (isRetro
                   ? null
                   : <div style={{ position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",width:20,height:2,borderRadius:99,background:accent }}/>
@@ -4668,7 +5212,7 @@ export default function App() {
         </div>
         )}
         {/* Nav spacer - only needed when the nav is actually on screen */}
-        {!simpleMode && <div style={{ height:72 }}/>}
+        {!travelMode.active && !simpleMode && <div style={{ height:72 }}/>}
       </div>
     </ErrorBoundary>
   );
