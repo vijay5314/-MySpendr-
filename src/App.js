@@ -690,6 +690,7 @@ const ACCENT_CLASSIC = { light: "#0369a1", dark: "#38bdf8" };
 // `amount`, converted at the rate the user sets for the trip; the original
 // foreign amount + currency are kept alongside just for display.
 const CURRENCIES = [
+  { code:"INR", symbol:"₹",  name:"Indian Rupee (local — no conversion)" },
   { code:"USD", symbol:"$",  name:"US Dollar" },
   { code:"EUR", symbol:"€",  name:"Euro" },
   { code:"GBP", symbol:"£",  name:"British Pound" },
@@ -720,9 +721,23 @@ const FRANKFURTER_SUPPORTED = new Set([
 // recent prior rate), so no special-casing is needed there. A date in the
 // future has no rate yet, so those route to /latest instead.
 async function fetchLiveFxRate(currency, dateStr, todayStr) {
+  // FIX: api.frankfurter.app stopped being a reliable host for this — the
+  // project's maintained domain is now api.frankfurter.dev (v1 endpoints,
+  // same query shape but base=/symbols= instead of from=/to=). Also added a
+  // hard timeout: a hung request used to leave fxStatus stuck on "loading"
+  // forever with no error surfaced.
   const endpoint = dateStr && dateStr > todayStr ? "latest" : (dateStr || "latest");
-  const url = `https://api.frankfurter.app/${endpoint}?from=${encodeURIComponent(currency)}&to=INR`;
-  const res = await fetch(url);
+  const url = `https://api.frankfurter.dev/v1/${endpoint}?base=${encodeURIComponent(currency)}&symbols=INR`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let res;
+  try {
+    res = await fetch(url, { signal: controller.signal });
+  } catch (e) {
+    throw new Error(e.name === "AbortError" ? "fx: request timed out" : `fx: network error (${e.message})`);
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!res.ok) throw new Error(`fx http ${res.status}`);
   const data = await res.json();
   const rate = data && data.rates && Number(data.rates.INR);
@@ -746,22 +761,28 @@ const RETRO_THEME = {
   orange:      "#f2a25e",
   yellow:      "#f6da6e",
 };
-// Dark counterpart of RETRO_THEME - same bold-outline retro language, inverted
-// onto a deep navy base so the teal/orange/yellow accents still pop. Every
-// place that reads RETRO_THEME.<key> now reads (dark?RETRO_THEME_DARK:RETRO_THEME).<key>
-// instead, so "Retro theme" and "Dark mode" can be combined.
+// Dark counterpart of RETRO_THEME - icy-grey base (not navy) with a red/green
+// accent pair. Button text in retro mode is always painted in this theme's
+// `border` color (near-white — see btnPrimary at ~L2132/L3541), so `orange`
+// (the primary accent, used for button backgrounds/active states/toggles)
+// has to stay dark/saturated enough for that near-white text to stay
+// legible — a bright neon green failed this (~2:1 contrast); the deep green
+// below checks out around 4.9:1. `teal` carries the red accent, `yellow`
+// keeps the road-line yellow. Every place that reads RETRO_THEME.<key> now
+// reads (dark?RETRO_THEME_DARK:RETRO_THEME).<key> instead, so "Retro theme"
+// and "Dark mode" can be combined.
 const RETRO_THEME_DARK = {
-  bg:          "#12172e",
-  cardBg:      "#1a2044",
-  border:      "#f4f1e6",
-  textMain:    "#f4f1e6",
-  textMute:    "#9aa3c9",
-  inputBg:     "#1a2044",
-  inputBorder: "#f4f1e6",
-  subbg:       "#232a52",
-  teal:        "#5cc9c6",
-  orange:      "#f2a25e",
-  yellow:      "#f6da6e",
+  bg:          "#20242b",
+  cardBg:      "#2b3038",
+  border:      "#eef1f4",
+  textMain:    "#eef1f4",
+  textMute:    "#96a1ac",
+  inputBg:     "#2b3038",
+  inputBorder: "#eef1f4",
+  subbg:       "#353b45",
+  teal:        "#b91c1c",
+  orange:      "#137a3a",
+  yellow:      "#ffd93d",
 };
 const CAT_PALETTE = [
   { bg:"#fee2e2",text:"#dc2626",darkBg:"#450a0a",darkText:"#fca5a5" },
@@ -2421,8 +2442,17 @@ export default function App() {
   const fxCacheRef = useRef({}); // "CUR_YYYY-MM-DD" -> rate, avoids refetching on every keystroke elsewhere
   const [fxRefreshNonce, setFxRefreshNonce] = useState(0); // bump to force a refetch (cache already cleared by caller)
   useEffect(() => {
-    if (!travelMode.active || !travelMode.fxAuto) return;
+    if (!travelMode.active) return;
     const currency = travelMode.currency;
+    // Local currency: no conversion needed, rate is fixed at 1 and there's
+    // nothing to fetch. Handle this before the fxAuto check so switching to
+    // INR always locks the rate, regardless of the live/manual toggle.
+    if (currency === "INR") {
+      setFxStatus({ state:"ok", currency, date, error:null });
+      setTravelMode(tm => (tm.currency==="INR" && tm.rate!==1) ? { ...tm, rate:1 } : tm);
+      return;
+    }
+    if (!travelMode.fxAuto) return;
     if (!FRANKFURTER_SUPPORTED.has(currency)) {
       setFxStatus({ state:"unsupported", currency, date, error:`No live rate source for ${currency} — enter it manually.` });
       // Switch the field back to manual so it isn't stuck disabled/empty.
@@ -2488,12 +2518,13 @@ export default function App() {
   useEffect(() => { storageSetDebounced(KEYS.FRIENDS, friends); }, [friends]);
   useEffect(() => { storageSetDebounced(KEYS.SPLITS, splits); }, [splits]);
   const newFriendInputRef = useRef(null);
-  const [splitTitle, setSplitTitle] = useState("");
-  const [splitIncludeMe, setSplitIncludeMe] = useState(false);
-  const [splitSelectedIds, setSplitSelectedIds] = useState([]);
-  const [splitPaidMap, setSplitPaidMap] = useState({}); // id -> paid amount string
-  const [splitMode, setSplitMode] = useState("equal"); // "equal" | "shares"
-  const [splitShareMap, setSplitShareMap] = useState({}); // id -> custom owed-share string (shares mode only)
+  const [splitTitle, setSplitTitle] = useState(""); // the split "topic", e.g. a whole day out or trip
+  const [splitItems, setSplitItems] = useState([]); // draft line-item expenses for the topic being built
+  const [splitEditingItemId, setSplitEditingItemId] = useState(null); // item being edited, or null when adding new
+  const [itemAmount, setItemAmount] = useState("");
+  const [itemNote, setItemNote] = useState("");
+  const [itemPaidBy, setItemPaidBy] = useState("me"); // "me" or a friend id
+  const [itemParticipantIds, setItemParticipantIds] = useState([]); // who this one expense is split between — including "me"/payer or not is just whether they're checked here
   const [splitResult, setSplitResult] = useState(null); // computed settlement for last saved/preview split
   const [friendDeleteConfirm, setFriendDeleteConfirm] = useState(null);
   const [splitDeleteConfirm, setSplitDeleteConfirm] = useState(null);
@@ -3138,49 +3169,42 @@ export default function App() {
   }
   function deleteFriend(id) {
     setFriends(p => p.filter(f => f.id!==id));
-    setSplitSelectedIds(p => p.filter(x => x!==id));
-    setSplitPaidMap(p => { const n = { ...p }; delete n[id]; return n; });
+    setItemParticipantIds(p => p.filter(x => x!==id));
+    setItemPaidBy(p => p===id ? "me" : p);
     setFriendDeleteConfirm(null);
     showToast("Friend removed.");
   }
-  function toggleSplitParticipant(id) {
-    setSplitSelectedIds(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  function splitPersonName(id) {
+    if (id === "me") return userName ? userName : "Me";
+    return friends.find(f => f.id===id)?.name || "Removed friend";
   }
-  function setSplitPaid(id, val) {
-    setSplitPaidMap(prev => ({ ...prev, [id]: val }));
+  function toggleItemParticipant(id) {
+    setItemParticipantIds(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
   }
-  function setSplitShare(id, val) {
-    setSplitShareMap(prev => ({ ...prev, [id]: val }));
-  }
-  function toggleSplitIncludeMe() {
-    setSplitIncludeMe(v => {
-      const next = !v;
-      setSplitSelectedIds(prev => next ? [...new Set([...prev, "me"])] : prev.filter(x=>x!=="me"));
-      return next;
+  // One split "topic" (e.g. a whole day out, or a trip) is made of several
+  // itemized expenses — each with its own payer and its own list of who that
+  // particular expense is split between. Whether the payer shares in the cost
+  // of their own expense is simply whether their own checkbox is ticked in
+  // that item's participant list — no separate toggle needed. Settlement nets
+  // every item's paid/owed against each other before working out who owes whom.
+  function computeItemizedSettlement(items) {
+    const balanceMap = {}; // id -> { id, name, paid, owed }
+    function ensure(id) {
+      if (!balanceMap[id]) balanceMap[id] = { id, name: splitPersonName(id), paid:0, owed:0 };
+      return balanceMap[id];
+    }
+    let total = 0;
+    items.forEach(it => {
+      const amt = Number(it.amount) || 0;
+      if (amt <= 0) return;
+      total += amt;
+      ensure(it.paidBy).paid += amt;
+      const participants = [...new Set(it.participantIds || [])];
+      const n = participants.length || 1;
+      const share = amt / n;
+      participants.forEach(pid => { ensure(pid).owed += share; });
     });
-  }
-  function buildSplitEntries() {
-    return splitSelectedIds.map(id => {
-      if (id === "me") return { id:"me", name: userName ? userName : "Me", paid: Number(splitPaidMap.me)||0, shares: splitShareMap.me };
-      const f = friends.find(x=>x.id===id);
-      return f ? { id:f.id, name:f.name, paid: Number(splitPaidMap[f.id])||0, shares: splitShareMap[f.id] } : null;
-    }).filter(Boolean);
-  }
-  // Equal-split settlement by default: everyone owes an equal portion of the
-  // pooled total. In "shares" mode, each participant is assigned a number of
-  // shares (e.g. B=2 shares, C=1 share, A=1 share → 4 shares total) and owes
-  // (their shares ÷ total shares) × total paid — a blank share box defaults to 1.
-  function computeSettlement(entries, mode = "equal") {
-    const total = entries.reduce((s,e) => s + (Number(e.paid)||0), 0);
-    const equalShare = entries.length ? total / entries.length : 0;
-    const useShares = mode === "shares";
-    const shareCount = e => { const n = Number(e.shares); return n > 0 ? n : 1; };
-    const totalShares = useShares ? entries.reduce((s,e) => s + shareCount(e), 0) : 0;
-    const perShare = useShares && totalShares ? total / totalShares : 0;
-    const balances = entries.map(e => {
-      const owed = useShares ? shareCount(e) * perShare : equalShare;
-      return { id:e.id, name:e.name, paid:Number(e.paid)||0, shares: useShares ? shareCount(e) : null, owed, balance: Math.round(((Number(e.paid)||0) - owed) * 100) / 100 };
-    });
+    const balances = Object.values(balanceMap).map(b => ({ ...b, balance: Math.round((b.paid - b.owed) * 100) / 100 }));
     const debtors = balances.filter(b => b.balance < -0.005).map(b => ({ ...b })).sort((a,b) => a.balance - b.balance);
     const creditors = balances.filter(b => b.balance > 0.005).map(b => ({ ...b })).sort((a,b) => b.balance - a.balance);
     const transactions = [];
@@ -3194,7 +3218,29 @@ export default function App() {
       if (Math.abs(d.balance) < 0.01) i++;
       if (Math.abs(c.balance) < 0.01) j++;
     }
-    return { total, share: equalShare, totalShares, perShare, mode, balances, transactions };
+    return { total, balances, transactions };
+  }
+  function resetItemDraft() {
+    setItemAmount(""); setItemNote(""); setSplitEditingItemId(null);
+    // keep itemPaidBy/itemParticipantIds as-is — a day out usually has the
+    // same group and often the same payer for the next expense too.
+  }
+  function addOrUpdateSplitItem() {
+    const amt = Number(itemAmount);
+    if (!(amt > 0)) { showToast("Enter a valid amount."); return; }
+    if (itemParticipantIds.length === 0) { showToast("Pick at least one person this expense is split between."); return; }
+    const item = { id: splitEditingItemId || uid(), amount: amt, note: itemNote.trim(), paidBy: itemPaidBy, participantIds: [...itemParticipantIds] };
+    setSplitItems(prev => splitEditingItemId ? prev.map(it => it.id===splitEditingItemId ? item : it) : [...prev, item]);
+    resetItemDraft();
+  }
+  function editSplitItem(id) {
+    const it = splitItems.find(x => x.id===id);
+    if (!it) return;
+    setItemAmount(String(it.amount)); setItemNote(it.note||""); setItemPaidBy(it.paidBy); setItemParticipantIds([...it.participantIds]); setSplitEditingItemId(id);
+  }
+  function removeSplitItem(id) {
+    setSplitItems(prev => prev.filter(it => it.id!==id));
+    if (splitEditingItemId===id) resetItemDraft();
   }
   function toggleTransactionPaid(splitId, txIndex) {
     setSplits(prev => prev.map(s => s.id!==splitId ? s : {
@@ -3203,21 +3249,20 @@ export default function App() {
     }));
   }
   function previewSplit() {
-    const entries = buildSplitEntries();
-    if (entries.length < 2) { showToast("Pick at least 2 people to split between."); return; }
-    setSplitResult(computeSettlement(entries, splitMode));
+    if (splitItems.length === 0) { showToast("Add at least one expense to this split topic."); return; }
+    setSplitResult(computeItemizedSettlement(splitItems));
   }
   function saveSplit() {
-    const entries = buildSplitEntries();
-    if (entries.length < 2) { showToast("Pick at least 2 people to split between."); return; }
-    const result = computeSettlement(entries, splitMode);
-    const record = { id:uid(), title: splitTitle.trim() || "Split", date: today, entries, includeMe: splitIncludeMe, mode: splitMode, total: result.total, transactions: result.transactions.map(t => ({ ...t, paid:false })) };
+    if (splitItems.length === 0) { showToast("Add at least one expense to this split topic."); return; }
+    const result = computeItemizedSettlement(splitItems);
+    const itemsWithNames = splitItems.map(it => ({ ...it, paidByName: splitPersonName(it.paidBy), participantNames: it.participantIds.map(splitPersonName) }));
+    const record = { id:uid(), title: splitTitle.trim() || "Split", date: today, items: itemsWithNames, total: result.total, transactions: result.transactions.map(t => ({ ...t, paid:false })) };
     setSplits(prev => [record, ...prev]);
     setSplitResult(result);
     showToast("Split saved!");
   }
   function resetSplitForm() {
-    setSplitTitle(""); setSplitIncludeMe(false); setSplitSelectedIds([]); setSplitPaidMap({}); setSplitShareMap({}); setSplitMode("equal"); setSplitResult(null);
+    setSplitTitle(""); setSplitItems([]); resetItemDraft(); setItemPaidBy("me"); setItemParticipantIds([]); setSplitResult(null);
   }
   function deleteSplit(id) {
     setSplits(prev => prev.filter(s => s.id!==id));
@@ -3724,42 +3769,52 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4 }}>
-                      <label style={{ fontSize:10,fontWeight:600,color:textMute }}>1 {travelMode.currency} = ₹</label>
-                      {FRANKFURTER_SUPPORTED.has(travelMode.currency) && (
-                        <button onClick={() => { haptic(6); setTravelMode(tm => ({ ...tm, fxAuto: !tm.fxAuto })); }}
-                          style={{ fontSize:9,fontWeight:800,letterSpacing:"0.04em",padding:"2px 7px",borderRadius:99,cursor:"pointer",
-                            border:`1px solid ${travelMode.fxAuto?"#f97316":border}`,
-                            background:travelMode.fxAuto?"#f97316":"transparent",
-                            color:travelMode.fxAuto?"#fff":textMute }}>
-                          {travelMode.fxAuto ? "LIVE" : "MANUAL"}
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ position:"relative" }}>
-                      <input type="number" inputMode="decimal" value={travelMode.rate}
-                        readOnly={travelMode.fxAuto && fxStatus.state==="loading"}
-                        onChange={e => { const v=e.target.value; if(v===""||Number(v)>=0) setTravelMode(tm => ({ ...tm, rate:v===""?0:Number(v), fxAuto:false })); }}
-                        placeholder="83" min="0"
-                        style={{ ...inputStyle,fontSize:13,fontFamily:"'DM Mono',monospace",borderColor:dark?"rgba(249,115,22,0.3)":"#fed7aa",
-                          paddingRight:travelMode.fxAuto?28:undefined,
-                          opacity:travelMode.fxAuto && fxStatus.state==="loading"?0.6:1 }}/>
-                      {travelMode.fxAuto && fxStatus.state==="ok" && fxStatus.currency===travelMode.currency && fxStatus.date===date && (
-                        <button title="Refresh live rate" onClick={() => { haptic(6); delete fxCacheRef.current[`${travelMode.currency}_${date}`]; setFxRefreshNonce(n => n+1); }}
-                          style={{ position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#f97316",padding:2,lineHeight:1 }}>⟳</button>
-                      )}
-                    </div>
-                    {travelMode.fxAuto && fxStatus.state==="loading" && (
-                      <p style={{ margin:"3px 0 0",fontSize:10,color:textMute }}>Fetching {travelMode.currency}→INR rate for {formatDate(date)}…</p>
-                    )}
-                    {travelMode.fxAuto && fxStatus.state==="ok" && fxStatus.date===date && (
-                      <p style={{ margin:"3px 0 0",fontSize:10,color:"#16a34a" }}>Live rate for {formatDate(date)}</p>
-                    )}
-                    {travelMode.fxAuto && fxStatus.state==="error" && (
-                      <p style={{ margin:"3px 0 0",fontSize:10,color:"#ef4444" }}>{fxStatus.error}</p>
-                    )}
-                    {!FRANKFURTER_SUPPORTED.has(travelMode.currency) && (
-                      <p style={{ margin:"3px 0 0",fontSize:10,color:textMute }}>No live source for {travelMode.currency} — enter rate manually.</p>
+                    {travelMode.currency === "INR" ? (
+                      <>
+                        <label style={{ display:"block",fontSize:10,fontWeight:600,color:textMute,marginBottom:4 }}>Rate</label>
+                        <div style={{ ...inputStyle,fontSize:13,fontFamily:"'DM Mono',monospace",borderColor:dark?"rgba(249,115,22,0.3)":"#fed7aa",display:"flex",alignItems:"center",color:textMute }}>1.00 (local)</div>
+                        <p style={{ margin:"3px 0 0",fontSize:10,color:textMute }}>Local currency — amounts are logged as-is, no conversion.</p>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4 }}>
+                          <label style={{ fontSize:10,fontWeight:600,color:textMute }}>1 {travelMode.currency} = ₹</label>
+                          {FRANKFURTER_SUPPORTED.has(travelMode.currency) && (
+                            <button onClick={() => { haptic(6); setTravelMode(tm => ({ ...tm, fxAuto: !tm.fxAuto })); }}
+                              style={{ fontSize:9,fontWeight:800,letterSpacing:"0.04em",padding:"2px 7px",borderRadius:99,cursor:"pointer",
+                                border:`1px solid ${travelMode.fxAuto?"#f97316":border}`,
+                                background:travelMode.fxAuto?"#f97316":"transparent",
+                                color:travelMode.fxAuto?"#fff":textMute }}>
+                              {travelMode.fxAuto ? "LIVE" : "MANUAL"}
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ position:"relative" }}>
+                          <input type="number" inputMode="decimal" value={travelMode.rate}
+                            readOnly={travelMode.fxAuto && fxStatus.state==="loading"}
+                            onChange={e => { const v=e.target.value; if(v===""||Number(v)>=0) setTravelMode(tm => ({ ...tm, rate:v===""?0:Number(v), fxAuto:false })); }}
+                            placeholder="83" min="0"
+                            style={{ ...inputStyle,fontSize:13,fontFamily:"'DM Mono',monospace",borderColor:dark?"rgba(249,115,22,0.3)":"#fed7aa",
+                              paddingRight:travelMode.fxAuto?28:undefined,
+                              opacity:travelMode.fxAuto && fxStatus.state==="loading"?0.6:1 }}/>
+                          {travelMode.fxAuto && fxStatus.state==="ok" && fxStatus.currency===travelMode.currency && fxStatus.date===date && (
+                            <button title="Refresh live rate" onClick={() => { haptic(6); delete fxCacheRef.current[`${travelMode.currency}_${date}`]; setFxRefreshNonce(n => n+1); }}
+                              style={{ position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"#f97316",padding:2,lineHeight:1 }}>⟳</button>
+                          )}
+                        </div>
+                        {travelMode.fxAuto && fxStatus.state==="loading" && (
+                          <p style={{ margin:"3px 0 0",fontSize:10,color:textMute }}>Fetching {travelMode.currency}→INR rate for {formatDate(date)}…</p>
+                        )}
+                        {travelMode.fxAuto && fxStatus.state==="ok" && fxStatus.date===date && (
+                          <p style={{ margin:"3px 0 0",fontSize:10,color:"#16a34a" }}>Live rate for {formatDate(date)}</p>
+                        )}
+                        {travelMode.fxAuto && fxStatus.state==="error" && (
+                          <p style={{ margin:"3px 0 0",fontSize:10,color:"#ef4444" }}>{fxStatus.error}</p>
+                        )}
+                        {!FRANKFURTER_SUPPORTED.has(travelMode.currency) && (
+                          <p style={{ margin:"3px 0 0",fontSize:10,color:textMute }}>No live source for {travelMode.currency} — enter rate manually.</p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -4806,78 +4861,71 @@ export default function App() {
 
               <div style={cardStyle}>
                 <h2 style={{ margin:"0 0 4px",fontSize:14,fontWeight:600 }}>New Split</h2>
-                <p style={{ margin:"0 0 12px",fontSize:11,color:textMute }}>Kept separate from your Expenses — nothing here is added to your budget unless you log it yourself.</p>
-                <div style={{ marginBottom:10 }}>
-                  <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Title (optional)</label>
-                  <input value={splitTitle} onChange={e => setSplitTitle(e.target.value)} placeholder="e.g. Goa trip, Dinner" style={inputStyle}/>
-                </div>
-
+                <p style={{ margin:"0 0 12px",fontSize:11,color:textMute }}>A topic can hold many expenses — e.g. a whole day out — added one at a time below. Kept separate from your Expenses — nothing here touches your budget unless you log it yourself.</p>
                 <div style={{ marginBottom:12 }}>
-                  <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Split type</label>
-                  <div style={{ display:"flex",gap:8 }}>
-                    {[{id:"equal",label:"Equal split"},{id:"shares",label:"By shares"}].map(m => {
-                      const active = splitMode===m.id;
-                      return (
-                        <button key={m.id} onClick={() => setSplitMode(m.id)}
-                          style={{ flex:1,padding:"8px 10px",borderRadius:10,border:`1.5px solid ${active?accent:border}`,background:active?(dark?`${accent}22`:`${accent}11`):subbg,color:active?accent:textMute,fontSize:12,fontWeight:700,cursor:"pointer" }}>
-                          {m.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {splitMode==="shares" && <p style={{ margin:"6px 0 0",fontSize:11,color:textMute }}>Give each person a number of shares — e.g. B=2, C=1, A=1. Whoever has more shares owes more of the total. Leave blank for 1 share.</p>}
-                </div>
-
-                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,padding:"8px 10px",background:subbg,borderRadius:10,border:cardBorder }}>
-                  <span style={{ fontSize:13,color:textMain }}>Include my own expenses in this split</span>
-                  <button onClick={toggleSplitIncludeMe} style={{ width:40,height:22,borderRadius:99,border:"none",cursor:"pointer",position:"relative",background:splitIncludeMe?accent:(dark?"#374151":"#e5e7eb"),flexShrink:0 }}>
-                    <div style={{ position:"absolute",top:2,left:splitIncludeMe?20:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s" }}/>
-                  </button>
+                  <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Topic (optional)</label>
+                  <input value={splitTitle} onChange={e => setSplitTitle(e.target.value)} placeholder="e.g. Goa trip, Saturday out" style={inputStyle}/>
                 </div>
 
                 {friends.length===0
                   ? <p style={{ margin:0,fontSize:12,color:textMute }}>Add at least one friend above to create a split.</p>
                   : (
-                    <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:12 }}>
-                      {splitMode==="shares" && (
-                        <div style={{ display:"flex",gap:8,paddingLeft:28 }}>
-                          <span style={{ flex:1 }}/>
-                          <span style={{ width:110,fontSize:10,fontWeight:700,color:textMute,textTransform:"uppercase",letterSpacing:"0.04em" }}>Paid</span>
-                          <span style={{ width:80,fontSize:10,fontWeight:700,color:textMute,textTransform:"uppercase",letterSpacing:"0.04em" }}>Shares</span>
+                    <>
+                      {/* Draft expenses already added to this topic */}
+                      {splitItems.length>0 && (
+                        <div style={{ display:"flex",flexDirection:"column",gap:6,marginBottom:12 }}>
+                          {splitItems.map(it => (
+                            <div key={it.id} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:subbg,borderRadius:10,border:cardBorder }}>
+                              <div style={{ flex:1,minWidth:0 }}>
+                                <p style={{ margin:0,fontSize:13,fontWeight:700,color:textMain }}>{it.note || "Expense"} · ₹{it.amount.toLocaleString()}</p>
+                                <p style={{ margin:0,fontSize:11,color:textMute,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>
+                                  Paid by {splitPersonName(it.paidBy)} · split between {it.participantIds.map(splitPersonName).join(", ")}
+                                </p>
+                              </div>
+                              <button onClick={() => editSplitItem(it.id)} style={{ background:"none",border:"none",cursor:"pointer",color:textMute,fontSize:11,fontWeight:700,padding:"4px 6px",flexShrink:0 }}>Edit</button>
+                              <button onClick={() => removeSplitItem(it.id)} style={{ background:"none",border:"none",cursor:"pointer",color:textMute,display:"flex",alignItems:"center",padding:0,flexShrink:0 }}><XIcon/></button>
+                            </div>
+                          ))}
+                          <p style={{ margin:0,fontSize:11,color:textMute,textAlign:"right" }}>₹{splitItems.reduce((s,it)=>s+it.amount,0).toLocaleString()} across {splitItems.length} expense{splitItems.length!==1?"s":""} so far</p>
                         </div>
                       )}
-                      {splitIncludeMe && (
-                        <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-                          <span style={{ flex:1,fontSize:13,color:textMain,fontWeight:600 }}>{userName||"Me"}</span>
-                          <input type="number" inputMode="decimal" value={splitPaidMap.me||""} onChange={e => setSplitPaidMap(p => ({ ...p,me:e.target.value }))} placeholder="₹ paid" style={{ ...inputStyle,width:110 }}/>
-                          {splitMode==="shares" && <input type="number" inputMode="decimal" value={splitShareMap.me||""} onChange={e => setSplitShare("me",e.target.value)} placeholder="1" style={{ ...inputStyle,width:80,textAlign:"center" }}/>}
+
+                      {/* Draft expense entry form */}
+                      <div style={{ padding:"10px",background:subbg,borderRadius:10,border:cardBorder,marginBottom:12 }}>
+                        <p style={{ margin:"0 0 8px",fontSize:11,fontWeight:700,color:textMute,textTransform:"uppercase",letterSpacing:"0.04em" }}>{splitEditingItemId ? "Edit expense" : "Add an expense"}</p>
+                        <div style={{ display:"flex",gap:8,marginBottom:8 }}>
+                          <input type="number" inputMode="decimal" value={itemAmount} onChange={e => setItemAmount(e.target.value)} placeholder="₹ amount" style={{ ...inputStyle,width:110 }}/>
+                          <input value={itemNote} onChange={e => setItemNote(e.target.value)} placeholder="What for? (e.g. Lunch)" style={{ ...inputStyle,flex:1 }}/>
                         </div>
-                      )}
-                      {friends.map(f => {
-                        const checked = splitSelectedIds.includes(f.id);
-                        return (
-                          <div key={f.id} style={{ display:"flex",alignItems:"center",gap:8 }}>
-                            <button onClick={() => toggleSplitParticipant(f.id)} style={{ width:20,height:20,borderRadius:6,border:`1.5px solid ${checked?accent:border}`,background:checked?accent:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff" }}>
-                              {checked && <CheckIcon/>}
-                            </button>
-                            <span style={{ flex:1,fontSize:13,color:textMain }}>{f.name}</span>
-                            {checked && <input type="number" inputMode="decimal" value={splitPaidMap[f.id]||""} onChange={e => setSplitPaid(f.id,e.target.value)} placeholder="₹ paid" style={{ ...inputStyle,width:110 }}/>}
-                            {checked && splitMode==="shares" && <input type="number" inputMode="decimal" value={splitShareMap[f.id]||""} onChange={e => setSplitShare(f.id,e.target.value)} placeholder="1" style={{ ...inputStyle,width:80,textAlign:"center" }}/>}
+                        <div style={{ marginBottom:8 }}>
+                          <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Paid by</label>
+                          <select value={itemPaidBy} onChange={e => setItemPaidBy(e.target.value)} style={inputStyle}>
+                            <option value="me">{userName||"Me"}</option>
+                            {friends.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ display:"block",fontSize:11,fontWeight:600,color:textMute,marginBottom:4 }}>Split between (includes the payer only if they're ticked too)</label>
+                          <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+                            {[{ id:"me", name:userName||"Me" }, ...friends].map(p => {
+                              const checked = itemParticipantIds.includes(p.id);
+                              return (
+                                <div key={p.id} style={{ display:"flex",alignItems:"center",gap:8 }}>
+                                  <button onClick={() => toggleItemParticipant(p.id)} style={{ width:20,height:20,borderRadius:6,border:`1.5px solid ${checked?accent:border}`,background:checked?accent:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff" }}>
+                                    {checked && <CheckIcon/>}
+                                  </button>
+                                  <span style={{ fontSize:13,color:textMain }}>{p.name}{p.id===itemPaidBy?" (paid)":""}</span>
+                                </div>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
-                      {splitMode==="shares" && splitSelectedIds.length>0 && (() => {
-                        const entries = buildSplitEntries();
-                        const totalShares = entries.reduce((s,e) => s + (Number(e.shares)>0?Number(e.shares):1), 0);
-                        const paidTotal = entries.reduce((s,e)=>s+(Number(e.paid)||0),0);
-                        const perShare = totalShares ? paidTotal/totalShares : 0;
-                        return (
-                          <p style={{ margin:0,fontSize:11,color:textMute }}>
-                            {totalShares} shares total · ₹{perShare.toLocaleString(undefined,{maximumFractionDigits:2})} per share
-                          </p>
-                        );
-                      })()}
-                    </div>
+                        </div>
+                        <div style={{ display:"flex",gap:8,marginTop:10 }}>
+                          {splitEditingItemId && <button onClick={resetItemDraft} style={{ ...btnSecondary,flex:1 }}>Cancel</button>}
+                          <button onClick={addOrUpdateSplitItem} style={{ ...btnPrimary,flex:1 }}>{splitEditingItemId ? "Update expense" : "Add expense"}</button>
+                        </div>
+                      </div>
+                    </>
                   )
                 }
 
@@ -4891,11 +4939,7 @@ export default function App() {
                 <div style={cardStyle}>
                   <h2 style={{ margin:"0 0 10px",fontSize:14,fontWeight:600 }}>Settlement</h2>
                   <p style={{ margin:"0 0 10px",fontSize:12,color:textMute }}>
-                    Total ₹{splitResult.total.toLocaleString()} split {splitResult.balances.length} ways
-                    {/* FIX: compared against "unequal", but the mode the UI
-                        actually sets is "shares" - so a shares split was
-                        labelled with the equal-split "₹X each" text. */}
-                    {splitResult.mode==="shares" ? " · custom shares" : ` · ₹${Math.round(splitResult.share).toLocaleString()} each`}
+                    Total ₹{splitResult.total.toLocaleString()} across {splitItems.length} expense{splitItems.length!==1?"s":""}, {splitResult.balances.length} people involved
                   </p>
                   {splitResult.transactions.length===0
                     ? <p style={{ margin:0,fontSize:13,color:textMain }}>Everyone's already even — nobody owes anything 🎉</p>
@@ -4922,6 +4966,9 @@ export default function App() {
                   <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                     {splits.map(s => {
                       const confirming = splitDeleteConfirm===s.id;
+                      // Legacy records (saved before itemized splits) have `entries`
+                      // instead of `items` — fall back to their flat name list.
+                      const peopleNames = s.items ? [...new Set(s.items.flatMap(it => it.participantNames||it.participantIds||[]))] : (s.entries||[]).map(e=>e.name);
                       return (
                         <div key={s.id} style={{ padding:"10px 12px",background:subbg,borderRadius:12,border:cardBorder }}>
                           <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6 }}>
@@ -4935,7 +4982,18 @@ export default function App() {
                               : <button onClick={() => setSplitDeleteConfirm(s.id)} style={{ background:"none",border:"none",cursor:"pointer",color:textMute,display:"flex",alignItems:"center",padding:0 }}><TrashIcon/></button>
                             }
                           </div>
-                          <p style={{ margin:"0 0 6px",fontSize:11,color:textMute }}>₹{s.total.toLocaleString()} between {s.entries.map(e=>e.name).join(", ")}</p>
+                          <p style={{ margin:"0 0 6px",fontSize:11,color:textMute }}>
+                            ₹{s.total.toLocaleString()}{s.items ? ` across ${s.items.length} expense${s.items.length!==1?"s":""}` : ""} between {peopleNames.join(", ")}
+                          </p>
+                          {s.items && (
+                            <div style={{ display:"flex",flexDirection:"column",gap:2,marginBottom:6 }}>
+                              {s.items.map(it => (
+                                <p key={it.id} style={{ margin:0,fontSize:11,color:textMute }}>
+                                  {it.note || "Expense"} · ₹{it.amount.toLocaleString()} — {it.paidByName||splitPersonName(it.paidBy)} paid, split with {(it.participantNames||it.participantIds.map(splitPersonName)).join(", ")}
+                                </p>
+                              ))}
+                            </div>
+                          )}
                           {s.transactions.length===0
                             ? <p style={{ margin:0,fontSize:12,color:textMain }}>Settled — nobody owed anything.</p>
                             : s.transactions.map((t,i) => (
